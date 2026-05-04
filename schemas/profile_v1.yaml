@@ -31,7 +31,7 @@ properties:
       - label         # Label sheet (LabelSheetRenderer)
       - sticker       # Sticker sheet (StickerSheetRenderer)
       - bundle        # Composite bundle (BundleRenderer)
-      - packet        # Multi-file packet (PacketRenderer)
+      - packet_review # Forge packet review projection adapter; packet itself is a lifecycle container
 
   profile_version:
     type: string

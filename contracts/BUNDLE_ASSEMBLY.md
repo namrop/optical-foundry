@@ -6,6 +6,18 @@ A composite bundle assembles multiple independent Markdown sources, generated
 front/back matter, figures, and profile styling into a single styled PDF.
 The CAM Stack is the reference exemplar for this output class.
 
+## Boundary with Packets and Documents
+
+A **source document** is a single canonical content object. A **bundle** is a
+declarative assembly/source graph over one or more source documents. A **packet**
+is a stateful work/lifecycle container with goals, constraints, state, evidence,
+and validation surfaces.
+
+Packet review PDFs should therefore be treated as packet-derived **assembly
+views**, not as proof that packets are bundles. A Forge packet can emit a bundle
+manifest or be adapted into one for review rendering, but its packet identity
+remains lifecycle/stateful rather than presentation/assembly-native.
+
 ## Input Shape
 
 A YAML manifest file following `schemas/bundle_manifest_v1.yaml`:

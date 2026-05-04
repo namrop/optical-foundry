@@ -1,7 +1,6 @@
 # Optical Foundry — Greenfield Architecture
 
-Pandoc-driven render engine. Profile-first architecture. Bundle assembly.
-Label and sticker pipelines. Greenfield design — no mutation of 40_latex.
+Pandoc-driven render engine. Profile-first architecture. Explicit split between source documents, bundles, packet review views, projection plans, and rendered artifacts. Bundle assembly, label and sticker pipelines. Greenfield design — no mutation of 40_latex.
 
 ## Quickstart
 
@@ -17,6 +16,14 @@ foundry validate profile_id
 
 See `DESIGN.md` for the complete architecture design document.
 
+## Conceptual Split
+
+- **Source document/object**: canonical content, usually one Markdown file.
+- **Bundle/manifest**: declarative source selection or source graph.
+- **Packet**: stateful work/lifecycle container, not primarily a render type.
+- **Projection plan / assembly view**: render-time plan that turns objects, bundles, or packet review state into an artifact.
+- **Rendered artifact**: PDF/DOCX/HTML output plus evidence sidecars.
+
 ## Folder Map
 
 | Directory | Purpose |
@@ -26,7 +33,7 @@ See `DESIGN.md` for the complete architecture design document.
 | `styles/` | LaTeX style packages (TEXMFHOME) |
 | `assets/` | Fonts, logos, figures |
 | `engine/` | Core engine: registry, dispatch, Pandoc, frontmatter |
-| `renderers/` | Render classes: document, packet, label, sticker, bundle |
+| `renderers/` | Render classes/adapters: document, bundle, packet review, label, sticker |
 | `schemas/` | Schema definitions for profiles, manifests, evidence |
 | `contracts/` | Expansion and assembly contracts |
 | `cli/` | CLI entrypoints |
@@ -38,4 +45,4 @@ See `DESIGN.md` for the complete architecture design document.
 ## Status
 
 **Phase**: Architecture design (complete)
-**Next**: Implementation Phase 0 — Scaffold and profile registry
+**Next**: Implementation Phase 0 — Scaffold role surfaces, projection-plan model, and profile registry

@@ -5,13 +5,13 @@ note_role: architecture-design
 validation_profile: standard
 status: active
 created: 2026-05-03T20:17:00-04:00
-updated: 2026-05-03T20:17:00-04:00
+updated: 2026-05-04T16:40:00-04:00
 beam_home: 42_optical_foundry_greenfield
 title: "Optical Foundry — Greenfield Architecture Design"
 summary: >
   Greenfield architecture for Optical Foundry: Pandoc-driven render engine
-  with profile registry, render dispatch, bundle assembly, label/sticker
-  pipeline, and expansion contract. 40_latex preserved as known-good reference.
+  with profile registry, render dispatch, projection plans, bundle assembly,
+  label/sticker pipeline, and expansion contract. 40_latex preserved as known-good reference.
 tags:
   - optical-foundry
   - greenfield
@@ -47,6 +47,43 @@ The architecture should feel like a **foundry**: raw Markdown goes in,
 a profile shapes it, Pandoc fires it, and a finished artifact comes out.
 The forge metaphor carries through: profiles are the molds, bundles are
 the casts, render dispatch is the pour.
+
+---
+
+## 0.5 Core Abstraction Split
+
+Optical Foundry should distinguish **source truth**, **work state**,
+**assembly intent**, and **rendered artifacts**. The previous greenfield design
+blurred packets, bundles, and documents by treating each as a peer renderer
+class. The cleaner split is:
+
+| Layer | Meaning | Primary question | Examples |
+|---|---|---|---|
+| Source object / source document | Canonical content object, usually one Markdown file with frontmatter | What is the content? | note, spec, letter, halo, report, canonical anchor |
+| Packet / Marea-like work container | Stateful lifecycle container with goal, constraints, plan, state, evidence, questions, validation | What work exists and what governs it? | Forge packet, implementation packet, audit packet |
+| Bundle / manifest | Declarative selection or source graph over multiple objects | What sources should be assembled together? | Atrium context bundle, CAM Stack manifest, evidence packet manifest |
+| Assembly view / projection plan | Render-time plan derived from one object, one bundle, or one packet review view | How should this become an artifact? | packet review view, CAM packet plan, context bundle PDF plan |
+| Renderer | Mechanical backend adapter that turns a projection plan into Pandoc invocation(s) | How is it rendered? | DocumentRenderer, BundleRenderer, LabelSheetRenderer |
+| Rendered artifact | Human-facing output with evidence sidecars | What can be read, printed, shared, or archived? | PDF, DOCX, HTML, EPUB, evidence JSON |
+
+### Consequence for packets
+
+A packet is **not primarily a document type** and not primarily a bundle type.
+It is a bounded unit of work. A packet can contain documents, emit bundles,
+and be rendered for review, but the PDF is a **projection of packet state**, not
+the packet itself.
+
+Therefore the old `PacketRenderer` concept should be narrowed to either:
+
+1. a thin `PacketReviewRenderer` that converts a Forge packet directory into an
+   explicit assembly view, then delegates to bundle/document rendering; or
+2. no separate renderer at all, if packet review views can be expressed as
+   ordinary bundle manifests.
+
+The preferred implementation direction is **PacketReviewRenderer as a thin
+adapter**, with `BundleRenderer` remaining the generic multi-source renderer.
+This preserves packet lifecycle semantics without letting packet-specific review
+assembly absorb all bundle behavior.
 
 ---
 
@@ -139,7 +176,7 @@ the casts, render dispatch is the pour.
 │   ├── __init__.py                   # Package init
 │   ├── base.py                       # BaseRenderer ABC
 │   ├── document.py                   # Single-document renderer (doc_pipeline)
-│   ├── packet.py                     # Multi-file packet assembler (packet_pipeline)
+│   ├── packet_review.py              # Thin Forge packet review adapter -> assembly view
 │   ├── label_sheet.py                # Label sheet from run manifest
 │   ├── sticker_sheet.py              # Sticker sheet layout
 │   └── bundle.py                     # Composite bundle assembler (CAM Stack)
@@ -187,7 +224,7 @@ the casts, render dispatch is the pour.
 │   ├── test_registry.py
 │   ├── test_dispatch.py
 │   ├── test_document_renderer.py
-│   ├── test_packet_renderer.py
+│   ├── test_packet_review_renderer.py
 │   ├── test_label_renderer.py
 │   ├── test_sticker_renderer.py
 │   ├── test_bundle_renderer.py
@@ -247,7 +284,7 @@ Every profile is a YAML file in `profiles/<class>/<name>.yaml`:
 
 profile_id: risk
 profile_name: "Risk Assessment Report"
-profile_class: document              # document | letter | resume | label | sticker | bundle
+profile_class: document              # document | letter | resume | label | sticker | bundle | packet_review
 profile_version: "1.0"
 
 # ===== Pandoc defaults (merged into Pandoc --defaults) =====
@@ -301,7 +338,7 @@ metadata:
 | `label` | `LabelSheetRenderer` | Label run manifest → many MD → one sheet | Single label-sheet PDF |
 | `sticker` | `StickerSheetRenderer` | Single MD with grid content | Single sticker-sheet PDF |
 | `bundle` | `BundleRenderer` | Bundle manifest → many MD + figures → one PDF | Single composite PDF |
-| `packet` | `PacketRenderer` | Directory of MD files → assembled MD → one PDF | Single packet PDF |
+| `packet_review` | `PacketReviewRenderer` | Forge packet directory → packet review assembly view | Packet review PDF + evidence |
 
 ### 2.3 Profile inheritance
 
@@ -457,12 +494,16 @@ RENDERER_REGISTRY: dict[str, type[BaseRenderer]] = {
     "label": LabelSheetRenderer,
     "sticker": StickerSheetRenderer,
     "bundle": BundleRenderer,
-    "packet": PacketRenderer,
+    "packet_review": PacketReviewRenderer,  # thin adapter over bundle/document projection plans,
 }
 ```
 
 Adding a new render archetype means adding one entry here and one renderer class.
 Adding a new profile within an existing archetype requires zero code changes.
+
+`packet_review` is intentionally narrow: it should understand Forge packet
+folder conventions well enough to create an assembly view, then delegate normal
+multi-source rendering behavior to `BundleRenderer` or shared assembly helpers.
 
 ### 3.4 Pandoc engine wrapper
 
@@ -1008,7 +1049,7 @@ The renderer discovers sheet specs dynamically. No code change.
 | `input/` | NOT moved | Input is external to the pipeline; fixtures provide synthetic test inputs |
 | `doc_pipeline.py` | `cli/main.py` + `engine/` | Rewritten as profile-driven dispatch |
 | `pandoc_build.py` | `engine/pandoc.py` | Rewritten as PandocEngine class |
-| `packet_pipeline.py` | `renderers/packet.py` | Rewritten as PacketRenderer |
+| `packet_pipeline.py` | `renderers/packet_review.py` + shared bundle assembly helpers | Rewritten as PacketReviewRenderer thin adapter, not a generic packet-as-document renderer |
 | `label_pipeline.py` | `renderers/label_sheet.py` | Rewritten with schema-validated run manifests |
 | `label_sheet_build.py` | `renderers/label_sheet.py` | Integrated into LabelSheetRenderer |
 | `markdown_label.py` | `engine/` or `renderers/label_sheet.py` | Integrated |
@@ -1069,7 +1110,7 @@ Every profile in `40_latex/defaults/` maps to a greenfield profile:
 | `labels_avery_5164.yaml` | label | `profiles/labels/labels_avery_5164.yaml` |
 | `sticker_sheet.yaml` | sticker | `profiles/stickers/sticker_sheet.yaml` |
 
-**Total: 21 profiles across 6 profile classes.**
+**Total: 21 profiles across 6 profile classes, plus `packet_review` as a narrow adapter class for Forge packet review projections.**
 
 ### 9.2 Workflow coverage matrix
 
@@ -1078,7 +1119,7 @@ Every profile in `40_latex/defaults/` maps to a greenfield profile:
 | Single doc (risk, tech, mythic, etc.) | 1 MD file | document | DocumentRenderer | ✅ | Standard |
 | Letter (personal, mythic, Johannah) | 1 MD with variables | letter | DocumentRenderer | ✅ | Standard |
 | Resume (base, CV, compact) | 1 MD resume | resume | DocumentRenderer | ✅ | Standard (wired via TEXINPUTS) |
-| Packet (Prometheus review) | Dir of MD → assembled | packet | PacketRenderer | ✅ | Standard |
+| Packet review (Prometheus/Forge) | Packet dir → assembly view | packet_review | PacketReviewRenderer → BundleRenderer/shared assembly | ✅ | Specialized view over work state |
 | Elian packet/poster | 1 MD (specialty) | document | DocumentRenderer | ✅ | Standard |
 | Label sheet (Avery 5164) | Run manifest → N MD | label | LabelSheetRenderer | ✅ | Formalized from existing |
 | Sticker sheet | 1 MD with grid | sticker | StickerSheetRenderer | ✅ | Formalized from existing |
@@ -1220,10 +1261,11 @@ This design doc is the architecture. Implementation phases:
 7. **Phase 6 — Validation Gate**: Run all profiles against synthetic fixtures; compare output to 40_latex
 8. **Phase 7 — Label Renderer**: `renderers/label_sheet.py` with run manifest support
 9. **Phase 8 — Sticker Renderer**: `renderers/sticker_sheet.py`
-10. **Phase 9 — Packet Renderer**: `renderers/packet.py`
-11. **Phase 10 — Bundle Renderer**: `renderers/bundle.py` with composite stack assembly
-12. **Phase 11 — CAM Stack Exemplar**: Render CAM Stack through bundle renderer; validate 30-point checklist
-13. **Phase 12 — Retirement Plan**: Once greenfield proves equivalent-or-better for all profiles, archive 40_latex
+10. **Phase 9 — Projection Plan Model**: shared assembly-view data structures for object, bundle, and packet-review projections
+11. **Phase 10 — Bundle Renderer**: `renderers/bundle.py` with composite stack/context-bundle assembly
+12. **Phase 11 — Packet Review Adapter**: `renderers/packet_review.py` converts Forge packet state into an assembly view and delegates shared rendering behavior
+13. **Phase 12 — CAM Stack Exemplar**: Render CAM Stack through bundle renderer; validate 30-point checklist
+14. **Phase 13 — Retirement Plan**: Once greenfield proves equivalent-or-better for all profiles, archive 40_latex
 
 ---
 
