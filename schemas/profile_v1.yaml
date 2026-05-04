@@ -1,0 +1,111 @@
+# Profile Declaration Schema — v1
+# This is a reference schema document. Actual validation uses YAML + Python.
+
+schema: profile_v1
+description: >
+  Schema for Optical Foundry profile declarations.
+  Each profile in profiles/<class>/*.yaml must conform to this schema.
+
+required:
+  - profile_id
+  - profile_class
+
+properties:
+  profile_id:
+    type: string
+    description: Unique profile identifier (e.g., "risk", "cam", "labels_avery_5164")
+    pattern: "^[a-z][a-z0-9_]+$"
+
+  profile_name:
+    type: string
+    description: Human-readable profile name
+    default: ""
+
+  profile_class:
+    type: string
+    description: Render archetype class
+    enum:
+      - document      # Single document renderer
+      - letter        # Letter stationery (uses DocumentRenderer)
+      - resume        # Resume/CV (uses DocumentRenderer with special args)
+      - label         # Label sheet (LabelSheetRenderer)
+      - sticker       # Sticker sheet (StickerSheetRenderer)
+      - bundle        # Composite bundle (BundleRenderer)
+      - packet        # Multi-file packet (PacketRenderer)
+
+  profile_version:
+    type: string
+    default: "1.0"
+
+  extends:
+    type: array
+    items:
+      type: string
+    description: >
+      Profile IDs to inherit from. Resolved depth-first, left-to-right.
+      Later profiles override earlier ones. Pandoc variables are shallow-merged.
+      List fields (requires.*) are concatenated with deduplication.
+    default: []
+
+  pandoc_defaults:
+    type: object
+    description: >
+      Pandoc defaults merged into --defaults YAML. This maps to Pandoc's
+      defaults file format. The `variables` key under here maps to Pandoc's
+      metadata/variables passed to the template.
+
+  template:
+    type: string
+    description: >
+      LaTeX template filename (relative to templates/). Used as Pandoc --template.
+      Must exist in the templates/ directory.
+
+  style_package:
+    type: string
+    description: >
+      LaTeX style package name (without .sty). Loaded via \usepackage in the template.
+      If declared, the .sty file must exist in styles/texmf/tex/latex/yugen/.
+
+  requires:
+    type: object
+    properties:
+      fonts:
+        type: array
+        items:
+          type: string
+        default: []
+      styles:
+        type: array
+        items:
+          type: string
+        default: []
+      assets:
+        type: array
+        items:
+          type: string
+        default: []
+
+  output:
+    type: object
+    default:
+      format: pdf
+      default_extension: .pdf
+      page_size: letter
+      orientation: portrait
+
+  metadata:
+    type: object
+    description: Documentation only — not used at render time
+    properties:
+      category:
+        type: string
+      tags:
+        type: array
+        items:
+          type: string
+      description:
+        type: string
+      suitable_for:
+        type: array
+        items:
+          type: string

@@ -1,0 +1,96 @@
+# Label Run Manifest Schema — v1
+# Reference schema for label sheet run manifests.
+
+schema: label_run_v1
+description: >
+  Schema for label sheet run manifests. A run manifest selects a sheet spec,
+  places independent Markdown label objects into physical slots, and provides
+  layout/typography defaults for the sheet.
+
+required:
+  - kind
+  - schema_version
+  - run_id
+  - sheet_spec
+  - labels
+
+properties:
+  kind:
+    type: string
+    const: label_run
+
+  schema_version:
+    type: string
+    const: label_run_v1
+
+  run_id:
+    type: string
+    description: Unique run identifier
+
+  profile:
+    type: string
+    description: Profile ID from the profile registry (e.g., labels_avery_5164)
+
+  sheet_spec:
+    type: string
+    description: Sheet spec ID (e.g., avery-5164, avery-15264, avery-18163)
+
+  output_name:
+    type: string
+    description: Base filename for output PDF
+
+  defaults:
+    type: object
+    properties:
+      layout:
+        type: object
+        properties:
+          text_align:
+            type: string
+            enum: [left, center, right]
+          safe_inset_in:
+            type: number
+          top_padding_in:
+            type: number
+      typography:
+        type: object
+        properties:
+          title:
+            type: object
+            properties:
+              font_family: { type: string }
+              font_size_pt: { type: number }
+              leading_pt: { type: number }
+          subtitle:
+            type: object
+            properties:
+              font_family: { type: string }
+              font_size_pt: { type: number }
+              leading_pt: { type: number }
+          body:
+            type: object
+            properties:
+              font_family: { type: string }
+              font_size_pt: { type: number }
+              leading_pt: { type: number }
+
+  labels:
+    type: array
+    minItems: 1
+    items:
+      type: object
+      required: [slot, source]
+      properties:
+        slot:
+          type: integer
+          minimum: 1
+          description: Physical slot number (1-indexed)
+        source:
+          type: string
+          description: Path to label Markdown file
+        layout:
+          type: object
+          properties:
+            rotate_deg:
+              type: number
+              description: Rotation in degrees for this label

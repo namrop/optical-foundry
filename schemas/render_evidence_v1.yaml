@@ -1,0 +1,115 @@
+# Render Evidence Schema — v1
+# Reference schema for render evidence JSON sidecars.
+
+schema: render_evidence_v1
+description: >
+  Schema for render evidence JSON sidecars. Every render produces an evidence
+  JSON recording provenance, output metadata, integrity checks, and boundary
+  assertions.
+
+properties:
+  schema_version:
+    type: string
+    const: render_evidence_v1
+
+  render_id:
+    type: string
+    description: Unique render event identifier (UUID or timestamp-based)
+
+  profile:
+    type: object
+    properties:
+      profile_id: { type: string }
+      profile_name: { type: string }
+      profile_class: { type: string }
+      profile_version: { type: string }
+
+  input:
+    type: object
+    properties:
+      path: { type: string }
+      digest_sha256: { type: string }
+      bytes: { type: integer }
+
+  source_inventory:
+    type: array
+    description: For multi-source renders (bundles, packets, label sheets)
+    items:
+      type: object
+      properties:
+        path: { type: string }
+        uid: { type: string }
+        role: { type: string }
+        digest_sha256: { type: string }
+        frontmatter_preserved: { type: boolean }
+        resolved: { type: boolean }
+
+  figure_inventory:
+    type: array
+    items:
+      type: object
+      properties:
+        path: { type: string }
+        caption: { type: string }
+        placement: { type: string }
+        present_in_pdf: { type: boolean }
+
+  render_metadata:
+    type: object
+    properties:
+      profile: { type: string }
+      profile_defaults_file: { type: string }
+      template: { type: string }
+      style: { type: string }
+      command: { type: string }
+      pandoc_version: { type: string }
+      tex_engine: { type: string }
+      render_duration_ms: { type: integer }
+      rendered_at: { type: string }
+
+  output:
+    type: object
+    properties:
+      pdf_path: { type: string }
+      pdf_pages: { type: integer }
+      pdf_bytes: { type: integer }
+      pdf_sha256: { type: string }
+      page_size: { type: string }
+      pdf_version: { type: string }
+
+  integrity:
+    type: object
+    properties:
+      text_extract_exists: { type: boolean }
+      expected_markers_found:
+        type: array
+        items:
+          type: object
+          properties:
+            marker: { type: string }
+            found: { type: boolean }
+            page: { type: integer }
+      all_sources_represented: { type: boolean }
+      toc_present: { type: boolean }
+      toc_depth: { type: integer }
+      figures_validated: { type: boolean }
+
+  visual_samples:
+    type: array
+    items:
+      type: object
+      properties:
+        page: { type: integer }
+        path: { type: string }
+
+  warnings:
+    type: array
+    items:
+      type: string
+
+  boundary:
+    type: object
+    properties:
+      target_40_latex_mutated: { type: boolean, const: false }
+      production_output: { type: boolean, const: false }
+      packet_local_generated_only: { type: boolean, const: true }
