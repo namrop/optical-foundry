@@ -2,8 +2,7 @@
 
 ## Purpose
 
-The label pipeline produces printable label-sheet PDFs from a run manifest
-that places independent Markdown label sources into physical sheet slots.
+The label pipeline produces printable label-sheet PDFs from a `label_run` render manifest subtype that places independent Markdown label sources into physical sheet slots.
 
 ## Input Shape
 

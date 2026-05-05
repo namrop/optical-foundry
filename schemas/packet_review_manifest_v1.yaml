@@ -1,0 +1,66 @@
+# Packet Review Manifest Schema — v1
+# Reference schema for rendering a projection of Forge packet lifecycle state.
+
+schema: packet_review_manifest_v1
+description: >
+  Schema for forge_packet_review manifests. This renders packet state/governance
+  surfaces for review. It is distinct from any bundle/source manifest the packet
+  may be assembling as its work product.
+
+required:
+  - kind
+  - schema_version
+  - profile
+  - packet
+
+properties:
+  kind:
+    type: string
+    const: forge_packet_review
+
+  schema_version:
+    type: string
+    const: packet_review_manifest_v1
+
+  profile:
+    type: string
+    description: Profile ID from the profile registry, e.g. prometheus_packet.
+
+  packet:
+    type: object
+    required: [path]
+    properties:
+      path:
+        type: string
+        description: Path to Forge packet directory.
+      include:
+        type: array
+        items:
+          type: string
+        default: [GOAL.md, CONSTRAINTS.md, PLAN.md, STATE.json, PROGRESS.md, VALIDATION.md]
+      exclude_generated:
+        type: boolean
+        default: true
+
+  render:
+    type: object
+    properties:
+      include_progress_tail:
+        type: boolean
+        default: true
+      include_dirty_state_summary:
+        type: boolean
+        default: true
+      include_questions:
+        type: boolean
+        default: true
+
+  validation:
+    type: object
+    properties:
+      require_packet_state:
+        type: boolean
+        default: true
+      require_no_target_mutation:
+        type: boolean
+        default: true

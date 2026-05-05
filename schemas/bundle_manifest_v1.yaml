@@ -3,9 +3,10 @@
 
 schema: bundle_manifest_v1
 description: >
-  Schema for composite stack bundle manifests. A bundle assembles multiple
+  Schema for bundle-family render manifests. A bundle manifest assembles multiple
   independent Markdown sources, generated front/back matter, figures, and
-  profile styling into a single styled PDF.
+  profile styling into a single styled artifact. Generic composite bundles, CAM Stack,
+  and Codex 0 may share this schema family with distinct kind values when needed.
 
 required:
   - kind
@@ -17,7 +18,7 @@ required:
 properties:
   kind:
     type: string
-    const: composite_stack_packet
+    enum: [composite_bundle, cam_stack, codex_bundle]
 
   schema_version:
     type: string
@@ -36,8 +37,9 @@ properties:
     type: string
     description: Profile ID from the profile registry
 
-  packet:
+  presentation:
     type: object
+    description: Title-page / reader-facing metadata. This is not Forge packet lifecycle state.
     properties:
       title:
         type: string

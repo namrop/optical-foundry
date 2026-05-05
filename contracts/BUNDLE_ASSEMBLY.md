@@ -1,10 +1,11 @@
-# Bundle Assembly Contract — Optical Foundry
+# Bundle-Family Manifest Assembly Contract — Optical Foundry
 
 ## Purpose
 
-A composite bundle assembles multiple independent Markdown sources, generated
-front/back matter, figures, and profile styling into a single styled PDF.
-The CAM Stack is the reference exemplar for this output class.
+A bundle-family render manifest assembles multiple independent Markdown sources,
+generated front/back matter, figures, and profile styling into a single styled
+artifact. Generic composite bundles, CAM Stack, and Codex 0 are all members of
+this family when they render source graphs into human-facing artifacts.
 
 ## Boundary with Packets and Documents
 
@@ -13,23 +14,24 @@ declarative assembly/source graph over one or more source documents. A **packet*
 is a stateful work/lifecycle container with goals, constraints, state, evidence,
 and validation surfaces.
 
-Packet review PDFs should therefore be treated as packet-derived **assembly
-views**, not as proof that packets are bundles. A Forge packet can emit a bundle
-manifest or be adapted into one for review rendering, but its packet identity
-remains lifecycle/stateful rather than presentation/assembly-native.
+The render target for bundle-family output is a manifest, not the bundle concept
+itself. A Forge packet can govern or produce a bundle manifest, but the packet is
+not the bundle. Packet review rendering uses a separate `forge_packet_review`
+manifest that projects packet state; it should not be conflated with the source
+files and manifest used to render the artifact the packet is building.
 
 ## Input Shape
 
-A YAML manifest file following `schemas/bundle_manifest_v1.yaml`:
+A YAML render manifest following the bundle-family schema `schemas/bundle_manifest_v1.yaml`:
 
 ```yaml
-kind: composite_stack_packet
+kind: composite_bundle              # or cam_stack / codex_bundle for recurring specialized cases
 schema_version: bundle_manifest_v1
 bundle_id: unique-bundle-id
 bundle_name: "Human-Readable Name"
 profile: cam                            # References profiles/reports/cam.yaml
 
-packet:
+presentation:
   title: "Packet Title"
   subtitle: "Optional Subtitle"
   authors: ["Author Name"]

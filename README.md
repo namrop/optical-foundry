@@ -1,6 +1,6 @@
 # Optical Foundry — Greenfield Architecture
 
-Pandoc-driven render engine. Profile-first architecture. Explicit split between source documents, bundles, packet review views, projection plans, and rendered artifacts. Bundle assembly, label and sticker pipelines. Greenfield design — no mutation of 40_latex.
+Pandoc-driven render engine. Profile-first architecture with two stable input classes: Markdown documents and typed render manifests. Manifests can target packets, bundles, label runs, sticker sheets, CAM Stack, Codex 0, or any recurring render case that earns a subtype. Greenfield design — no mutation of 40_latex.
 
 ## Quickstart
 
@@ -18,10 +18,12 @@ See `DESIGN.md` for the complete architecture design document.
 
 ## Conceptual Split
 
-- **Source document/object**: canonical content, usually one Markdown file.
-- **Bundle/manifest**: declarative source selection or source graph.
-- **Packet**: stateful work/lifecycle container, not primarily a render type.
-- **Projection plan / assembly view**: render-time plan that turns objects, bundles, or packet review state into an artifact.
+- **Markdown document**: direct Foundry input for one canonical source object.
+- **Render manifest**: direct Foundry input for every recurring assembled/projection case.
+- **Manifest subtype**: named contract such as `label_run`, `sticker_sheet`, `composite_bundle`, `cam_stack`, `codex_bundle`, or `forge_packet_review`.
+- **Bundle**: source graph/content grouping, usually rendered through a manifest.
+- **Packet**: work/lifecycle container; rendered only through a packet-review manifest that projects packet state.
+- **Projection plan / assembly view**: internal compiled render plan derived from Markdown or a manifest.
 - **Rendered artifact**: PDF/DOCX/HTML output plus evidence sidecars.
 
 ## Folder Map
@@ -33,7 +35,7 @@ See `DESIGN.md` for the complete architecture design document.
 | `styles/` | LaTeX style packages (TEXMFHOME) |
 | `assets/` | Fonts, logos, figures |
 | `engine/` | Core engine: registry, dispatch, Pandoc, frontmatter |
-| `renderers/` | Render classes/adapters: document, bundle, packet review, label, sticker |
+| `renderers/` | Render executors and manifest compilers: document, manifest, bundle/composite, packet review, label, sticker |
 | `schemas/` | Schema definitions for profiles, manifests, evidence |
 | `contracts/` | Expansion and assembly contracts |
 | `cli/` | CLI entrypoints |

@@ -1,0 +1,55 @@
+# Render Manifest Envelope Schema — v1
+# Reference schema for Optical Foundry render manifest envelopes.
+
+schema: render_manifest_v1
+description: >
+  Umbrella convention for non-Markdown Optical Foundry inputs. Concrete
+  manifests use a kind + schema_version pair such as label_run/label_run_v1,
+  sticker_sheet/sticker_sheet_v1, composite_bundle/bundle_manifest_v1,
+  cam_stack/bundle_manifest_v1, codex_bundle/bundle_manifest_v1, or
+  forge_packet_review/packet_review_manifest_v1. Concrete schema files should exist once the subtype is active.
+
+required:
+  - kind
+  - schema_version
+  - profile
+
+properties:
+  kind:
+    type: string
+    description: Manifest subtype / render target discriminator.
+    enum:
+      - label_run
+      - sticker_sheet
+      - composite_bundle
+      - cam_stack
+      - codex_bundle
+      - forge_packet_review
+
+  schema_version:
+    type: string
+    description: Concrete subtype schema version.
+
+  profile:
+    type: string
+    description: Profile ID from the profile registry.
+
+  target:
+    type: object
+    description: Pointer to the domain object/state graph/source graph being rendered.
+    properties:
+      type:
+        type: string
+        enum: [markdown_document, bundle, packet, label_run, sticker_sheet, source_graph]
+      path:
+        type: string
+      uid:
+        type: string
+
+  render:
+    type: object
+    description: Shared render options. Subtype schemas may extend this.
+
+  validation:
+    type: object
+    description: Shared validation/evidence requirements. Subtype schemas may extend this.

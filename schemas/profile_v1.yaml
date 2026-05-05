@@ -23,15 +23,15 @@ properties:
 
   profile_class:
     type: string
-    description: Render archetype class
+    description: Layout/profile family. Render-target dispatch comes from Markdown input or manifest kind/schema_version, not from profile_class alone.
     enum:
       - document      # Single document renderer
       - letter        # Letter stationery (uses DocumentRenderer)
       - resume        # Resume/CV (uses DocumentRenderer with special args)
-      - label         # Label sheet (LabelSheetRenderer)
-      - sticker       # Sticker sheet (StickerSheetRenderer)
-      - bundle        # Composite bundle (BundleRenderer)
-      - packet_review # Forge packet review projection adapter; packet itself is a lifecycle container
+      - label         # Label sheet profile family; normally used by label_run manifests
+      - sticker       # Sticker sheet profile family; normally used by sticker_sheet manifests
+      - bundle        # Composite bundle styling family; target comes from manifest kind
+      - packet_review # Packet review styling family; target comes from forge_packet_review manifest
 
   profile_version:
     type: string

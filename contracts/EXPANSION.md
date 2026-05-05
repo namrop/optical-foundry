@@ -156,20 +156,20 @@ sheet_spec: my-new-labels
 
 The renderer loads sheet specs dynamically. No code change.
 
-## Scenario 4: New Bundle Type
+## Scenario 4: New Bundle-Family Manifest
 
-You want a "Keeper Stack" bundle that assembles multiple Keeper captures.
+You want a "Keeper Stack" recurring bundle-family render target that assembles multiple Keeper captures.
 
-### Step 1: Create the bundle manifest
+### Step 1: Create the render manifest
 
 ```yaml
 # manifests/keeper_stack.bundle.yaml
-kind: composite_stack_packet
+kind: composite_bundle
 schema_version: bundle_manifest_v1
 bundle_id: keeper-stack-v0
 bundle_name: "Keeper Stack"
 profile: keeper
-packet:
+presentation:
   title: "Keeper Stack — Governance Anchors"
 sources:
   - uid: keeper-capture-1
@@ -185,15 +185,14 @@ sources:
 foundry render manifests/keeper_stack.bundle.yaml --output keeper_stack.pdf
 ```
 
-No code changes — `BundleRenderer` handles any profile in the `bundle` class.
-The `keeper` profile provides styling.
+No code changes for a one-off/generic composite bundle — the bundle-family manifest compiler handles the source graph and the `keeper` profile provides styling. If Keeper Stack becomes a recurring artifact family with dedicated generated sections or validation, promote it to a named manifest subtype such as `keeper_stack`.
 
 ## When Core Code Changes ARE Required
 
 | Situation | What changes | Files |
 |---|---|---|
 | New Pandoc feature (e.g., markdown extension) | `engine/pandoc.py` | 1 file |
-| New render archetype (e.g., slides) | New renderer class + dispatch entry | 2 files |
+| New recurring render target (e.g., slides, Codex bundle, packet review variant) | New manifest subtype schema/compiler + dispatch entry | 2+ files |
 | New validation category | `validators/` | 1 file |
 | CLI argument changes | `cli/main.py` | 1 file |
 | Profile schema changes | `schemas/profile_v1.yaml` + registry loader | 2 files |

@@ -5,13 +5,13 @@ note_role: architecture-design
 validation_profile: standard
 status: active
 created: 2026-05-03T20:17:00-04:00
-updated: 2026-05-04T16:40:00-04:00
+updated: 2026-05-04T23:15:00-04:00
 beam_home: 42_optical_foundry_greenfield
 title: "Optical Foundry — Greenfield Architecture Design"
 summary: >
   Greenfield architecture for Optical Foundry: Pandoc-driven render engine
-  with profile registry, render dispatch, projection plans, bundle assembly,
-  label/sticker pipeline, and expansion contract. 40_latex preserved as known-good reference.
+  with profile registry, render dispatch, typed render manifests, projection plans,
+  bundle assembly, label/sticker manifests, and expansion contract. 40_latex preserved as known-good reference.
 tags:
   - optical-foundry
   - greenfield
@@ -45,47 +45,79 @@ hardcode which profiles exist; profiles declare themselves.
 
 The architecture should feel like a **foundry**: raw Markdown goes in,
 a profile shapes it, Pandoc fires it, and a finished artifact comes out.
-The forge metaphor carries through: profiles are the molds, bundles are
-the casts, render dispatch is the pour.
+The forge metaphor carries through: profiles are the molds, render manifests are
+the work orders, projection plans are the pour plans, and render dispatch is the pour.
 
 ---
 
 ## 0.5 Core Abstraction Split
 
-Optical Foundry should distinguish **source truth**, **work state**,
-**assembly intent**, and **rendered artifacts**. The previous greenfield design
-blurred packets, bundles, and documents by treating each as a peer renderer
-class. The cleaner split is:
+Optical Foundry should distinguish **source truth**, **work/lifecycle state**,
+**render intent**, **compiled projection**, and **rendered artifacts**.
+
+The stable external inputs to Optical Foundry are:
+
+1. **Markdown documents** — direct single-source render input.
+2. **Render manifest files** — typed declarations for every recurring assembled,
+   multi-source, physical-layout, or state-projection render case.
+
+Manifests are the render target for anything more structured than a single
+Markdown document. A manifest can point at a packet, a bundle/source graph, a
+label run, a sticker sheet, the CAM Stack, Codex 0, or another render target that
+recurs enough to deserve its own subtype.
 
 | Layer | Meaning | Primary question | Examples |
 |---|---|---|---|
-| Source object / source document | Canonical content object, usually one Markdown file with frontmatter | What is the content? | note, spec, letter, halo, report, canonical anchor |
-| Packet / Marea-like work container | Stateful lifecycle container with goal, constraints, plan, state, evidence, questions, validation | What work exists and what governs it? | Forge packet, implementation packet, audit packet |
-| Bundle / manifest | Declarative selection or source graph over multiple objects | What sources should be assembled together? | Atrium context bundle, CAM Stack manifest, evidence packet manifest |
-| Assembly view / projection plan | Render-time plan derived from one object, one bundle, or one packet review view | How should this become an artifact? | packet review view, CAM packet plan, context bundle PDF plan |
-| Renderer | Mechanical backend adapter that turns a projection plan into Pandoc invocation(s) | How is it rendered? | DocumentRenderer, BundleRenderer, LabelSheetRenderer |
+| Markdown source document/object | Canonical content object and direct Foundry input | What is the content? | note, spec, letter, halo, report, canonical anchor |
+| Render manifest | Machine-readable Foundry input declaring what should be rendered | What render target is being requested? | `label_run.yaml`, `sticker_sheet.yaml`, `cam_stack.yaml`, `codex_bundle.yaml`, `forge_packet_review.yaml` |
+| Manifest subtype | Recurring contract for a specific render target family | How should this manifest be interpreted? | label run, sticker sheet, composite bundle, CAM Stack, Codex 0 bundle, Forge packet review |
+| Bundle | Declarative content grouping/source graph | Which source objects belong together, in what order/roles, with what provenance? | Atrium context bundle, Codex 0 source bundle, evidence packet source graph |
+| Packet / Marea-like work container | Stateful lifecycle container with goal, constraints, plan, state, evidence, questions, validation | What work exists and what governs it? | Forge packet assembling Codex 0, implementation packet, audit packet |
+| Projection plan / assembly view | Internal compiled render IR produced from Markdown or a manifest | How exactly should this become an artifact? | resolved source list, generated reader guide, label grid, packet-state review view |
+| Renderer | Mechanical backend adapter that turns a projection plan into Pandoc invocation(s) | How is it rendered? | PandocProjectionRenderer, LabelSheetRenderer internals, PDF evidence generator |
 | Rendered artifact | Human-facing output with evidence sidecars | What can be read, printed, shared, or archived? | PDF, DOCX, HTML, EPUB, evidence JSON |
 
-### Consequence for packets
+### Consequence for packets and bundles
 
-A packet is **not primarily a document type** and not primarily a bundle type.
-It is a bounded unit of work. A packet can contain documents, emit bundles,
-and be rendered for review, but the PDF is a **projection of packet state**, not
-the packet itself.
+A **bundle** is not a packet. It is a source graph/content grouping. It may be
+assembled by a Forge packet, tracked by a packet, or rendered through a manifest,
+but it does not own lifecycle governance.
 
-Therefore the old `PacketRenderer` concept should be narrowed to either:
+A **packet** is not a bundle. It is a governed work container. A packet can
+assemble the Codex 0 bundle by managing source files plus a `codex_bundle`
+manifest. That same packet can also have a separate `forge_packet_review`
+manifest that renders a projection of packet state: goals, constraints, progress,
+questions, validation, and evidence. Those are different manifests because they
+render different things.
 
-1. a thin `PacketReviewRenderer` that converts a Forge packet directory into an
-   explicit assembly view, then delegates to bundle/document rendering; or
-2. no separate renderer at all, if packet review views can be expressed as
-   ordinary bundle manifests.
+Therefore packet review rendering should be modeled as:
 
-The preferred implementation direction is **PacketReviewRenderer as a thin
-adapter**, with `BundleRenderer` remaining the generic multi-source renderer.
-This preserves packet lifecycle semantics without letting packet-specific review
-assembly absorb all bundle behavior.
+```text
+Forge packet directory/state
+        ↓ forge_packet_review manifest
+PacketReviewManifestCompiler
+        ↓
+ProjectionPlan / AssemblyView
+        ↓
+Pandoc-backed renderer
+        ↓
+Packet review artifact + evidence
+```
 
----
+Codex 0 bundle rendering should be modeled separately:
+
+```text
+Codex 0 source files + codex_bundle manifest
+        ↓ CodexBundleManifestCompiler
+ProjectionPlan / AssemblyView
+        ↓
+Pandoc-backed renderer
+        ↓
+Codex 0 artifact + evidence
+```
+
+The packet can govern both processes, but the source bundle artifact and packet
+state artifact remain distinct projections.
 
 ## 1. Folder Structure
 
@@ -165,7 +197,7 @@ assembly absorb all bundle behavior.
 ├── engine/                           # ★ Core render engine (Python)
 │   ├── __init__.py                   # Package init
 │   ├── registry.py                   # Profile registry — loads profiles/ tree
-│   ├── dispatch.py                   # Render dispatch — routes to render classes
+│   ├── dispatch.py                   # Render dispatch — routes Markdown/manifests to compilers/renderers
 │   ├── pandoc.py                     # Pandoc invocation (replaces pandoc_build.py)
 │   ├── frontmatter.py                # Frontmatter extraction and variable promotion
 │   ├── mermaid.py                    # Mermaid diagram rendering
@@ -176,14 +208,15 @@ assembly absorb all bundle behavior.
 │   ├── __init__.py                   # Package init
 │   ├── base.py                       # BaseRenderer ABC
 │   ├── document.py                   # Single-document renderer (doc_pipeline)
-│   ├── packet_review.py              # Thin Forge packet review adapter -> assembly view
+│   ├── packet_review.py              # forge_packet_review manifest compiler -> assembly view
 │   ├── label_sheet.py                # Label sheet from run manifest
 │   ├── sticker_sheet.py              # Sticker sheet layout
-│   └── bundle.py                     # Composite bundle assembler (CAM Stack)
+│   └── bundle.py                     # Composite/codex/cam bundle manifest compiler
 │
 ├── schemas/                          # Schema definitions (YAML)
 │   ├── profile_v1.yaml               # Profile declaration schema
-│   ├── bundle_manifest_v1.yaml       # Composite bundle manifest schema
+│   ├── render_manifest_v1.yaml       # Umbrella manifest envelope/schema conventions
+│   ├── bundle_manifest_v1.yaml       # Composite/CAM/Codex bundle manifest schema
 │   ├── label_run_v1.yaml             # Label run manifest schema
 │   └── render_evidence_v1.yaml       # Render evidence/output schema
 │
@@ -260,7 +293,7 @@ composite bundle) into a Pandoc invocation. Renderers do not know about specific
 they receive a loaded profile object from the dispatcher.
 
 **`schemas/`** defines the contracts. Every YAML file in the system (profile declaration,
-bundle manifest, label run, render evidence) has a schema here.
+render manifest, bundle manifest, label run, sticker sheet, render evidence) has a schema here.
 
 **`contracts/`** is documentation for expansion and assembly. This is where a human
 reads how to add a new profile or wire a new bundle type.
@@ -284,7 +317,7 @@ Every profile is a YAML file in `profiles/<class>/<name>.yaml`:
 
 profile_id: risk
 profile_name: "Risk Assessment Report"
-profile_class: document              # document | letter | resume | label | sticker | bundle | packet_review
+profile_class: document              # layout/profile family; render target comes from Markdown input or manifest kind
 profile_version: "1.0"
 
 # ===== Pandoc defaults (merged into Pandoc --defaults) =====
@@ -328,17 +361,27 @@ metadata:
   suitable_for: [security_reports, risk_assessments, technical_audits]
 ```
 
-### 2.2 Profile class taxonomy
+### 2.2 Profile classes vs manifest kinds
 
-| Profile class | Renderer | Input shape | Output shape |
+Profile classes describe **layout/profile families**. They are not the primary
+render-target taxonomy. The render target is either a Markdown document or a
+manifest `kind` / `schema_version` pair.
+
+| Input | Target discriminator | Compiler / renderer path | Output shape |
 |---|---|---|---|
-| `document` | `DocumentRenderer` | Single Markdown file | Single PDF |
-| `letter` | `DocumentRenderer` | Single Markdown with `variables:` frontmatter | Single styled letter PDF |
-| `resume` | `DocumentRenderer` | Single Markdown with CV content | Single resume PDF |
-| `label` | `LabelSheetRenderer` | Label run manifest → many MD → one sheet | Single label-sheet PDF |
-| `sticker` | `StickerSheetRenderer` | Single MD with grid content | Single sticker-sheet PDF |
-| `bundle` | `BundleRenderer` | Bundle manifest → many MD + figures → one PDF | Single composite PDF |
-| `packet_review` | `PacketReviewRenderer` | Forge packet directory → packet review assembly view | Packet review PDF + evidence |
+| Markdown file | source file extension + selected profile | Document compiler → projection plan → Pandoc renderer | Single document PDF |
+| Manifest file | `kind` + `schema_version` | Manifest subtype compiler → projection plan → Pandoc renderer | Depends on manifest subtype |
+| Label manifest | `kind: label_run` | LabelRunManifestCompiler / LabelSheetRenderer | Single physical label-sheet PDF |
+| Sticker manifest | `kind: sticker_sheet` | StickerSheetManifestCompiler / StickerSheetRenderer | Single sticker-sheet PDF |
+| Composite bundle manifest | `kind: composite_bundle` or subtype | BundleManifestCompiler | Single composite PDF |
+| CAM Stack manifest | `kind: cam_stack` | CAMStackManifestCompiler, likely specialized bundle compiler | CAM Stack PDF + evidence |
+| Codex 0 bundle manifest | `kind: codex_bundle` | CodexBundleManifestCompiler | Codex 0 artifact + evidence |
+| Forge packet review manifest | `kind: forge_packet_review` | PacketReviewManifestCompiler | Packet-state review PDF + evidence |
+
+A new manifest subtype should be introduced when a render case becomes more than
+a one-off. One-off multi-source renders can use a generic composite/bundle
+manifest; recurring artifacts such as CAM Stack and Codex 0 deserve named
+manifest subtypes.
 
 ### 2.3 Profile inheritance
 
@@ -484,26 +527,33 @@ class BaseRenderer(ABC):
 
 ### 3.3 Dispatch table
 
-`engine/dispatch.py` maps profile classes to renderer classes:
+`engine/dispatch.py` first distinguishes **input class**:
 
 ```python
-RENDERER_REGISTRY: dict[str, type[BaseRenderer]] = {
-    "document": DocumentRenderer,
-    "letter": DocumentRenderer,       # Same renderer, different profile template
-    "resume": DocumentRenderer,       # Same renderer with resume-specific Pandoc args
-    "label": LabelSheetRenderer,
-    "sticker": StickerSheetRenderer,
-    "bundle": BundleRenderer,
-    "packet_review": PacketReviewRenderer,  # thin adapter over bundle/document projection plans,
+if input_path.suffix in {".md", ".markdown"}:
+    compiler = MarkdownDocumentCompiler(profile=selected_profile)
+else:
+    manifest = load_manifest(input_path)
+    compiler = MANIFEST_COMPILERS[(manifest.kind, manifest.schema_version)]
+```
+
+Manifest dispatch is keyed by manifest subtype, not by packet/bundle identity:
+
+```python
+MANIFEST_COMPILERS = {
+    ("label_run", "label_run_v1"): LabelRunManifestCompiler,
+    ("sticker_sheet", "sticker_sheet_v1"): StickerSheetManifestCompiler,
+    ("composite_bundle", "bundle_manifest_v1"): BundleManifestCompiler,
+    ("cam_stack", "bundle_manifest_v1"): CAMStackManifestCompiler,
+    ("codex_bundle", "bundle_manifest_v1"): CodexBundleManifestCompiler,
+    ("forge_packet_review", "packet_review_manifest_v1"): PacketReviewManifestCompiler,
 }
 ```
 
-Adding a new render archetype means adding one entry here and one renderer class.
-Adding a new profile within an existing archetype requires zero code changes.
-
-`packet_review` is intentionally narrow: it should understand Forge packet
-folder conventions well enough to create an assembly view, then delegate normal
-multi-source rendering behavior to `BundleRenderer` or shared assembly helpers.
+Each compiler emits a `ProjectionPlan` / assembly view. The Pandoc-backed render
+executor consumes that projection plan. Adding a new profile within an existing
+layout family requires no code changes; adding a recurring render target means
+adding a new manifest subtype/compiler.
 
 ### 3.4 Pandoc engine wrapper
 
@@ -540,25 +590,27 @@ class PandocEngine:
 
 ---
 
-## 4. Bundle Assembly Contract
+## 4. Manifest-Based Assembly Contract
 
-### 4.1 Bundle manifest schema
+### 4.1 Bundle-family manifest schema
 
-A bundle manifest declares multiple source anchors, generated front/back matter,
-figures, and profile settings — assembled into one styled PDF:
+A bundle-family manifest is one manifest subtype. It declares multiple source
+anchors, generated front/back matter, figures, and profile settings — assembled
+into one styled PDF. Generic composite bundles, CAM Stack, and Codex 0 can share
+this family while using distinct `kind` values when their contracts recur:
 
 ```yaml
 # Schema: bundle_manifest_v1
 # Example: manifests/cam_stack_exemplar.bundle.yaml
 
-kind: composite_stack_packet
+kind: composite_bundle          # or cam_stack / codex_bundle for recurring specialized contracts
 schema_version: bundle_manifest_v1
 bundle_id: cam-stack-exemplar-v0
 bundle_name: "CAM Stack — Civic Architecture Packet"
 profile: cam                           # Profile ID from profiles/ registry
 
-# ===== Packet metadata (for title page and reader guide) =====
-packet:
+# ===== Presentation metadata (for title page and reader guide) =====
+presentation:
   title: "CAM Stack"
   subtitle: "Civic Architecture and Governance Architecture"
   authors: ["Luis Ramirez"]
@@ -630,10 +682,10 @@ validation:
 
 ### 4.2 Bundle assembly algorithm
 
-The `BundleRenderer` implements:
+The bundle-family manifest compiler implements:
 
 ```
-BundleRenderer.prepare(bundle_manifest.yaml):
+BundleManifestCompiler.prepare(bundle_manifest.yaml):
   1. Parse and validate manifest against bundle_manifest_v1 schema
   2. Resolve profile from registry
   3. Verify all source paths exist
@@ -641,7 +693,7 @@ BundleRenderer.prepare(bundle_manifest.yaml):
   5. Verify UID uniqueness
   6. Verify ordering consistency
 
-BundleRenderer.assemble(bundle_manifest.yaml) → single Markdown file:
+BundleManifestCompiler.compile(bundle_manifest.yaml) → ProjectionPlan / assembled Markdown view:
   1. Generate title page block (from packet metadata)
   2. Generate reader guide block (from manifest.generated.reader_guide)
   3. Generate TOC placeholder (\tableofcontents)
@@ -657,7 +709,7 @@ BundleRenderer.assemble(bundle_manifest.yaml) → single Markdown file:
   6. Generate provenance block (source paths, digests)
   7. Write assembled Markdown to temp file
 
-BundleRenderer.render(bundle_manifest.yaml):
+Bundle-family render execution:
   1. assemble → temp_assembled.md
   2. Build PandocInvocation with:
      - input: temp_assembled.md
@@ -679,8 +731,10 @@ It exercises the full bundle assembly contract:
 - **Bundle renderer** assembles the composite Markdown
 - **Pandoc** renders with `cam.tex` template + `yugencam.sty`
 
-The same mechanism will work for Keeper bundles, Civic bundles, or any
-future multi-source composite packet — just change the profile and sources.
+The same family will work for Keeper bundles, Civic bundles, CAM Stack, Codex 0,
+or any future multi-source composite artifact. Use a generic `composite_bundle`
+manifest for one-offs; create a named manifest subtype when the artifact family
+recurs and needs dedicated validation or generated sections.
 
 ### 4.4 Bundle validation checklist
 
@@ -1049,7 +1103,7 @@ The renderer discovers sheet specs dynamically. No code change.
 | `input/` | NOT moved | Input is external to the pipeline; fixtures provide synthetic test inputs |
 | `doc_pipeline.py` | `cli/main.py` + `engine/` | Rewritten as profile-driven dispatch |
 | `pandoc_build.py` | `engine/pandoc.py` | Rewritten as PandocEngine class |
-| `packet_pipeline.py` | `renderers/packet_review.py` + shared bundle assembly helpers | Rewritten as PacketReviewRenderer thin adapter, not a generic packet-as-document renderer |
+| `packet_pipeline.py` | `renderers/packet_review.py` manifest compiler + shared projection helpers | Rewritten as `forge_packet_review` manifest compiler, not a generic packet-as-document renderer |
 | `label_pipeline.py` | `renderers/label_sheet.py` | Rewritten with schema-validated run manifests |
 | `label_sheet_build.py` | `renderers/label_sheet.py` | Integrated into LabelSheetRenderer |
 | `markdown_label.py` | `engine/` or `renderers/label_sheet.py` | Integrated |
@@ -1110,7 +1164,7 @@ Every profile in `40_latex/defaults/` maps to a greenfield profile:
 | `labels_avery_5164.yaml` | label | `profiles/labels/labels_avery_5164.yaml` |
 | `sticker_sheet.yaml` | sticker | `profiles/stickers/sticker_sheet.yaml` |
 
-**Total: 21 profiles across 6 profile classes, plus `packet_review` as a narrow adapter class for Forge packet review projections.**
+**Total: 21 profiles across 6 profile/layout families. Packet review is now a manifest subtype (`forge_packet_review`), not a peer document/profile class.**
 
 ### 9.2 Workflow coverage matrix
 
@@ -1119,13 +1173,13 @@ Every profile in `40_latex/defaults/` maps to a greenfield profile:
 | Single doc (risk, tech, mythic, etc.) | 1 MD file | document | DocumentRenderer | ✅ | Standard |
 | Letter (personal, mythic, Johannah) | 1 MD with variables | letter | DocumentRenderer | ✅ | Standard |
 | Resume (base, CV, compact) | 1 MD resume | resume | DocumentRenderer | ✅ | Standard (wired via TEXINPUTS) |
-| Packet review (Prometheus/Forge) | Packet dir → assembly view | packet_review | PacketReviewRenderer → BundleRenderer/shared assembly | ✅ | Specialized view over work state |
+| Packet review (Prometheus/Forge) | `forge_packet_review` manifest → packet dir/state | packet_review/profile family | PacketReviewManifestCompiler → ProjectionPlan → Pandoc renderer | ✅ | Specialized projection over work state |
 | Elian packet/poster | 1 MD (specialty) | document | DocumentRenderer | ✅ | Standard |
 | Label sheet (Avery 5164) | Run manifest → N MD | label | LabelSheetRenderer | ✅ | Formalized from existing |
-| Sticker sheet | 1 MD with grid | sticker | StickerSheetRenderer | ✅ | Formalized from existing |
-| CAM Stack bundle | Bundle manifest → N MD + figures | bundle | BundleRenderer | ✅ | **New — greenfield addition** |
+| Sticker sheet | `sticker_sheet` manifest | sticker | StickerSheetManifestCompiler → StickerSheetRenderer internals | ✅ | Manifest-driven physical/flexible layout |
+| CAM Stack bundle | `cam_stack` manifest → N MD + figures | bundle/profile family | CAMStackManifestCompiler → ProjectionPlan → Pandoc renderer | ✅ | **New — greenfield addition** |
 | Atrium context object | 1 MD (context object) | document | DocumentRenderer | ✅ | Standard (generic_report) |
-| Atrium context bundle | Bundle manifest → N MD | bundle | BundleRenderer | ✅ | **New — unified with CAM Stack** |
+| Atrium context bundle | `composite_bundle` manifest → N MD | bundle/profile family | BundleManifestCompiler → ProjectionPlan → Pandoc renderer | ✅ | **New — unified with CAM Stack family** |
 
 ### 9.3 Gap resolution from Stage 05
 
@@ -1134,18 +1188,18 @@ Every profile in `40_latex/defaults/` maps to a greenfield profile:
 | G1 | tightlist-mythic-letter-johannah | Fixed in `mythic_letter_johannah.tex` preamble (template carried from 40_latex with fix) |
 | G2 | elian-campaign-asset-paths | Content-dependent; profile declares `requires.assets` for validation |
 | G3 | resume-base-cv-orphan-wiring | Resume profiles wired via profile declaration, not hidden in doc_pipeline.py |
-| G4 | sticker-sheet-no-grid-layout | StickerSheetRenderer generates TikZ grid from profile declaration |
+| G4 | sticker-sheet-no-grid-layout | StickerSheetManifestCompiler generates TikZ grid from `sticker_sheet` manifest declaration |
 | G5 | labels-avery-5164-synthetic-layout | LabelSheetRenderer generates TikZ placement from sheet spec |
 | G6 | label-grid-positioning-source | Grid defined in sheet spec + run manifest, rendered by renderer |
 | G7 | mythic-letter-johannah-font-paths | Font paths in `requires.fonts` and `styles/`; resource-path includes font dirs |
 
 ### 9.4 Composite stack bundle validation
 
-The CAM Stack exemplar exercises the full bundle contract:
+The CAM Stack exemplar exercises the bundle-family manifest contract:
 
-1. **Manifest**: `fixtures/manifests/cam_stack_exemplar.bundle.yaml` declares 2+ CAM anchor sources + 1 figure + reader guide + afterword
+1. **Manifest**: `fixtures/manifests/cam_stack_exemplar.bundle.yaml` uses `kind: cam_stack` and declares 2+ CAM anchor sources + 1 figure + reader guide + afterword
 2. **Profile**: `profiles/reports/cam.yaml` provides CAM styling
-3. **Assembly**: BundleRenderer generates intermediate Markdown with reader guide, demoted source sections, figure pages, afterword
+3. **Assembly**: CAMStackManifestCompiler / bundle-family compiler generates a projection plan with reader guide, demoted source sections, figure pages, afterword
 4. **Render**: Pandoc with `cam.tex` template + `yugencam.sty` style
 5. **Evidence**: 30-point validation checklist, visual page samples, provenance JSON
 6. **Boundary**: Output in `generated/bundles/`, 40_latex untouched
@@ -1168,7 +1222,7 @@ The CAM Stack exemplar exercises the full bundle contract:
 | ID | Decision | Rationale | Trade-offs |
 |---|---|---|---|
 | DD-01 | Profile-first architecture | No hardcoded profile lists; expansion is file creation, not code change | Startup cost of resolving inheritance chains |
-| DD-02 | Profile class taxonomy (6 classes) | Covers all current profiles; each class maps to one renderer | May need splitting if profiles diverge within a class |
+| DD-02 | Manifest subtype taxonomy for render targets | Keeps packets/bundles/labels/stickers/CAM/Codex distinct while sharing projection/render machinery | Requires subtype schemas/compilers for recurring artifact families |
 | DD-03 | YAML inheritance for profiles | Replaces hardcoded defaults lists; mirrors CSS/LaTeX precedent | Circular dependency detection needed |
 | DD-04 | Intermediate Markdown for bundles | Pandoc speaks Markdown natively; assembly is simple concatenation | Large bundles may produce large intermediate files |
 | DD-05 | TikZ for label/sticker grids | LaTeX's native grid placement; no external dependencies | Requires LaTeX picture/tikz knowledge for debugging |
@@ -1323,16 +1377,16 @@ metadata:
 ## Appendix B: Bundle Manifest Template
 
 ```yaml
-# Copy this template to create a new composite bundle manifest
+# Copy this template to create a new bundle-family render manifest
 # Save as: manifests/<bundle_name>.bundle.yaml
 
-kind: composite_stack_packet
+kind: composite_bundle   # or cam_stack / codex_bundle for recurring specialized contracts
 schema_version: bundle_manifest_v1
 bundle_id: ""
 bundle_name: ""
 profile: ""                           # Profile ID from profiles/ registry
 
-packet:
+presentation:
   title: ""
   subtitle: ""
   authors: []

@@ -2,15 +2,16 @@
 
 ## Purpose
 
-The sticker sheet pipeline renders a single Markdown file with grid layout
-directives into a full-page sticker grid PDF with optional cut lines.
+The sticker sheet pipeline renders a `sticker_sheet` render manifest subtype into a full-page sticker grid PDF with optional cut lines. Individual sticker cells may point to Markdown snippets/assets, but the sheet itself is manifest-driven.
 
 ## Input Shape
 
-A single Markdown file with grid declaration in frontmatter:
+A sticker-sheet YAML manifest:
 
-```markdown
----
+```yaml
+kind: sticker_sheet
+schema_version: sticker_sheet_v1
+sheet_id: codex-zero-stickers
 profile: sticker_sheet
 layout:
   grid: [3, 3]
@@ -22,17 +23,15 @@ cells:
     content: "Sticker 1"
     image: assets/icon1.png
   - position: [1, 0]
-    content: "Sticker 2"
+    source: stickers/sticker2.md
     image: assets/icon2.png
   - position: [0, 1]
     content: "Sticker 3"
   # ... remaining cells
----
-
-# Sticker Sheet Header
-
-Optional overall content for the sheet.
 ```
+
+A cell may contain inline content for simple sheets or point to a Markdown source
+when the sticker has its own authored object.
 
 ## Profile
 
@@ -54,8 +53,8 @@ pandoc_defaults:
 ## Rendering Flow
 
 ```
-sticker_content.md → StickerSheetRenderer.prepare()
-  ├── Parse Markdown frontmatter
+sticker_sheet.yaml → StickerSheetManifestCompiler.prepare()
+  ├── Parse sticker_sheet manifest
   ├── Validate grid declaration
   ├── Validate cell positions (within grid bounds)
   └── Check for duplicate positions
@@ -80,7 +79,7 @@ sticker_content.md → StickerSheetRenderer.prepare()
 ## Grid Positioning
 
 Unlike labels (which use physical sheet specs), sticker sheets declare their
-grid in the content frontmatter. This is intentional:
+grid in the sheet manifest. This is intentional:
 
 - **Labels**: Physical stock → sheet spec (data file)
 - **Stickers**: Flexible layout → content declaration (frontmatter)
