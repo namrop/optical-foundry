@@ -1,0 +1,11 @@
+kind: label_run
+schema_version: label_run_v1
+run_id: fixture-label-run-001
+profile: generic-report
+sheet_spec: avery-5164
+output_name: fixture-labels
+labels:
+  - slot: 1
+    source: fixtures/sources/label-001.md
+  - slot: 2
+    source: fixtures/sources/label-002.md

@@ -1,0 +1,58 @@
+"""Tests for CLI registry wiring — manifest→compiler resolution."""
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from engine.manifest_registry import ManifestRegistry
+from engine.manifest_compiler import (
+    CompositeBundleCompiler, LabelRunCompiler,
+    StickerSheetCompiler, ForgePacketReviewCompiler,
+)
+
+
+def _default_registry() -> ManifestRegistry:
+    reg = ManifestRegistry()
+    for cls in [CompositeBundleCompiler, LabelRunCompiler, StickerSheetCompiler, ForgePacketReviewCompiler]:
+        reg.register(cls.kind, cls.schema_version, cls)
+    return reg
+
+
+def test_registry_resolves_bundle():
+    reg = _default_registry()
+    raw = {"kind": "composite_bundle", "schema_version": "bundle_manifest_v1", "profile": "cam"}
+    compiler_cls = reg.resolve_compiler(raw)
+    assert compiler_cls == CompositeBundleCompiler
+
+
+def test_registry_resolves_label():
+    reg = _default_registry()
+    raw = {"kind": "label_run", "schema_version": "label_run_v1", "profile": "labels-avery-5164"}
+    compiler_cls = reg.resolve_compiler(raw)
+    assert compiler_cls == LabelRunCompiler
+
+
+def test_registry_resolves_sticker():
+    reg = _default_registry()
+    raw = {"kind": "sticker_sheet", "schema_version": "sticker_sheet_v1", "profile": "sticker-sheet"}
+    compiler_cls = reg.resolve_compiler(raw)
+    assert compiler_cls == StickerSheetCompiler
+
+
+def test_registry_resolves_packet_review():
+    reg = _default_registry()
+    raw = {"kind": "forge_packet_review", "schema_version": "packet_review_manifest_v1", "profile": "prometheus-packet"}
+    compiler_cls = reg.resolve_compiler(raw)
+    assert compiler_cls == ForgePacketReviewCompiler
+
+
+def test_registry_returns_none_for_unknown():
+    reg = _default_registry()
+    assert reg.resolve_compiler({}) is None
+    assert reg.resolve_compiler({"kind": "bogus"}) is None
+
+
+def test_all_compilers_registered():
+    reg = _default_registry()
+    kinds = reg.supported_kinds()
+    for k in ["composite_bundle", "label_run", "sticker_sheet", "forge_packet_review"]:
+        assert k in kinds, f"expected {k} in supported kinds"
