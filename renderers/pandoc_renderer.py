@@ -22,7 +22,7 @@ from renderers.base import Renderer
 
 # Read-only reference path for 40_latex templates, styles, fonts.
 LATEX40 = Path("~/Digital_Workspace/40_latex")
-TEXMFHOME = LATEX40 / "texmf"
+TEXMFHOME = LATEX40 / "styles" / "texmf"
 
 
 class PandocRenderer(Renderer):

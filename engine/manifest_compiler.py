@@ -179,28 +179,22 @@ class CompositeBundleCompiler(ManifestCompiler):
         # --- assemble intermediate Markdown ---
         lines: list[str] = []
 
-        # title page
-        lines.append("\\begin{titlepage}")
-        lines.append("\\begin{center}")
-        lines.append(f"\\Huge\\textbf{{{title}}}")
-        if subtitle:
-            lines.append(f"\\large {{{subtitle}}}")
-        if authors:
-            lines.append(f"\\large By: {', '.join(authors)}")
-        if date:
-            lines.append(f"\\large {{{date}}}")
-        lines.append("\\end{center}")
+        # Title metadata is passed through Pandoc --metadata; the template
+        # renders the title page from metadata. We add a brief preamble.
         abstract = pres.get("abstract", "")
         if abstract:
-            lines.append("\\vspace{1cm}")
-            lines.append(abstract)
-        lines.append("\\end{titlepage}")
+            lines.append(f"> {abstract}")
+            lines.append("")
+
+        if render_cfg.get("include_toc", True):
+            lines.append("\\newpage\\tableofcontents")
 
         # reader guide
         rg = gen_cfg.get("reader_guide", {})
         if rg.get("enabled", False):
             rg_title = rg.get("title", "Reader Guide")
-            lines.append(f"\\newpage\\section{{{rg_title}}}")
+            lines.append("\\newpage")
+            lines.append(f"# {rg_title}")
             for section_line in rg.get("sections", []):
                 lines.append(section_line)
                 lines.append("")
@@ -230,7 +224,8 @@ class CompositeBundleCompiler(ManifestCompiler):
             raw_text = src_path.read_text()
             fm, body = _split_frontmatter_and_body(raw_text)
 
-            lines.append(f"\\newpage\\section{{{src_title}}}")
+            lines.append("\\newpage")
+            lines.append(f"# {src_title}")
 
             # frontmatter block
             if inc_fm == "full" and fm:
@@ -278,13 +273,15 @@ class CompositeBundleCompiler(ManifestCompiler):
         if aw.get("enabled", False):
             aw_title = aw.get("title", "Afterword")
             aw_content = aw.get("content", "")
-            lines.append(f"\\newpage\\section{{{aw_title}}}")
+            lines.append("\\newpage")
+            lines.append(f"# {aw_title}")
             if aw_content:
                 lines.append(aw_content)
             lines.append("")
 
         # provenance block
-        lines.append("\\newpage\\section{Provenance & Evidence}")
+        lines.append("\\newpage")
+        lines.append("# Provenance & Evidence")
         lines.append("\\textbf{Source Inventory}")
         lines.append("")
         for uid in assembly.source_order:
