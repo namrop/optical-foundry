@@ -145,13 +145,13 @@ BUNDLE_PARTIAL: dict[str, list[str]] = {
 # Profiles fundamentally incompatible with bundle rendering.
 BUNDLE_INCOMPATIBLE: dict[str, list[str]] = {
     "elian-packet": [
-        "Hardcoded campaign image assets — fails without real files",
+        "Placeholder assets available for synthetic local renders only; real campaign art remains external/content-dependent",
         "No TOC guard — --toc flag has no effect",
         "Content-dependent (see G2 in gap report)",
         "Designed for single-packet Elian campaign render, not generic bundles",
     ],
     "elian-poster": [
-        "Hardcoded campaign image assets — fails without real files",
+        "Placeholder assets available for synthetic local renders only; real campaign art remains external/content-dependent",
         "No TOC guard — --toc flag has no effect",
         "Missing \\tightlist",
         "Missing longtable support",

@@ -181,3 +181,20 @@ behavior in Optical Foundry:
 
 This makes the current limitation honest and testable without pretending a full
 grid engine exists.
+
+## Elian placeholder asset posture
+
+Local imported Elian defaults now point to OF-owned synthetic placeholder art in
+`fixtures/assets/elian/` for **local test renders only**:
+- `elian_packet_cover_placeholder.png`
+- `elian_poster_placeholder.png`
+
+These defaults set `placeholder_assets: true`, and PandocRenderer copies that
+into render evidence as:
+- warning: synthetic placeholder asset note
+- `boundary.placeholder_assets = true`
+- `boundary.production_output = false`
+
+`foundry profiles` still reports `elian-packet` and `elian-poster` as
+**incompatible** for real bundle/content usage because real campaign art remains
+external/content-dependent.

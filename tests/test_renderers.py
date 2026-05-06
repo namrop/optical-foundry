@@ -45,3 +45,10 @@ def test_pandoc_renderer_template_inference():
     assert r._infer_template("labels-avery-5164") == "label_sheet.tex"
     assert r._infer_template("sticker-sheet") == "label_sheet.tex"
     assert r._infer_template("unknown") is None
+
+
+def test_read_defaults_metadata_detects_placeholder_assets():
+    r = PandocRenderer()
+    meta = r._read_defaults_metadata(GF / "profiles" / "40_latex_import" / "defaults" / "elian_packet.yaml")
+    assert meta["boundary"]["placeholder_assets"] is True
+    assert any("placeholder" in w.lower() for w in meta["warnings"])

@@ -53,8 +53,10 @@ class PandocRenderer(Renderer):
 
         # profile defaults: look for profile YAML in 40_latex defaults/
         defaults_file = self._find_profile_defaults(plan.profile_id)
+        defaults_meta: dict[str, Any] = {}
         if defaults_file:
             cmd += ["--defaults", str(defaults_file)]
+            defaults_meta = self._read_defaults_metadata(defaults_file)
 
         # template — prefer local import, fall back to 40_latex
         template = plan.template or self._infer_template(plan.profile_id)
@@ -179,11 +181,12 @@ class PandocRenderer(Renderer):
                 "toc_depth": plan.toc_depth,
                 "figures_validated": len(plan.figure_inventory) == 0,
             },
-            "warnings": list(plan.boundary_assertions.get("warnings", [])),
+            "warnings": list(plan.boundary_assertions.get("warnings", [])) + defaults_meta.get("warnings", []),
             "boundary": {
                 "target_40_latex_mutated": False,
                 "production_output": False,
                 "packet_local_generated_only": True,
+                **defaults_meta.get("boundary", {}),
                 **plan.boundary_assertions,
             },
             "command": " ".join(cmd),
@@ -240,6 +243,26 @@ class PandocRenderer(Renderer):
             "sticker-sheet": "label_sheet.tex",
         }
         return mapping.get(profile_id)
+
+    @staticmethod
+    def _read_defaults_metadata(path: Path) -> dict[str, Any]:
+        """Read small OF-local metadata hints from defaults YAML.
+
+        Currently used for local placeholder asset warnings so synthetic renders
+        cannot be mistaken for production outputs.
+        """
+        try:
+            import yaml
+            data = yaml.safe_load(path.read_text()) or {}
+        except Exception:
+            return {}
+        vars_ = data.get("variables", {}) if isinstance(data, dict) else {}
+        out: dict[str, Any] = {"warnings": [], "boundary": {}}
+        if isinstance(vars_, dict) and vars_.get("placeholder_assets") is True:
+            note = vars_.get("placeholder_asset_note", "Synthetic placeholder assets active.")
+            out["warnings"].append(str(note))
+            out["boundary"]["placeholder_assets"] = True
+        return out
 
     @staticmethod
     def _sha256_file(path: Path) -> str:
