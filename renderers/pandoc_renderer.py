@@ -228,7 +228,7 @@ class PandocRenderer(Renderer):
             "mythic-letter-johannah": "mythic_letter_johannah.tex",
             "letter": "personal_letter.tex",
             "resume": "resume.tex",
-            "prometheus-packet": "prometheus_packet.tex",
+            "prometheus-packet": "generic_report.tex",
             "convergence": "convergence.tex",
             "keeper": "keeper.tex",
             "yugen-brand": "yugen_brand.tex",

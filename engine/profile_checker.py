@@ -33,7 +33,7 @@ PROFILE_TEMPLATE_MAP: dict[str, str] = {
     "mythic-letter-johannah": "mythic_letter_johannah.tex",
     "letter": "personal_letter.tex",
     "resume": "resume.tex",
-    "prometheus-packet": "prometheus_packet.tex",
+    "prometheus-packet": "generic_report.tex",
     "convergence": "convergence.tex",
     "keeper": "keeper.tex",
     "yugen-brand": "yugen_brand.tex",
@@ -86,7 +86,6 @@ TEMPLATE_CORRECTIONS: dict[str, str] = {
     "risk": "base.tex",           # risk.yaml defaults point to base.tex
     "tech": "base.tex",           # technology.yaml defaults point to base.tex
     "creative": "base.tex",       # creative.yaml defaults point to base.tex
-    "prometheus-packet": "generic_report.tex",  # prometheus_packet.yaml → generic_report.tex
     "yugen-brand": "generic_report.tex",        # yugenbase.yaml → generic_report.tex
     "yugen-brand-elevated": "generic_report.tex",
 }

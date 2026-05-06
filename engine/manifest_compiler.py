@@ -733,26 +733,35 @@ class ForgePacketReviewCompiler(ManifestCompiler):
             assembly.source_roles[uid] = "packet_surface"
 
             if not inc_path.exists():
-                lines.append(f"\\newpage\\section{{{inc_name}}}")
+                lines.append("\\newpage")
+                lines.append(f"# `{inc_name}`")
                 lines.append(f"*[File not found: {inc_path}]*")
                 lines.append("")
                 continue
 
             assembly.source_digests[uid] = _sha256_hex(inc_path)
-            lines.append(f"\\newpage\\section{{{inc_name}}}")
+            lines.append("\\newpage")
+            lines.append(f"# `{inc_name}`")
 
             if inc_path.suffix == ".json":
                 import json
                 try:
                     data = json.loads(inc_path.read_text())
-                    formatted = json.dumps(data, indent=2)
-                    lines.append("```json")
-                    lines.append(formatted)
-                    lines.append("```")
+                    if isinstance(data, dict):
+                        lines.append("**JSON summary**")
+                        lines.append("")
+                        for k, v in data.items():
+                            if isinstance(v, (str, int, float, bool)) or v is None:
+                                lines.append(f"- **{k}**: {v}")
+                            elif isinstance(v, list):
+                                lines.append(f"- **{k}**: list[{len(v)}]")
+                            elif isinstance(v, dict):
+                                lines.append(f"- **{k}**: object[{len(v)} keys]")
+                        lines.append("")
+                    else:
+                        lines.append(f"*JSON value of type {type(data).__name__}*\n")
                 except json.JSONDecodeError:
-                    lines.append("```")
-                    lines.append(inc_path.read_text())
-                    lines.append("```")
+                    lines.append("*Invalid JSON; raw content omitted from packet-review fixture render.*")
             else:
                 lines.append(inc_path.read_text())
             lines.append("")
@@ -766,7 +775,8 @@ class ForgePacketReviewCompiler(ManifestCompiler):
                 assembly.source_paths[uid] = str(q_path)
                 assembly.source_roles[uid] = "packet_surface"
                 assembly.source_digests[uid] = _sha256_hex(q_path)
-                lines.append(f"\\newpage\\section{{QUESTIONS.md}}")
+                lines.append("\\newpage")
+                lines.append("# `QUESTIONS.md`")
                 lines.append(q_path.read_text())
                 lines.append("")
 
@@ -780,10 +790,19 @@ class ForgePacketReviewCompiler(ManifestCompiler):
                 assembly.source_paths[uid] = str(ds_path)
                 assembly.source_roles[uid] = "packet_surface"
                 assembly.source_digests[uid] = _sha256_hex(ds_path)
-                lines.append(f"\\newpage\\section{{DIRTY_STATE.json}}")
-                lines.append("```json")
-                lines.append(json.dumps(json.loads(ds_path.read_text()), indent=2))
-                lines.append("```")
+                lines.append("\\newpage")
+                lines.append("# `DIRTY_STATE.json`")
+                data = json.loads(ds_path.read_text())
+                lines.append("**JSON summary**")
+                lines.append("")
+                if isinstance(data, dict):
+                    for k, v in data.items():
+                        if isinstance(v, (str, int, float, bool)) or v is None:
+                            lines.append(f"- **{k}**: {v}")
+                        elif isinstance(v, list):
+                            lines.append(f"- **{k}**: list[{len(v)}]")
+                        elif isinstance(v, dict):
+                            lines.append(f"- **{k}**: object[{len(v)} keys]")
                 lines.append("")
 
         assembled_content = "\n".join(lines)
@@ -803,6 +822,12 @@ class ForgePacketReviewCompiler(ManifestCompiler):
                 }
                 for uid in assembly.source_order
             ],
+            boundary_assertions={
+                "projection_mode": "packet_review",
+                "packet_review_fixture": True,
+                "include_questions": render_cfg.get("include_questions", True),
+                "include_dirty_state_summary": render_cfg.get("include_dirty_state_summary", True),
+            },
         )
         return plan
 

@@ -292,3 +292,44 @@ def test_packet_review_validate():
     }
     errors = compiler.validate(manifest)
     assert errors == [], errors
+
+
+def test_packet_review_compile_uses_markdown_headings_for_file_names():
+    compiler = ForgePacketReviewCompiler()
+    manifest = {
+        "kind": "forge_packet_review", "schema_version": "packet_review_manifest_v1",
+        "profile": "prometheus-packet",
+        "packet": {
+            "path": str(GF),
+            "include": ["BEAM.md"],
+        },
+        "render": {
+            "include_questions": False,
+            "include_dirty_state_summary": False,
+        },
+    }
+    plan = compiler.compile(manifest)
+    assembled = plan.render_source.read_text()
+    assert "# `BEAM.md`" in assembled
+    assert "\\section{BEAM.md}" not in assembled
+
+
+def test_packet_review_compile_summarizes_json_instead_of_fencing_full_block():
+    compiler = ForgePacketReviewCompiler()
+    manifest = {
+        "kind": "forge_packet_review", "schema_version": "packet_review_manifest_v1",
+        "profile": "prometheus-packet",
+        "packet": {
+            "path": str(GF),
+            "include": ["STATE.json"],
+        },
+        "render": {
+            "include_questions": False,
+            "include_dirty_state_summary": False,
+        },
+    }
+    plan = compiler.compile(manifest)
+    assembled = plan.render_source.read_text()
+    assert "# `STATE.json`" in assembled
+    assert "**JSON summary**" in assembled
+    assert "```json" not in assembled
