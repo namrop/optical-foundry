@@ -22,7 +22,10 @@ from renderers.base import Renderer
 
 # Read-only reference path for 40_latex templates, styles, fonts.
 LATEX40 = Path("~/Digital_Workspace/40_latex")
-TEXMFHOME = LATEX40 / "styles" / "texmf"
+
+# Local copy of 40_latex profile assets (editable Optical Foundry copies).
+# Prefer these over 40_latex when they exist.
+LOCAL_IMPORT = Path(__file__).resolve().parents[1] / "profiles" / "40_latex_import"
 
 
 class PandocRenderer(Renderer):
@@ -53,12 +56,15 @@ class PandocRenderer(Renderer):
         if defaults_file:
             cmd += ["--defaults", str(defaults_file)]
 
-        # template
+        # template — prefer local import, fall back to 40_latex
         template = plan.template or self._infer_template(plan.profile_id)
         if template:
-            tpath = LATEX40 / "templates" / template
-            if tpath.exists():
-                cmd += ["--template", str(tpath)]
+            tpath_local = LOCAL_IMPORT / "templates" / template
+            tpath_40 = LATEX40 / "templates" / template
+            if tpath_local.exists():
+                cmd += ["--template", str(tpath_local)]
+            elif tpath_40.exists():
+                cmd += ["--template", str(tpath_40)]
 
         # metadata
         if plan.title:
@@ -81,10 +87,14 @@ class PandocRenderer(Renderer):
         xe = shutil.which("xelatex") or "xelatex"
         cmd += ["--pdf-engine", str(xe)]
 
-        # texmf path for styles
+        # texmf path for styles — prefer local import, fall back to 40_latex
+        local_texmf = LOCAL_IMPORT / "styles" / "texmf"
+        texmf40 = LATEX40 / "styles" / "texmf"
         env = os.environ.copy()
-        if TEXMFHOME.exists():
-            env["TEXMFHOME"] = str(TEXMFHOME)
+        if local_texmf.exists():
+            env["TEXMFHOME"] = str(local_texmf)
+        elif texmf40.exists():
+            env["TEXMFHOME"] = str(texmf40)
 
         # page geometry
         if plan.page_size and plan.page_size != "letter":
@@ -185,12 +195,15 @@ class PandocRenderer(Renderer):
     # ── helpers ──────────────────────────────
 
     def _find_profile_defaults(self, profile_id: str) -> Path | None:
-        # Check 40_latex defaults/ directory for a matching YAML file.
+        # Prefer local import, then 40_latex, then greenfield profiles/
         for pattern in [f"{profile_id}.yaml", f"{profile_id.replace('_', '-')}.yaml",
                         f"{profile_id.replace('-', '_')}.yaml"]:
-            candidate = LATEX40 / "defaults" / pattern
-            if candidate.exists():
-                return candidate
+            local = LOCAL_IMPORT / "defaults" / pattern
+            if local.exists():
+                return local
+            remote = LATEX40 / "defaults" / pattern
+            if remote.exists():
+                return remote
         # Also check profiles/ in greenfield
         for pdir in (Path("profiles") / "reports", Path("profiles") / "labels",
                       Path("profiles") / "stickers", Path("profiles") / "letters",

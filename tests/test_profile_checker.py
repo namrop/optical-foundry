@@ -178,3 +178,69 @@ def test_template_found_is_absolute_path():
         assert cap.template_found.startswith("/"), (
             f"Expected absolute path for template, got: {cap.template_found}"
         )
+
+
+# ── Source detection tests ──────────────────────────────────────
+
+
+def test_generic_report_sources_are_local():
+    """With 40_latex_import directory present, profile assets should be local."""
+    cap = check_profile("generic-report")
+    assert cap.defaults_source == "local", (
+        f"Expected defaults_source='local', got '{cap.defaults_source}'"
+    )
+    assert cap.template_source == "local", (
+        f"Expected template_source='local', got '{cap.template_source}'"
+    )
+    assert "40_latex_import" in cap.defaults_found, (
+        f"Expected local import path, got: {cap.defaults_found}"
+    )
+    assert "40_latex_import" in cap.template_found, (
+        f"Expected local import path, got: {cap.template_found}"
+    )
+
+
+def test_all_bundle_ok_profiles_have_local_sources():
+    """All bundle-ok profiles should resolve assets from local import."""
+    from engine.profile_checker import BUNDLE_OK
+    caps = check_all_profiles()
+    for pid in BUNDLE_OK:
+        cap = caps[pid]
+        assert cap.defaults_source == "local", (
+            f"{pid}: expected defaults_source='local', got '{cap.defaults_source}'"
+        )
+        assert cap.template_source == "local", (
+            f"{pid}: expected template_source='local', got '{cap.template_source}'"
+        )
+
+
+def test_json_report_includes_source_fields():
+    data = check_all_profiles_json()
+    report = __import__("json").loads(data)
+    caps = report["profiles"]
+    for pid, cap in caps.items():
+        assert "defaults_source" in cap, f"Missing defaults_source for {pid}"
+        assert "template_source" in cap, f"Missing template_source for {pid}"
+        assert cap["defaults_source"] in ("local", "40_latex", "missing"), (
+            f"{pid}: invalid defaults_source '{cap['defaults_source']}'"
+        )
+        assert cap["template_source"] in ("local", "40_latex", "missing"), (
+            f"{pid}: invalid template_source '{cap['template_source']}'"
+        )
+
+
+def test_summary_includes_source_counts():
+    data = check_all_profiles_json()
+    report = __import__("json").loads(data)
+    s = report["summary"]
+    # At least some should be local since we have the import dir
+    assert s["defaults_local"] > 0, "Expected some local defaults"
+    assert s["templates_local"] > 0, "Expected some local templates"
+    assert s["defaults_local"] + s["defaults_40_latex"] == s["with_defaults"]
+    assert s["templates_local"] + s["templates_40_latex"] == s["with_templates"]
+
+
+def test_unknown_profile_source_is_missing():
+    cap = check_profile("nonexistent-profile-999")
+    assert cap.defaults_source == "missing"
+    assert cap.template_source == "missing"

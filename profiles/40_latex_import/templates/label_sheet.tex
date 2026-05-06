@@ -1,0 +1,45 @@
+% templates/label_sheet.tex — minimal label-sheet template
+\PassOptionsToPackage{hyphens}{url}
+\documentclass[$if(classoption)$$for(classoption)$$classoption$$sep$,$endfor$$endif$]{$documentclass$}
+
+\usepackage{ifluatex}
+\usepackage{ifxetex}
+
+\ifxetex
+  \usepackage{fontspec}
+  $if(mainfont)$\setmainfont{$mainfont$}$endif$
+  $if(sansfont)$\setsansfont{$sansfont$}$endif$
+  $if(monofont)$\setmonofont{$monofont$}$endif$
+\else
+  \ifluatex
+    \usepackage{fontspec}
+    $if(mainfont)$\setmainfont{$mainfont$}$endif$
+    $if(sansfont)$\setsansfont{$sansfont$}$endif$
+    $if(monofont)$\setmonofont{$monofont$}$endif$
+  \fi
+\fi
+
+$if(geometry)$
+\usepackage[$for(geometry)$$geometry$$sep$,$endfor$]{geometry}
+$endif$
+
+\usepackage{graphicx,xcolor,microtype}
+\usepackage{array,calc}
+\usepackage{hyperref}
+\hypersetup{hidelinks}
+\providecommand{\tightlist}{\setlength{\itemsep}{0pt}\setlength{\parskip}{0pt}}
+\providecommand{\passthrough}[1]{#1}
+\providecommand{\pandocbounded}[1]{#1}
+
+$if(labelsheetstyle)$
+  \usepackage{$labelsheetstyle$}
+$endif$
+
+$for(header-includes)$
+$header-includes$
+$endfor$
+
+\begin{document}
+\pagestyle{empty}
+$body$
+\end{document}

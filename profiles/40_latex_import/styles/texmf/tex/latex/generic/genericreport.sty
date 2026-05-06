@@ -1,0 +1,43 @@
+%% genericreport.sty — stripped-down generic report styling
+\NeedsTeXFormat{LaTeX2e}
+\ProvidesPackage{genericreport}[2026/03/20 v0.1 Generic report style]
+
+\RequirePackage{xcolor}
+\RequirePackage{graphicx}
+\RequirePackage{hyperref}
+\RequirePackage{ifthen}
+
+\definecolor{GenericInk}{HTML}{111111}
+\definecolor{GenericMuted}{HTML}{555555}
+\definecolor{GenericRule}{HTML}{CCCCCC}
+\definecolor{GenericShade}{HTML}{F6F6F6}
+
+\hypersetup{colorlinks=true, linkcolor=GenericInk, urlcolor=GenericInk, citecolor=GenericInk}
+
+\makeatletter
+\@ifclassloaded{memoir}{%
+  \setlength{\headheight}{16pt}
+
+  \makepagestyle{genericPlain}
+  \makeevenhead{genericPlain}{}{}{}
+  \makeoddhead {genericPlain}{}{}{}
+  \makeevenfoot{genericPlain}{\thepage}{}{}
+  \makeoddfoot {genericPlain}{\thepage}{}{}
+
+  \makepagestyle{genericRule}
+  \makeheadrule{genericRule}{\textwidth}{0.4pt}
+  \makeevenhead{genericRule}{\small\sffamily\itshape Report}{}{}
+  \makeoddhead {genericRule}{\small\sffamily\itshape Report}{}{}
+  \makefootrule{genericRule}{\textwidth}{0.4pt}{0.6\baselineskip}
+  \makeevenfoot{genericRule}{\thepage}{}{}
+  \makeoddfoot {genericRule}{\thepage}{}{}
+
+  \aliaspagestyle{plain}{genericRule}
+}{}
+\makeatother
+
+\AtBeginDocument{%
+  \pagestyle{genericRule}%
+  \color{GenericInk}%
+  \definecolor{shadecolor}{HTML}{F6F6F6}%
+}

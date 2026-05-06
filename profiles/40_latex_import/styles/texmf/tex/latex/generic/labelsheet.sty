@@ -1,0 +1,22 @@
+%% labelsheet.sty — minimal styling helpers for printable label sheets
+\NeedsTeXFormat{LaTeX2e}
+\ProvidesPackage{labelsheet}[2026/04/21 v0.1 Label sheet style]
+
+\RequirePackage{xcolor}
+\RequirePackage{array}
+\RequirePackage{graphicx}
+\RequirePackage{tikz}
+\RequirePackage{enumitem}
+
+\newfontfamily\labelcinzel[Path=assets/fonts/cinzel/,UprightFont=Cinzel-Regular.ttf,BoldFont=Cinzel-Bold.ttf]{Cinzel}
+
+\newcommand{\labeltitle}[1]{{\fontsize{28}{32}\selectfont\bfseries #1\par}}
+\newcommand{\labelsubtitle}[1]{{\fontsize{17}{20}\selectfont #1\par}}
+\newcommand{\labelbody}[1]{{\fontsize{8}{10}\selectfont #1\par}}
+
+\AtBeginDocument{%
+  \pagestyle{empty}%
+  \setlength{\parindent}{0pt}%
+  \setlength{\parskip}{0pt}%
+  \setlist{nosep,leftmargin=*,topsep=0pt,partopsep=0pt,parsep=0pt,itemsep=0pt}%
+}

@@ -1,0 +1,19 @@
+from: markdown+footnotes+yaml_metadata_block+table_captions+smart
+to: pdf
+pdf-engine: xelatex
+template: templates/generic_report.tex
+top-level-division: section
+
+variables:
+  documentclass: memoir
+  classoption: [11pt, oneside]
+  mainfont: "Helvetica"
+  sansfont: "Helvetica"
+  monofont: "Menlo"
+  geometry:
+    - margin=1in
+  colorlinks: true
+  linkcolor: black
+  urlcolor: black
+  pagestyle: "genericRule"
+  genericstyle: genericreport

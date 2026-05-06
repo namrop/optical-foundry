@@ -1,0 +1,123 @@
+% templates/generic_report.tex — stripped-down generic Pandoc template
+\PassOptionsToPackage{hyphens}{url}
+\documentclass[$if(classoption)$$for(classoption)$$classoption$$sep$,$endfor$$endif$]{$documentclass$}
+
+\usepackage{ifluatex}
+\usepackage{ifxetex}
+
+\ifxetex
+  \usepackage{fontspec}
+  $if(mainfont)$\setmainfont{$mainfont$}$endif$
+  $if(sansfont)$\setsansfont{$sansfont$}$endif$
+  $if(monofont)$\setmonofont{$monofont$}$endif$
+\else
+  \ifluatex
+    \usepackage{fontspec}
+    $if(mainfont)$\setmainfont{$mainfont$}$endif$
+    $if(sansfont)$\setsansfont{$sansfont$}$endif$
+    $if(monofont)$\setmonofont{$monofont$}$endif$
+  \fi
+\fi
+
+\usepackage{graphicx,xcolor}
+\setkeys{Gin}{width=\linewidth,height=0.85\textheight,keepaspectratio}
+\usepackage{microtype}
+\usepackage{amsmath,mathtools,amssymb}
+\usepackage{pdflscape}
+\usepackage{fancyvrb,framed,fvextra}
+\providecommand{\pandocbounded}[1]{#1}
+\providecommand{\tightlist}{\setlength{\itemsep}{0pt}\setlength{\parskip}{0pt}}
+\providecommand{\passthrough}[1]{#1}
+
+$if(highlighting-macros)$
+$highlighting-macros$
+\RecustomVerbatimEnvironment{Highlighting}{Verbatim}{breaklines,fontsize=\small,commandchars=\\\{\}}
+\renewenvironment{Shaded}{\begin{snugshade}}{\end{snugshade}}
+$endif$
+
+$if(geometry)$
+\usepackage[$for(geometry)$$geometry$$sep$,$endfor$]{geometry}
+$endif$
+
+\usepackage{longtable,booktabs,array,tabularx,calc,multirow}
+\providecommand{\real}[1]{#1}
+\usepackage{chngcntr}
+\counterwithout{section}{chapter}
+\usepackage{needspace}
+\let\oldsection\section
+\renewcommand{\section}{\Needspace{6\baselineskip}\oldsection}
+\let\oldsubsection\subsection
+\renewcommand{\subsection}{\Needspace{6\baselineskip}\oldsubsection}
+\usepackage{caption}
+\makeatletter
+\@ifundefined{c@none}{\newcounter{none}}{}
+\makeatother
+\AtBeginEnvironment{longtable}{\captionsetup{type=table}}
+\setlength{\LTleft}{0pt plus 1fill}
+\setlength{\LTright}{0pt plus 1fill}
+\renewcommand{\arraystretch}{1.15}
+\setlength{\tabcolsep}{6pt}
+
+\usepackage{hyperref}
+\usepackage{newunicodechar}
+\newunicodechar{≤}{\ensuremath{\le}}
+\newunicodechar{≥}{\ensuremath{\ge}}
+\newunicodechar{×}{\ensuremath{\times}}
+\newunicodechar{≠}{\ensuremath{\ne}}
+\newunicodechar{±}{\ensuremath{\pm}}
+\newunicodechar{…}{\ldots}
+\newunicodechar{–}{\textendash}
+\newunicodechar{—}{\textemdash}
+\newunicodechar{“}{\textquotedblleft}
+\newunicodechar{”}{\textquotedblright}
+\newunicodechar{’}{\textquoteright}
+\newunicodechar{↔}{\ensuremath{\leftrightarrow}}
+\newunicodechar{ }{\quad}
+\newunicodechar{️}{}
+
+$if(genericstyle)$
+  \usepackage{$genericstyle$}
+$endif$
+
+$if(title)$\title{$title$}$endif$
+$if(author)$\author{$for(author)$$author$$sep$ \\ $endfor$}$endif$
+$if(date)$\date{$date$}$endif$
+
+$for(header-includes)$
+$header-includes$
+$endfor$
+
+$if(numbersections)$
+  \setcounter{secnumdepth}{$if(secnumdepth)$$secnumdepth$$else$5$endif$}
+$else$
+  \setcounter{secnumdepth}{0}
+$endif$
+\setcounter{tocdepth}{$if(toc-depth)$$toc-depth$$else$2$endif$}
+
+\begin{document}
+
+$if(pagestyle)$
+  \pagestyle{$pagestyle$}
+$endif$
+
+$if(title)$
+\maketitle
+$endif$
+
+$if(abstract)$
+\begin{abstract}
+$abstract$
+\end{abstract}
+$endif$
+
+$if(toc)$
+{
+\clearpage
+\tableofcontents
+\clearpage
+}
+$endif$
+
+$body$
+
+\end{document}

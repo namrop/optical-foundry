@@ -215,9 +215,13 @@ def cmd_profiles(args: argparse.Namespace) -> int:
 def _print_profiles_table(caps: dict) -> None:
     """Pretty-print a table of all profile capabilities."""
     # Header
-    hdr = f"{'Profile':<28} {'Defaults':<8} {'Template':<8} {'TOC':<5} {'Bundle':<14} {'Notes'}"
+    hdr = f"{'Profile':<28} {'D':<2} {'Src':<6} {'T':<2} {'Src':<6} {'TOC':<5} {'Bundle':<14} {'Notes'}"
     print(hdr)
     print("-" * len(hdr))
+
+    # Legend
+    print("L=local(import)  R=40_latex(reference)  D=Defaults  T=Template")
+    print()
 
     badge = {"ok": "✅ ok", "partial": "⚠️  partial", "incompatible": "❌ incompatible"}
 
@@ -225,9 +229,11 @@ def _print_profiles_table(caps: dict) -> None:
         has_d = "✓" if cap.defaults_found else "✗"
         has_t = "✓" if cap.template_found else "✗"
         has_toc = "✓" if cap.supports_toc else "✗"
+        ds = cap.defaults_source[:1].upper() if cap.defaults_source != "missing" else "-"
+        ts = cap.template_source[:1].upper() if cap.template_source != "missing" else "-"
         b = badge.get(cap.bundle_compatibility, cap.bundle_compatibility)
-        reasons = "; ".join(cap.bundle_reasons[:2])  # first two reasons
-        print(f"{pid:<28} {has_d:<8} {has_t:<8} {has_toc:<5} {b:<14} {reasons}")
+        reasons = "; ".join(cap.bundle_reasons[:1])  # first reason
+        print(f"{pid:<28} {has_d} {ds:<6} {has_t} {ts:<6} {has_toc:<5} {b:<14} {reasons}")
 
     # Summary
     from engine.profile_checker import _build_summary
@@ -235,17 +241,17 @@ def _print_profiles_table(caps: dict) -> None:
     print()
     print(f"Total: {s['total']} | Bundle: {s['bundle_ok']} ok, {s['bundle_partial']} partial, "
           f"{s['bundle_incompatible']} incompatible | "
-          f"Defaults: {s['with_defaults']}/{s['total']} | "
-          f"Templates: {s['with_templates']}/{s['total']} | "
+          f"Defaults: {s['with_defaults']}/{s['total']} (L:{s.get('defaults_local',0)} R:{s.get('defaults_40_latex',0)}) | "
+          f"Templates: {s['with_templates']}/{s['total']} (L:{s.get('templates_local',0)} R:{s.get('templates_40_latex',0)}) | "
           f"TOC: {s['with_toc_support']}/{s['total']}")
 
 
 def _print_profile_table_row(cap: "ProfileCapability") -> None:
     """Pretty-print a single profile check."""
     print(f"Profile: {cap.profile_id}")
-    print(f"  Defaults:    {cap.defaults_found or 'MISSING'}")
-    print(f"  Template:    {cap.template_found or 'MISSING'}  (inferred: {cap.template_inferred})")
-    print(f"  Uses 40_latex: {cap.uses_40_latex}")
+    print(f"  Defaults:    {cap.defaults_found or 'MISSING'}  (source: {cap.defaults_source})")
+    print(f"  Template:    {cap.template_found or 'MISSING'}  (source: {cap.template_source}, inferred: {cap.template_inferred})")
+    print(f"  Uses 40_latex ref: {cap.uses_40_latex}")
     print(f"  TOC support:   {cap.supports_toc}")
     print(f"  Tightlist:     {cap.has_tightlist}")
     print(f"  Longtable:     {cap.has_longtable}")

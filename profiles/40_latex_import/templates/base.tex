@@ -1,0 +1,387 @@
+
+% templates/base.tex — Pandoc LaTeX template (Memoir) for Yugen Advisors
+\PassOptionsToPackage{hyphens}{url}
+\documentclass[$if(classoption)$$for(classoption)$$classoption$$sep$,$endfor$$endif$]{$documentclass$}
+
+% Engine + fonts will be managed by the yugen*.sty packages (fontspec when available)
+\usepackage{ifluatex}
+\usepackage{ifxetex}
+
+\ifxetex
+  \usepackage{fontspec}
+  $if(mainfont)$
+    \setmainfont[$for(mainfontoptions)$$mainfontoptions$$sep$,$endfor$]{$mainfont$}
+  $endif$
+  $if(sansfont)$
+    \setsansfont[$for(sansfontoptions)$$sansfontoptions$$sep$,$endfor$]{$sansfont$}
+  $endif$
+  $if(monofont)$
+    \setmonofont[$for(monofontoptions)$$monofontoptions$$sep$,$endfor$]{$monofont$}
+  $endif$
+\else
+  \ifluatex
+    \usepackage{fontspec}
+    $if(mainfont)$
+      \setmainfont[$for(mainfontoptions)$$mainfontoptions$$sep$,$endfor$]{$mainfont$}
+    $endif$
+    $if(sansfont)$
+      \setsansfont[$for(sansfontoptions)$$sansfontoptions$$sep$,$endfor$]{$sansfont$}
+    $endif$
+    $if(monofont)$
+      \setmonofont[$for(monofontoptions)$$monofontoptions$$sep$,$endfor$]{$monofont$}
+    $endif$
+  \fi
+\fi
+\usepackage{graphicx,xcolor}
+\setkeys{Gin}{width=\linewidth,height=0.85\textheight,keepaspectratio}
+\usepackage{microtype}
+
+%Math stuff
+\usepackage{amsmath}
+\usepackage{mathtools}
+
+% ---- Pandoc compatibility (newer pandoc emits \pandocbounded{...}) ----
+\providecommand{\pandocbounded}[1]{#1}
+
+
+\usepackage{pdflscape}
+\usepackage{graphicx}
+
+
+%boxes
+\usepackage{amssymb}
+
+% Shaded code blocks + better verbatim with UTF-8
+\usepackage{fancyvrb}
+\usepackage{framed}
+\usepackage{fvextra}
+%\DefineVerbatimEnvironment{Highlighting}{Verbatim}{breaklines,fontsize=\small}
+\definecolor{shadecolor}{HTML}{F6F5F2} % Yugen Light
+%\newenvironment{Shaded}{\begin{snugshade}}{\end{snugshade}}
+
+% === Pandoc syntax-highlighting macros ===
+$if(highlighting-macros)$
+$highlighting-macros$
+
+
+% Restore our desired Highlighting and Shaded behavior
+\RecustomVerbatimEnvironment{Highlighting}{Verbatim}{breaklines,fontsize=\small,commandchars=\\\{\}}
+\renewenvironment{Shaded}{\begin{snugshade}}{\end{snugshade}}
+$endif$
+
+% Pandoc helper macros (safe no-ops if not used)
+\providecommand{\tightlist}{\setlength{\itemsep}{0pt}\setlength{\parskip}{0pt}}
+\providecommand{\passthrough}[1]{#1}
+
+
+$if(geometry)$
+\usepackage[$for(geometry)$$geometry$$sep$,$endfor$]{geometry}
+$endif$
+
+% Tables & longtables
+\usepackage{longtable,booktabs,array,tabularx}
+\usepackage{calc}
+\providecommand{\real}[1]{#1} % fallback so p{…\real{…}} works
+
+% Section numbering without chapter prefix
+\usepackage{chngcntr}
+\counterwithout{section}{chapter}
+
+% prevent orphaned section headings
+\usepackage{needspace}
+\let\oldsection\section
+\renewcommand{\section}{\Needspace{6\baselineskip}\oldsection}
+\let\oldsubsection\subsection
+\renewcommand{\subsection}{\Needspace{6\baselineskip}\oldsubsection}
+
+% TOC readability (memoir macros)
+%uncomment these if subsections are getting too long
+%\renewcommand{\cftsectionfont}{\small}
+%\renewcommand{\cftsectionpagefont}{\small}
+% Bigger TOC title (Memoir)
+\renewcommand{\printtoctitle}[1]{\begin{center}{\Large\bfseries #1}\end{center}}
+%\renewcommand{\cftaftertoctitle}{\par\vspace{0.75em}}
+\cftsetindents{section}{0em}{3em}
+\cftsetindents{subsection}{1.5em}{3em}
+\setlength{\cftbeforesectionskip}{0.2em}
+\setlength{\cftbeforesubsectionskip}{0.15em}
+
+
+\usepackage{caption}
+
+% Fallback: some Pandoc flows set caption type "none"
+\makeatletter
+\@ifundefined{c@none}{\newcounter{none}}{}
+\makeatother
+
+\AtBeginEnvironment{longtable}{\captionsetup{type=table}}
+
+\usepackage{multirow}
+
+% Longtable layout tuning (center & spacing)
+\setlength{\LTleft}{0pt plus 1fill}
+\setlength{\LTright}{0pt plus 1fill}
+\renewcommand{\arraystretch}{1.15}
+\setlength{\tabcolsep}{6pt}
+
+
+% Brand colors (duplicated here so defaults work even if style not loaded yet)
+\definecolor{YugenNavy}{HTML}{0B1220}
+\definecolor{YugenGold}{HTML}{C6A35E}
+\definecolor{YugenSlate}{HTML}{2A2F3A}
+\definecolor{YugenLight}{HTML}{F6F5F2}
+
+% Pass Pandoc variables to LaTeX macros so .sty can read them
+$if(logo_path)$
+\def\YugenLogoPath{$logo_path$}
+$endif$
+
+$if(division)$
+\def\YugenDivision{$division$}
+$endif$
+
+$if(tagline)$
+\def\YugenTagline{$tagline$}
+$endif$
+
+$if(footeremail)$
+\def\YugenFooterEmail{$footeremail$}
+$endif$
+
+% Load selected style package if provided
+$if(yugenstyle)$
+  \usepackage{$yugenstyle$}
+$endif$
+
+% Metadata
+$if(title)$\title{$title$}$endif$
+$if(author)$\author{$for(author)$$author$$sep$ \\ $endfor$}$endif$
+$if(date)$\date{$date$}$endif$
+
+
+%-- Draft, Sample wiring
+$if(sample)$
+\usepackage{draftwatermark}
+$endif$
+
+$if(draft)$
+\usepackage{draftwatermark}
+$endif$
+
+
+\usepackage{hyperref}
+
+% Map common Unicode chars in body text to LaTeX equivalents
+\usepackage{newunicodechar}
+\newunicodechar{≤}{\ensuremath{\le}}
+\newunicodechar{≥}{\ensuremath{\ge}}
+\newunicodechar{×}{\ensuremath{\times}}
+\newunicodechar{≠}{\ensuremath{\ne}}
+\newunicodechar{±}{\ensuremath{\pm}}
+\newunicodechar{…}{\ldots}
+\newunicodechar{–}{\textendash}
+\newunicodechar{—}{\textemdash}
+\newunicodechar{“}{\textquotedblleft}
+\newunicodechar{”}{\textquotedblright}
+\newunicodechar{’}{\textquoteright}
+\newunicodechar{↔}{\ensuremath{\leftrightarrow}}
+% EM SPACE (U+2003) → a quad
+\newunicodechar{ }{\quad}
+
+% --- Emoji support -------------------------------------------------
+% Ignore VARIATION SELECTOR-16 globally (U+FE0F); must map single code points
+\newunicodechar{️}{} 
+
+\makeatletter
+% Define \EmojiFont once, preferring color emoji if available
+\@ifundefined{EmojiFont}{
+  \ifluatex
+    \RequirePackage{fontspec}
+    \IfFontExistsTF{Apple Color Emoji}{
+      \newfontfamily\EmojiFont{Apple Color Emoji}[Renderer=Harfbuzz,Scale=MatchLowercase]
+    }{
+      \IfFontExistsTF{Noto Color Emoji}{
+        \newfontfamily\EmojiFont{Noto Color Emoji}[Renderer=Harfbuzz,Scale=MatchLowercase]
+      }{
+        \IfFontExistsTF{DejaVu Sans}{
+          \newfontfamily\EmojiFont{DejaVu Sans}[Scale=MatchLowercase]
+        }{
+          \newcommand{\EmojiFont}{}% last-resort noop
+        }
+      }
+    }
+  \else
+    \newcommand{\EmojiFont}{}% non-Lua engines: noop
+  \fi
+}{}
+\makeatother
+
+% --- Frequently used emoji (map each to \EmojiFont) ----------------
+% Core beams / categories
+\newunicodechar{🪐}{{\EmojiFont 🪐}} % Digital Architecture
+\newunicodechar{🧠}{{\EmojiFont 🧠}} % Metacognition
+\newunicodechar{💼}{{\EmojiFont 💼}} % Business / Yugen
+\newunicodechar{🧵}{{\EmojiFont 🧵}} % Letters & Creative
+\newunicodechar{🧰}{{\EmojiFont 🧰}} % Tools & Automation
+\newunicodechar{🏠}{{\EmojiFont 🏠}} % Life & Logistics
+\newunicodechar{🕯}{{\EmojiFont 🕯}} % Keeper’s Journal
+\newunicodechar{🛠}{{\EmojiFont 🛠}} % Engineering
+\newunicodechar{🛡}{{\EmojiFont 🛡}} % Security
+\newunicodechar{🕊}{{\EmojiFont 🕊}} % Fresh Nest (client)
+\newunicodechar{🥩}{{\EmojiFont 🥩}} % Scott’s Jerky (client)
+
+% Common symbols / status
+\newunicodechar{✅}{{\EmojiFont ✅}}
+\newunicodechar{☑}{{\EmojiFont ☑}}
+\newunicodechar{❌}{{\EmojiFont ❌}}
+\newunicodechar{⚠}{{\EmojiFont ⚠}}
+\newunicodechar{ℹ}{{\EmojiFont ℹ}}
+\newunicodechar{⭐}{{\EmojiFont ⭐}}
+\newunicodechar{✨}{{\EmojiFont ✨}}
+\newunicodechar{🔥}{{\EmojiFont 🔥}}
+\newunicodechar{🎯}{{\EmojiFont 🎯}}
+\newunicodechar{📌}{{\EmojiFont 📌}}
+\newunicodechar{📎}{{\EmojiFont 📎}}
+
+% Communication / files
+\newunicodechar{💬}{{\EmojiFont 💬}}
+\newunicodechar{✉}{{\EmojiFont ✉}}
+\newunicodechar{📧}{{\EmojiFont 📧}}
+\newunicodechar{📝}{{\EmojiFont 📝}}
+\newunicodechar{📄}{{\EmojiFont 📄}}
+\newunicodechar{📁}{{\EmojiFont 📁}}
+\newunicodechar{📂}{{\EmojiFont 📂}}
+\newunicodechar{🗂}{{\EmojiFont 🗂}}
+\newunicodechar{🧾}{{\EmojiFont 🧾}}
+
+% Time / scheduling
+\newunicodechar{⏱}{{\EmojiFont ⏱}}
+\newunicodechar{⏰}{{\EmojiFont ⏰}}
+\newunicodechar{📅}{{\EmojiFont 📅}}
+\newunicodechar{🕒}{{\EmojiFont 🕒}}
+
+% Tech / tools / science
+\newunicodechar{🖥}{{\EmojiFont 🖥}}
+\newunicodechar{💻}{{\EmojiFont 💻}}
+\newunicodechar{🧪}{{\EmojiFont 🧪}}
+\newunicodechar{🧬}{{\EmojiFont 🧬}}
+\newunicodechar{🤖}{{\EmojiFont 🤖}}
+\newunicodechar{🔧}{{\EmojiFont 🔧}}
+\newunicodechar{🔨}{{\EmojiFont 🔨}}
+\newunicodechar{🪛}{{\EmojiFont 🪛}}
+\newunicodechar{🧷}{{\EmojiFont 🧷}}
+
+% Navigation / arrows (emoji variants)
+\newunicodechar{➡}{{\EmojiFont ➡}}
+\newunicodechar{⬅}{{\EmojiFont ⬅}}
+\newunicodechar{⬆}{{\EmojiFont ⬆}}
+\newunicodechar{⬇}{{\EmojiFont ⬇}}
+\newunicodechar{↗}{{\EmojiFont ↗}}
+\newunicodechar{↘}{{\EmojiFont ↘}}
+
+% Finance / business
+\newunicodechar{💡}{{\EmojiFont 💡}}
+\newunicodechar{📈}{{\EmojiFont 📈}}
+\newunicodechar{📉}{{\EmojiFont 📉}}
+\newunicodechar{📊}{{\EmojiFont 📊}}
+\newunicodechar{🏷}{{\EmojiFont 🏷}}
+\newunicodechar{💳}{{\EmojiFont 💳}}
+\newunicodechar{💰}{{\EmojiFont 💰}}
+
+% Misc frequent
+\newunicodechar{🔒}{{\EmojiFont 🔒}}
+\newunicodechar{🔓}{{\EmojiFont 🔓}}
+\newunicodechar{🔐}{{\EmojiFont 🔐}}
+\newunicodechar{🗝}{{\EmojiFont 🗝}}
+\newunicodechar{🏗}{{\EmojiFont 🏗}}
+\newunicodechar{🧭}{{\EmojiFont 🧭}}
+\newunicodechar{📍}{{\EmojiFont 📍}}
+\newunicodechar{🧩}{{\EmojiFont 🧩}}
+\newunicodechar{🧱}{{\EmojiFont 🧱}}
+
+% === Pandoc header includes and counters ===
+$for(header-includes)$
+$header-includes$
+$endfor$
+
+$if(numbersections)$
+  \setcounter{secnumdepth}{$if(secnumdepth)$$secnumdepth$$else$5$endif$}
+$else$
+  \setcounter{secnumdepth}{0}
+$endif$
+
+\setcounter{tocdepth}{$if(toc-depth)$$toc-depth$$else$2$endif$}
+% === End Pandoc header includes and counters ===
+
+\begin{document}
+
+$if(pagestyle)$
+  \pagestyle{$pagestyle$}
+$endif$
+
+$if(draft)$
+\SetWatermarkText{DRAFT}
+\SetWatermarkScale{0.9}
+\SetWatermarkColor[HTML]{E5E7EB}
+$endif$
+
+$if(sample)$
+\SetWatermarkText{SAMPLE}
+\SetWatermarkScale{0.9}
+\SetWatermarkColor[HTML]{E5E7EB}
+$endif$
+
+
+
+% --- Title rendering ---
+$if(titlepage)$
+  % (your existing full-page cover stays here unchanged)
+  \thispagestyle{empty}
+  \begin{center}
+    \vspace{1em}
+    \includegraphics[height=5cm]{$logo_path$}\par
+    \vspace{5em}
+    $if(logo_path)$
+    $endif$
+    $if(title)${\LARGE\bfseries $title$ \par}\vspace{0.75em}$endif$
+    $if(subtitle)$\textit{$subtitle$}\par\vspace{0.5em}$endif$
+  \end{center}
+  \begin{flushleft}
+    %\vspace{1em}
+    \vfill
+    \noindent\rule{\linewidth}{0.5pt}\par
+    $for(author)$\textbf{$author$}\par$endfor$
+    $if(date)$\small $date$\par$endif$
+  \end{flushleft}
+  \clearpage
+$else$
+  $if(title)$
+    {\centering
+      {\LARGE\bfseries $title$\par}
+      $if(subtitle)$\vspace{0.3em}\textit{$subtitle$}\par$endif$
+      $if(author)$\vspace{0.3em}$for(author)${\small $author$}$sep$ \\ $endfor$\par$endif$
+      $if(date)$\vspace{0.3em}{\small $date$}\par$endif$
+    \par}
+    \vspace{0.75em}\noindent\rule{\linewidth}{0.5pt}\par
+  $endif$
+$endif$
+
+
+
+$if(toc)$
+% Bigger TOC title (Memoir)
+\renewcommand{\printtoctitle}[1]{\begin{center}{\Large\bfseries #1}\end{center}}
+%\renewcommand{\cftaftertoctitle}{\par\vspace{0.75em}}
+\begingroup
+\thispagestyle{plain}
+  $if(yugenstyle)$
+    \thispagestyle{yugenTOC}
+  $endif$
+  \tableofcontents
+\endgroup
+\clearpage
+$endif$
+
+$body$
+
+\end{document}

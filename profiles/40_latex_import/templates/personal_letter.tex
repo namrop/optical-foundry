@@ -1,0 +1,320 @@
+% templates/personal_letter.tex
+% Purpose: Personal letter template (Pandoc → LuaLaTeX), not tied to any business brand.
+% Notes:
+% - Uses memoir (your preferred TeX class).
+% - Supports optional letterhead + watermark images via variables.
+
+\documentclass[11pt,oneside]{memoir}
+
+% ---------- Core packages ----------
+\usepackage{iftex}
+\ifLuaTeX
+  \usepackage{fontspec}
+  \defaultfontfeatures{Ligatures=TeX}
+\else
+  \usepackage[T1]{fontenc}
+  \usepackage[utf8]{inputenc}
+\fi
+
+\usepackage{microtype}
+\usepackage{graphicx}
+\usepackage{xcolor}
+\usepackage{geometry}
+
+\DisemulatePackage{setspace}
+\usepackage{setspace}
+
+\usepackage{hyperref}
+\usepackage{fancyhdr}
+\usepackage{calc}
+\usepackage{ragged2e}
+
+% Optional watermark support (safe, no shell escape)
+\usepackage{eso-pic}
+
+% ---------- Page geometry ----------
+% Keep this calm and letter-like; adjust later if you want tighter or more airy.
+\geometry{
+  paper=letterpaper,
+  left=1.05in,
+  right=1.05in,
+  top=1.00in,
+  bottom=1.05in
+}
+
+% ---------- Option B: Neutralize Pandoc sectioning for letters ----------
+% Pandoc emits \section / \subsection / \subsubsection when Markdown contains
+% headings. For personal letters we want headings to behave like lightweight
+% emphasis lines, not document structure.
+%
+% This block:
+%  - ensures the commands exist even if the class/template path changes
+%  - removes numbering and TOC interactions
+%  - renders headings as bold (with a gentle size gradient)
+%
+% Place BEFORE \begin{document}.
+
+\makeatletter
+
+% Safe "exists?" check utility
+\newcommand{\Letter@ProvideOrRenew}[2]{%
+  \@ifundefined{#1}{\expandafter\newcommand\csname #1\endcsname[1]{#2}}%
+                 {\expandafter\renewcommand\csname #1\endcsname[1]{#2}}%
+}
+
+% Common renderer: compact, no numbering, no TOC
+\newcommand{\Letter@Heading}[2]{%
+  \par\vspace{0.75\baselineskip}%
+  {\noindent #1\bfseries #2\par}%
+  \vspace{0.25\baselineskip}%
+}
+
+% Map sectioning to typographic headings
+\Letter@ProvideOrRenew{section}{\Letter@Heading{\large}{#1}}
+\Letter@ProvideOrRenew{subsection}{\Letter@Heading{\normalsize}{#1}}
+\Letter@ProvideOrRenew{subsubsection}{\Letter@Heading{\small}{#1}}
+\Letter@ProvideOrRenew{paragraph}{\Letter@Heading{\small}{#1}}
+\Letter@ProvideOrRenew{subparagraph}{\Letter@Heading{\small}{#1}}
+
+% Also neutralize starred variants if they exist / get called
+\Letter@ProvideOrRenew{section*}{\Letter@Heading{\large}{#1}}
+\Letter@ProvideOrRenew{subsection*}{\Letter@Heading{\normalsize}{#1}}
+\Letter@ProvideOrRenew{subsubsection*}{\Letter@Heading{\small}{#1}}
+
+% If anything tries to write ToC entries, drop them on the floor for letters.
+\@ifundefined{addcontentsline}{}{%
+  \renewcommand{\addcontentsline}[3]{}%
+}
+
+\makeatother
+% ---------- End Option B ----------
+
+
+% ---------- Fonts ----------
+$if(mainfont)$
+\setmainfont{$mainfont$}
+$endif$
+$if(sansfont)$
+\setsansfont{$sansfont$}
+$endif$
+$if(monofont)$
+\setmonofont{$monofont$}
+$endif$
+
+% ---------- Color system ----------
+$if(body_color)$
+\definecolor{LetterBody}{HTML}{$body_color$}
+$else$
+\definecolor{LetterBody}{HTML}{2D5A3D}
+$endif$
+$if(accent_color)$
+\definecolor{LetterAccent}{HTML}{$accent_color$}
+$else$
+\definecolor{LetterAccent}{HTML}{8B2942}
+$endif$
+$if(rule_color)$
+\definecolor{LetterRule}{HTML}{$rule_color$}
+$else$
+\definecolor{LetterRule}{HTML}{496B53}
+$endif$
+$if(ornament_color)$
+\definecolor{LetterOrnament}{HTML}{$ornament_color$}
+$else$
+\definecolor{LetterOrnament}{HTML}{7A8F6A}
+$endif$
+\color{LetterBody}
+
+
+% ---------- Spacing ----------
+$if(linestretch)$
+\setstretch{$linestretch$}
+$endif$
+
+% Paragraph spacing
+\setlength{\parindent}{$parindent$}
+\setlength{\parskip}{$parskip$}
+
+% ---------- Hyperref ----------
+\hypersetup{
+  colorlinks=true,
+  linkcolor=LetterBody,
+  urlcolor=LetterAccent,
+  citecolor=LetterBody,
+  pdfauthor={$if(from_name)$$from_name$$endif$},
+  pdftitle={$if(subject)$$subject$$else$Letter$endif$}
+}
+
+% ---------- Mythic-letter typography / artifact controls ----------
+\newcommand{\ArtifactMark}{%
+$if(artifact_mark)$
+  {\centering\vspace*{0.06in}{\color{LetterOrnament}\normalsize $artifact_mark$\par}\vspace{0.08in}}
+$endif$
+}
+
+\newcommand{\ArtifactHeader}{%
+$if(artifact_header)$
+  {\small\itshape
+    \noindent
+    \begin{minipage}[t]{0.34\textwidth}
+      $if(conceived_date)$Conceived on $conceived_date$$endif$
+    \end{minipage}
+    \begin{minipage}[t]{0.30\textwidth}
+      \centering
+      $if(artifact_series)$$artifact_series$$endif$
+    \end{minipage}
+    \begin{minipage}[t]{0.34\textwidth}
+      \raggedleft
+      $if(penned_date)$Penned on $penned_date$$endif$
+    \end{minipage}\par}
+  \vspace{0.08in}
+  {\color{LetterRule}\noindent\rule{\linewidth}{0.5pt}\par}
+  \vspace{0.14in}
+$endif$
+}
+
+\newcommand{\MaybeBodyStyle}{%
+$if(body_raggedright)$
+  \RaggedRight
+  \hyphenpenalty=3000
+  \exhyphenpenalty=3000
+  \emergencystretch=2em
+$endif$
+}
+
+% ---------- Header/Footer ----------
+\pagestyle{fancy}
+\fancyhf{}
+\renewcommand{\headrulewidth}{0pt}
+\renewcommand{\footrulewidth}{0pt}
+$if(artifact_footer)$
+\fancyfoot[L]{{\scriptsize\itshape $artifact_location$}}
+\fancyfoot[C]{{\scriptsize\itshape Page \thepage}}
+\fancyfoot[R]{{\scriptsize\itshape From the desk of $desk_of$}}
+$else$
+\fancyfoot[C]{\thepage}
+$endif$
+
+% ---------- Optional stationery: letterhead ----------
+% If you set letterhead_image, it will appear at the very top of page 1.
+\newcommand{\MaybeLetterhead}{%
+$if(letterhead_image)$
+  \noindent\includegraphics[width=\textwidth,height=$letterhead_height$,keepaspectratio]{$letterhead_image$}\par\vspace{0.25in}
+$endif$
+}
+
+% ---------- Optional stationery: watermark ----------
+% If you set watermark_image, it will be placed behind the page content.
+\newcommand{\MaybeWatermark}{%
+$if(watermark_image)$
+  \AddToShipoutPictureBG*{%
+    \AtPageCenter{%
+      \transparent{$watermark_opacity$}%
+      \includegraphics[width=0.8\paperwidth,keepaspectratio]{$watermark_image$}%
+    }%
+  }%
+$endif$
+}
+
+% ---------- Blocks: address & meta ----------
+\newcommand{\SenderBlock}{%
+$if(from_name)$
+  {\bfseries $from_name$}\par
+$endif$
+$if(from_address)$
+  $from_address$\par
+$endif$
+$if(from_email)$
+  \href{mailto:$from_email$}{$from_email$}\par
+$endif$
+$if(from_phone)$
+  $from_phone$\par
+$endif$
+}
+
+\newcommand{\RecipientBlock}{%
+$if(to_name)$
+  {\bfseries $to_name$}\par
+$endif$
+$if(to_address)$
+  $to_address$\par
+$endif$
+}
+
+\newcommand{\LetterMeta}{%
+$if(date)$
+  {\small $date$}\par
+$endif$
+$if(subject)$
+  \vspace{0.15in}
+  {\bfseries Subject: $subject$}\par
+$endif$
+}
+
+% ---------- Signature ----------
+\newcommand{\SignatureBlock}{%
+$if(signature_style)$
+  \vspace{0.35in}
+$else$
+  \vspace{0.25in}
+$endif$
+$if(closing)$
+  $if(signature_style)$
+    {\itshape $closing$}\par
+  $else$
+    $closing$\par
+  $endif$
+$endif$
+\vspace{0.16in}
+$if(signature_image)$
+  \includegraphics[scale=$signature_scale$]{$signature_image$}\par
+  \vspace{0.05in}
+$endif$
+$if(signature_name)$
+  {\bfseries $signature_name$}\par
+$endif$
+}
+
+% ---------- Pandoc hooks ----------
+$if(header-includes)$
+$header-includes$
+$endif$
+
+\begin{document}
+\MaybeWatermark
+\MaybeLetterhead
+\ArtifactMark
+\MaybeBodyStyle
+\ArtifactHeader
+
+% Layout: sender on left, date on right (if both exist); otherwise simple flow.
+\noindent
+\begin{minipage}[t]{0.62\textwidth}
+  \SenderBlock
+\end{minipage}
+\hfill
+\begin{minipage}[t]{0.34\textwidth}
+  \raggedleft
+  $if(date)${\small\itshape $date$}$endif$
+\end{minipage}
+
+\vspace{0.28in}
+
+% Recipient (optional)
+$if(to_name)$
+\noindent\RecipientBlock
+\vspace{0.25in}
+$endif$
+
+% Opening (optional)
+$if(opening)$
+\noindent {\Large\bfseries $opening$}\par
+\vspace{0.18in}
+$endif$
+
+% Body
+$body$
+
+% Closing + signature
+\SignatureBlock
+
+\end{document}

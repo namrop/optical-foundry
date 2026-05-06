@@ -1,0 +1,21 @@
+from: markdown+raw_tex+yaml_metadata_block+smart
+to: pdf
+pdf-engine: xelatex
+template: templates/label_sheet.tex
+top-level-division: section
+
+variables:
+  documentclass: memoir
+  classoption: [10pt, oneside]
+  colorlinks: false
+  mainfont: "Helvetica"
+  sansfont: "Helvetica"
+  monofont: "Menlo"
+  geometry:
+    - paperwidth=8.5in
+    - paperheight=11in
+    - left=0in
+    - right=0in
+    - top=0in
+    - bottom=0in
+    - noheadfoot

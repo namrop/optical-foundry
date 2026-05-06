@@ -1,5 +1,38 @@
 # Optical Foundry — Profile and Pandoc Reference Wiring
 
+## Ownership boundary (2026-05-06)
+
+As of commit `a4d7788`, Optical Foundry owns editable copies of all
+40_latex profile assets in `profiles/40_latex_import/`:
+
+```
+profiles/40_latex_import/
+├── defaults/    ← 21 YAML defaults (editable copies)
+├── templates/   ← 12 .tex templates (editable copies)
+└── styles/texmf/tex/latex/
+    ├── generic/  ← genericreport.sty, labelsheet.sty, elianpacket.sty
+    ├── resume/   ← resume.sty, resumecommon.sty, cv.sty
+    └── yugen/    ← yugencommon.sty, yugenrisk.sty, etc.
+```
+
+**Resolution order**: PandocRenderer and profile checker prefer local imports
+(`profiles/40_latex_import/`) first. If a local copy doesn't exist, they fall
+back to `40_latex/` as a read-only reference. All 20 profiles currently resolve
+their defaults and templates from local import.
+
+**Editing policy**: Files in `profiles/40_latex_import/` are editable Optical
+Foundry copies. The original `40_latex/` tree remains untouched and serves as
+the canonical reference. Future profile modifications should happen in the
+local import, not in `40_latex/`.
+
+**TEXMFHOME**: The pandoc renderer points `TEXMFHOME` to
+`profiles/40_latex_import/styles/texmf` when available, falling back to
+`40_latex/styles/texmf`.
+
+---
+
+## Original reference wiring
+
 How the greenfield `42_optical_foundry_greenfield` pipeline references `40_latex`
 as a read-only template/style/defaults source.
 

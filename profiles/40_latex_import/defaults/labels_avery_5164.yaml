@@ -1,0 +1,22 @@
+from: markdown+raw_tex+footnotes+table_captions+smart
+to: pdf
+pdf-engine: xelatex
+template: templates/label_sheet.tex
+top-level-division: section
+
+variables:
+  documentclass: memoir
+  classoption: [10pt, oneside]
+  colorlinks: false
+  mainfont: "Dune Rise"
+  sansfont: "Avenir Next"
+  monofont: "Menlo"
+  labelsheetstyle: labelsheet
+  geometry:
+    - paperwidth=8.5in
+    - paperheight=11in
+    - left=0in
+    - right=0in
+    - top=0in
+    - bottom=0in
+    - noheadfoot

@@ -204,7 +204,9 @@ class ProfileCapability:
 
     profile_id: str
     defaults_found: str | None = None   # resolved path, or None
+    defaults_source: str = "missing"     # local | 40_latex | missing
     template_found: str | None = None   # resolved path, or None
+    template_source: str = "missing"     # local | 40_latex | missing
     template_inferred: str = ""         # raw mapping lookup (before corrections)
     uses_40_latex: bool = True
     supports_toc: bool = False
@@ -218,7 +220,9 @@ class ProfileCapability:
         return {
             "profile_id": self.profile_id,
             "defaults_found": self.defaults_found,
+            "defaults_source": self.defaults_source,
             "template_found": self.template_found,
+            "template_source": self.template_source,
             "template_inferred": self.template_inferred,
             "uses_40_latex": self.uses_40_latex,
             "supports_toc": self.supports_toc,
@@ -238,11 +242,20 @@ def check_profile(profile_id: str) -> ProfileCapability:
 
     cap = ProfileCapability(profile_id=profile_id)
 
-    # ── defaults ──────────────────────────────────────────────────
-    defaults_path = _find_defaults(profile_id)
-    cap.defaults_found = str(defaults_path) if defaults_path else None
+    gf_root = Path(__file__).resolve().parents[1]
+    local_import = gf_root / "profiles" / "40_latex_import"
 
-    if defaults_path is None:
+    # ── defaults ──────────────────────────────────────────────────
+    local_defaults, remote_defaults = _find_defaults_local_remote(profile_id, local_import)
+    if local_defaults is not None:
+        cap.defaults_found = str(local_defaults)
+        cap.defaults_source = "local"
+    elif remote_defaults is not None:
+        cap.defaults_found = str(remote_defaults)
+        cap.defaults_source = "40_latex"
+    else:
+        cap.defaults_found = None
+        cap.defaults_source = "missing"
         cap.warnings.append(f"No defaults file found for {profile_id}")
 
     # ── template ──────────────────────────────────────────────────
@@ -253,23 +266,23 @@ def check_profile(profile_id: str) -> ProfileCapability:
     if not effective_template:
         cap.warnings.append(f"No template mapping for {profile_id}")
     else:
-        tpath = LATEX40 / "templates" / effective_template
-        if tpath.exists():
-            cap.template_found = str(tpath)
-        elif effective_template != inferred:
-            # Try the uncorrected name too
-            tpath2 = LATEX40 / "templates" / inferred
-            if tpath2.exists():
-                cap.template_found = str(tpath2)
-                cap.warnings.append(
-                    f"Template mapping says {inferred} but {effective_template} "
-                    f"found (correction applied)"
-                )
-            else:
-                cap.warnings.append(
-                    f"Template mapping says {inferred} → resolved to "
-                    f"{effective_template} — neither found on disk"
-                )
+        local_tpath = local_import / "templates" / effective_template
+        remote_tpath = LATEX40 / "templates" / effective_template
+        uncorrected_tpath = LATEX40 / "templates" / inferred
+
+        if local_tpath.exists():
+            cap.template_found = str(local_tpath)
+            cap.template_source = "local"
+        elif remote_tpath.exists():
+            cap.template_found = str(remote_tpath)
+            cap.template_source = "40_latex"
+        elif effective_template != inferred and uncorrected_tpath.exists():
+            cap.template_found = str(uncorrected_tpath)
+            cap.template_source = "40_latex"
+            cap.warnings.append(
+                f"Template mapping says {inferred} but {effective_template} "
+                f"found (correction applied)"
+            )
         else:
             cap.warnings.append(f"No template found for {profile_id} (expected {inferred})")
 
@@ -338,6 +351,10 @@ def _build_summary(caps: dict[str, ProfileCapability]) -> dict[str, Any]:
     with_defaults = sum(1 for c in caps.values() if c.defaults_found is not None)
     with_templates = sum(1 for c in caps.values() if c.template_found is not None)
     with_toc = sum(1 for c in caps.values() if c.supports_toc)
+    local_defaults = sum(1 for c in caps.values() if c.defaults_source == "local")
+    local_templates = sum(1 for c in caps.values() if c.template_source == "local")
+    remote_defaults = sum(1 for c in caps.values() if c.defaults_source == "40_latex")
+    remote_templates = sum(1 for c in caps.values() if c.template_source == "40_latex")
     return {
         "total": len(caps),
         "bundle_ok": ok,
@@ -346,10 +363,46 @@ def _build_summary(caps: dict[str, ProfileCapability]) -> dict[str, Any]:
         "with_defaults": with_defaults,
         "with_templates": with_templates,
         "with_toc_support": with_toc,
+        "defaults_local": local_defaults,
+        "defaults_40_latex": remote_defaults,
+        "templates_local": local_templates,
+        "templates_40_latex": remote_templates,
     }
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
+
+
+def _find_defaults_local_remote(profile_id: str, local_import: Path) -> tuple[Path | None, Path | None]:
+    """Find defaults YAML for a profile, returning (local_path, remote_path)."""
+    special: dict[str, str] = {
+        "tech": "technology.yaml",
+        "letter": "personal_letter.yaml",
+        "mythic-letter": "personal_letter.yaml",
+        "resume": "resume_resume.yaml",
+        "prometheus-packet": "prometheus_packet.yaml",
+        "yugen-brand": "yugenbase.yaml",
+        "yugen-brand-elevated": "yugenbase.yaml",
+        "labels-avery-15264": "labels_avery_5164.yaml",
+    }
+    patterns = [
+        f"{profile_id}.yaml",
+        f"{profile_id.replace('_', '-')}.yaml",
+        f"{profile_id.replace('-', '_')}.yaml",
+    ]
+    if profile_id in special:
+        patterns.insert(0, special[profile_id])
+
+    local: Path | None = None
+    remote: Path | None = None
+    for p in patterns:
+        lc = local_import / "defaults" / p
+        if lc.exists() and local is None:
+            local = lc
+        rc = LATEX40 / "defaults" / p
+        if rc.exists() and remote is None:
+            remote = rc
+    return local, remote
 
 
 def _find_defaults(profile_id: str) -> Path | None:
