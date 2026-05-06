@@ -1,0 +1,33 @@
+kind: composite_bundle
+schema_version: bundle_manifest_v1
+bundle_id: fixture-mythic-letter-bundle-001
+bundle_name: Mythic Letter Bundle Fixture
+profile: mythic-letter
+presentation:
+  title: Mythic Letter Bundle Fixture
+  subtitle: Local personal_letter mythic bundle compatibility check
+  authors:
+    - Optical Foundry
+  date: '2026-05-06'
+  abstract: |
+    Synthetic composite bundle fixture for the local mythic-letter profile.
+sources:
+  - uid: fixture-src-001
+    path: fixtures/sources/source-001.md
+    role: primary_anchor
+    order: 1
+    include_frontmatter: summary
+    suppress_frontmatter: true
+  - uid: fixture-src-002
+    path: fixtures/sources/source-002.md
+    role: supporting_anchor
+    order: 2
+    include_frontmatter: summary
+    suppress_frontmatter: true
+render:
+  include_toc: true
+  toc_depth: 2
+  preserve_source_provenance: true
+validation:
+  require_all_source_paths: true
+  require_unique_uids: true

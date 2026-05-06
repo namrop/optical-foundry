@@ -11,10 +11,13 @@
 \ifLuaTeX
   \usepackage{fontspec}
   \defaultfontfeatures{Ligatures=TeX}
+\else\ifXeTeX
+  \usepackage{fontspec}
+  \defaultfontfeatures{Ligatures=TeX}
 \else
   \usepackage[T1]{fontenc}
   \usepackage[utf8]{inputenc}
-\fi
+\fi\fi
 
 \usepackage{microtype}
 \usepackage{graphicx}
@@ -28,6 +31,13 @@
 \usepackage{fancyhdr}
 \usepackage{calc}
 \usepackage{ragged2e}
+\usepackage{longtable}
+\usepackage{booktabs}
+\usepackage{array}
+
+% Pandoc/bundle compatibility: keep this local Optical Foundry import
+% self-contained without mutating source 40_latex.
+\providecommand{\tightlist}{\setlength{\itemsep}{0pt}\setlength{\parskip}{0pt}}
 
 % Optional watermark support (safe, no shell escape)
 \usepackage{eso-pic}
@@ -54,6 +64,11 @@
 %
 % Place BEFORE \begin{document}.
 
+$if(toc)$
+% Bundle mode: keep real sectioning so Pandoc's --toc produces an actual TOC.
+\setsecnumdepth{subsubsection}
+\settocdepth{subsection}
+$else$
 \makeatletter
 
 % Safe "exists?" check utility
@@ -87,6 +102,7 @@
 }
 
 \makeatother
+$endif$
 % ---------- End Option B ----------
 
 
@@ -309,6 +325,13 @@ $endif$
 $if(opening)$
 \noindent {\Large\bfseries $opening$}\par
 \vspace{0.18in}
+$endif$
+
+$if(toc)$
+\newpage
+\begin{center}{\Large\bfseries Contents\par}\end{center}
+{\renewcommand{\contentsname}{}\tableofcontents}
+\newpage
 $endif$
 
 % Body

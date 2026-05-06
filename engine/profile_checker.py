@@ -29,9 +29,9 @@ PROFILE_TEMPLATE_MAP: dict[str, str] = {
     "creative": "creative.tex",
     "cam": "cam.tex",
     "mythic": "mythic.tex",
-    "mythic-letter": "mythic_letter.tex",
+    "mythic-letter": "personal_letter.tex",
     "mythic-letter-johannah": "mythic_letter_johannah.tex",
-    "letter": "letter.tex",
+    "letter": "personal_letter.tex",
     "resume": "resume.tex",
     "prometheus-packet": "prometheus_packet.tex",
     "convergence": "convergence.tex",
@@ -86,8 +86,6 @@ TEMPLATE_CORRECTIONS: dict[str, str] = {
     "risk": "base.tex",           # risk.yaml defaults point to base.tex
     "tech": "base.tex",           # technology.yaml defaults point to base.tex
     "creative": "base.tex",       # creative.yaml defaults point to base.tex
-    "letter": "personal_letter.tex",       # actual file is personal_letter.tex
-    "mythic-letter": "personal_letter.tex",  # shares personal_letter.tex
     "prometheus-packet": "generic_report.tex",  # prometheus_packet.yaml → generic_report.tex
     "labels-avery-5164": "label_sheet.tex",     # actual file is label_sheet.tex
     "labels-avery-15264": "label_sheet.tex",    # same template
@@ -99,14 +97,16 @@ TEMPLATE_CORRECTIONS: dict[str, str] = {
 # Profiles with TOC guard ($if(toc)$) in their effective template.
 TOC_GUARD_PROFILES = {
     "generic-report", "risk", "tech", "creative", "cam",
-    "mythic", "mythic-letter-johannah", "convergence", "keeper",
+    "mythic", "letter", "mythic-letter", "mythic-letter-johannah",
+    "convergence", "keeper",
     "yugen-brand", "yugen-brand-elevated", "prometheus-packet",
 }
 
 # Profiles whose effective template defines \tightlist.
 TIGHTLIST_PROFILES = {
     "generic-report", "risk", "tech", "creative", "cam",
-    "mythic", "mythic-letter-johannah", "convergence", "keeper",
+    "mythic", "letter", "mythic-letter", "mythic-letter-johannah",
+    "convergence", "keeper",
     "yugen-brand", "yugen-brand-elevated", "prometheus-packet",
     "elian-packet", "resume", "labels-avery-5164", "labels-avery-15264",
     "sticker-sheet",
@@ -115,7 +115,8 @@ TIGHTLIST_PROFILES = {
 # Profiles whose effective template defines \longtable.
 LONGTABLE_PROFILES = {
     "generic-report", "risk", "tech", "creative", "cam",
-    "mythic", "mythic-letter-johannah", "convergence", "keeper",
+    "mythic", "letter", "mythic-letter", "mythic-letter-johannah",
+    "convergence", "keeper",
     "yugen-brand", "yugen-brand-elevated", "prometheus-packet",
     "elian-packet",
 }
@@ -125,23 +126,14 @@ LONGTABLE_PROFILES = {
 # Profiles fully compatible with composite_bundle rendering.
 BUNDLE_OK = {
     "generic-report", "risk", "tech", "creative", "cam",
-    "mythic", "mythic-letter-johannah", "convergence", "keeper",
+    "mythic", "letter", "mythic-letter", "mythic-letter-johannah",
+    "convergence", "keeper",
     "yugen-brand", "yugen-brand-elevated",
 }
 
 # Profiles partially compatible (template exists, renders documents,
 # but missing one or more bundle features).
 BUNDLE_PARTIAL: dict[str, list[str]] = {
-    "letter": [
-        "No TOC guard — --toc flag has no effect; TOC not rendered",
-        "Memoir class — letter-centric layout, not designed for multi-section bundles",
-        "Missing longtable support",
-    ],
-    "mythic-letter": [
-        "No TOC guard — --toc flag has no effect; TOC not rendered",
-        "Memoir class — letter-centric layout, not designed for multi-section bundles",
-        "Missing longtable support",
-    ],
     "prometheus-packet": [
         "Template is generic_report.tex (shared with generic-report)",
         "Designed for packet state projection, not content bundle assembly",
@@ -371,8 +363,6 @@ def _find_defaults_local_remote(profile_id: str, local_import: Path) -> tuple[Pa
     """Find defaults YAML for a profile, returning (local_path, remote_path)."""
     special: dict[str, str] = {
         "tech": "technology.yaml",
-        "letter": "personal_letter.yaml",
-        "mythic-letter": "personal_letter.yaml",
         "resume": "resume_resume.yaml",
         "prometheus-packet": "prometheus_packet.yaml",
         "yugen-brand": "yugenbase.yaml",
@@ -414,8 +404,6 @@ def _find_defaults(profile_id: str) -> Path | None:
     # Special-case known mappings that don't follow naming convention.
     special: dict[str, str] = {
         "tech": "technology.yaml",
-        "letter": "personal_letter.yaml",
-        "mythic-letter": "personal_letter.yaml",
         "resume": "resume_resume.yaml",
         "prometheus-packet": "prometheus_packet.yaml",
         "yugen-brand": "yugenbase.yaml",

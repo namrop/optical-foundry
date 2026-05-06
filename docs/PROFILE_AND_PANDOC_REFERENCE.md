@@ -146,22 +146,21 @@ Implemented in `engine/profile_checker.py`. Reports for each profile:
 
 | Status | Count | Profiles |
 |--------|-------|----------|
-| ✅ ok | 11 | generic-report, risk, tech, creative, cam, mythic, mythic-letter-johannah, convergence, keeper, yugen-brand, yugen-brand-elevated |
-| ⚠️ partial | 4 | letter, mythic-letter, prometheus-packet, resume |
+| ✅ ok | 13 | generic-report, risk, tech, creative, cam, mythic, letter, mythic-letter, mythic-letter-johannah, convergence, keeper, yugen-brand, yugen-brand-elevated |
+| ⚠️ partial | 2 | prometheus-packet, resume |
 | ❌ incompatible | 5 | elian-packet, elian-poster, labels-avery-5164, labels-avery-15264, sticker-sheet |
 
 ### Known Template Mapping Corrections
 
-The `_infer_template()` mapping in PandocRenderer has some entries that don't
-match filenames on disk. The profile checker applies known corrections:
+Some profile IDs still resolve through compatibility corrections because their
+historic names don't match filenames on disk. `letter` and `mythic-letter` now
+map directly to `personal_letter.tex` in PandocRenderer and the profile checker:
 
 | Profile | Mapped → | Actual template |
 |---------|----------|-----------------|
 | risk | risk.tex | base.tex |
 | tech | tech.tex | base.tex |
 | creative | creative.tex | base.tex |
-| letter | letter.tex | personal_letter.tex |
-| mythic-letter | mythic_letter.tex | personal_letter.tex |
 | prometheus-packet | prometheus_packet.tex | generic_report.tex |
 | labels-avery-5164 | labels_avery_5164.tex | label_sheet.tex |
 | labels-avery-15264 | labels_avery_5164.tex | label_sheet.tex |
@@ -169,6 +168,6 @@ match filenames on disk. The profile checker applies known corrections:
 | yugen-brand | yugen_brand.tex | generic_report.tex |
 | yugen-brand-elevated | yugen_brand_elevated.tex | generic_report.tex |
 
-These corrections are embedded in the profile checker's `TEMPLATE_CORRECTIONS`
-dict. The PandocRenderer's `_infer_template()` still uses the raw mapping;
-updating it requires a separate implementation pass (and does not mutate 40_latex).
+Remaining corrections are embedded in the profile checker's `TEMPLATE_CORRECTIONS`
+dict. Aligning additional renderer mappings is a separate local-import-only
+implementation pass if/when those profiles become active render targets.

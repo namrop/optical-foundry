@@ -39,4 +39,6 @@ def test_pandoc_renderer_template_inference():
     r = PandocRenderer()
     assert r._infer_template("generic-report") == "generic_report.tex"
     assert r._infer_template("risk") == "risk.tex"
+    assert r._infer_template("letter") == "personal_letter.tex"
+    assert r._infer_template("mythic-letter") == "personal_letter.tex"
     assert r._infer_template("unknown") is None

@@ -77,13 +77,26 @@ def test_mythic_letter_johannah_is_bundle_ok():
     assert cap.template_source == "local"
 
 
-def test_letter_is_partial():
+def test_letter_is_bundle_ok():
     cap = check_profile("letter")
-    assert cap.bundle_compatibility == "partial"
-    assert cap.supports_toc is False
-    # Has no longtable
-    assert cap.has_longtable is False
+    assert cap.bundle_compatibility == "ok"
+    assert cap.supports_toc is True
+    assert cap.has_tightlist is True
+    assert cap.has_longtable is True
     assert cap.template_found is not None
+    assert cap.defaults_source == "local"
+    assert cap.template_source == "local"
+
+
+def test_mythic_letter_is_bundle_ok():
+    cap = check_profile("mythic-letter")
+    assert cap.bundle_compatibility == "ok"
+    assert cap.supports_toc is True
+    assert cap.has_tightlist is True
+    assert cap.has_longtable is True
+    assert cap.template_found is not None
+    assert cap.defaults_source == "local"
+    assert cap.template_source == "local"
 
 
 def test_elian_packet_is_incompatible():

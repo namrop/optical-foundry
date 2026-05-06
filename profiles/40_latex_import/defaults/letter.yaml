@@ -1,0 +1,59 @@
+# defaults/personal_letter.yaml
+# Purpose: Pandoc defaults for personal letters (not tied to any business brand).
+# Engine: LuaLaTeX (matches your pipeline preference)
+# Template: templates/personal_letter.tex
+
+pdf-engine: lualatex
+standalone: true
+
+template: templates/personal_letter.tex
+
+# Keep this conservative; no shell-escape.
+pdf-engine-opts:
+  - "-interaction=nonstopmode"
+  - "-halt-on-error"
+
+# Document-level variables (override per-letter in frontmatter)
+variables:
+  # Page & typography
+  paper: "letter"
+  fontsize: "11pt"
+  mainfont: "Helvetica"
+  sansfont: "Helvetica"
+  monofont: "Menlo"
+  linestretch: "1.08"
+
+  # Spacing around paragraphs
+  parskip: "6pt"
+  parindent: "0pt"
+
+  # Signature controls
+  signature_name: ""
+  signature_image: ""   # e.g. assets/personal/signatures/luis.png
+  signature_scale: "0.22"
+
+  # Optional stationery assets (leave blank if none)
+  letterhead_image: ""  # e.g. assets/personal/stationery/letterhead.pdf
+  letterhead_height: "1.0in"
+  watermark_image: ""   # e.g. assets/personal/stationery/watermark.png
+  watermark_opacity: "0.06"
+
+  # Letter metadata (override per letter frontmatter)
+  date: ""
+  subject: ""
+  opening: ""           # e.g. "Dear Jordan,"
+  closing: ""
+
+  # Sender block (optional)
+  from_name: ""
+  from_address: ""      # can contain line breaks
+  from_email: ""
+  from_phone: ""
+
+  # Recipient block (optional)
+  to_name: ""
+  to_address: ""        # can contain line breaks
+
+# Suggested metadata to keep PDFs clean
+metadata:
+  lang: en-US
