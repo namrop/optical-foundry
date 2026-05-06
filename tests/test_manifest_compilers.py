@@ -153,6 +153,107 @@ def test_sticker_sheet_validate():
     assert errors == [], errors
 
 
+def test_bundle_toc_not_duplicated():
+    """CompositeBundleCompiler assembled Markdown must contain \\tableofcontents only once."""
+    compiler = CompositeBundleCompiler()
+    manifest = {
+        "kind": "composite_bundle", "schema_version": "bundle_manifest_v1",
+        "bundle_id": "test-toc", "profile": "generic-report",
+        "presentation": {"title": "TOC Test", "abstract": "Should have one TOC."},
+        "render": {"include_toc": True, "toc_depth": 2},
+        "sources": [
+            {"uid": "src1", "path": str(SRC / "source-001.md"), "role": "primary_anchor", "order": 1},
+            {"uid": "src2", "path": str(SRC / "source-002.md"), "role": "supporting_anchor", "order": 2},
+        ],
+    }
+    plan = compiler.compile(manifest)
+    assembled = plan.render_source.read_text()
+    # Count occurrences of \tableofcontents
+    toc_count = assembled.count("\\tableofcontents")
+    assert toc_count == 1, f"Expected 1 \\tableofcontents, found {toc_count}"
+
+
+def test_bundle_suppress_frontmatter_true():
+    """suppress_frontmatter: true removes the frontmatter code block from assembled output."""
+    compiler = CompositeBundleCompiler()
+    manifest = {
+        "kind": "composite_bundle", "schema_version": "bundle_manifest_v1",
+        "bundle_id": "test-suppress", "profile": "generic-report",
+        "sources": [
+            {"uid": "src1", "path": str(SRC / "source-001.md"), "role": "primary_anchor", "order": 1,
+             "suppress_frontmatter": True},
+        ],
+    }
+    plan = compiler.compile(manifest)
+    assembled = plan.render_source.read_text()
+    # The source-001.md has frontmatter with uid, title, tags etc.
+    # suppress_frontmatter=True should remove the yaml code block
+    assert "Source Frontmatter" not in assembled, (
+        f"suppress_frontmatter=True should suppress frontmatter block"
+    )
+    assert "```yaml" not in assembled, (
+        f"No yaml code fences expected when suppress_frontmatter=True"
+    )
+    # But the body content should still be there
+    assert "Primary Synthetic Source" in assembled
+
+
+def test_bundle_suppress_frontmatter_false_default():
+    """Default (suppress_frontmatter omitted) includes frontmatter as before."""
+    compiler = CompositeBundleCompiler()
+    manifest = {
+        "kind": "composite_bundle", "schema_version": "bundle_manifest_v1",
+        "bundle_id": "test-show-fm", "profile": "generic-report",
+        "sources": [
+            {"uid": "src1", "path": str(SRC / "source-001.md"), "role": "primary_anchor", "order": 1},
+        ],
+    }
+    plan = compiler.compile(manifest)
+    assembled = plan.render_source.read_text()
+    assert "Source Frontmatter" in assembled, (
+        f"Default should include frontmatter block"
+    )
+    assert "```yaml" in assembled
+
+
+def test_bundle_suppress_frontmatter_explicit_false():
+    """suppress_frontmatter: False explicitly includes frontmatter."""
+    compiler = CompositeBundleCompiler()
+    manifest = {
+        "kind": "composite_bundle", "schema_version": "bundle_manifest_v1",
+        "bundle_id": "test-explicit-fm", "profile": "generic-report",
+        "sources": [
+            {"uid": "src1", "path": str(SRC / "source-001.md"), "role": "primary_anchor", "order": 1,
+             "suppress_frontmatter": False},
+        ],
+    }
+    plan = compiler.compile(manifest)
+    assembled = plan.render_source.read_text()
+    assert "Source Frontmatter" in assembled
+    assert "```yaml" in assembled
+
+
+def test_bundle_suppress_frontmatter_mixed():
+    """Mixed: source 1 suppressed, source 2 not."""
+    compiler = CompositeBundleCompiler()
+    manifest = {
+        "kind": "composite_bundle", "schema_version": "bundle_manifest_v1",
+        "bundle_id": "test-mixed", "profile": "generic-report",
+        "sources": [
+            {"uid": "src1", "path": str(SRC / "source-001.md"), "role": "primary_anchor", "order": 1,
+             "suppress_frontmatter": True},
+            {"uid": "src2", "path": str(SRC / "source-002.md"), "role": "supporting_anchor", "order": 2,
+             "suppress_frontmatter": False},
+        ],
+    }
+    plan = compiler.compile(manifest)
+    assembled = plan.render_source.read_text()
+    assert "Source Frontmatter" in assembled  # source 2 shows it
+    # source 1 frontmatter is suppressed, source 2 frontmatter appears
+    assert "uid: fixture-src-002" in assembled  # source 2 fm visible
+    assert "uid: fixture-src-001" not in assembled  # source 1 fm suppressed
+
+
 def test_packet_review_validate():
     compiler = ForgePacketReviewCompiler()
     manifest = {

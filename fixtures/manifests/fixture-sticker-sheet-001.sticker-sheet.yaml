@@ -1,0 +1,29 @@
+kind: sticker_sheet
+schema_version: sticker_sheet_v1
+sheet_id: fixture-sticker-sheet-001
+profile: sticker-sheet
+layout:
+  grid:
+    - 2
+    - 2
+  cell_size:
+    - 2.5
+    - 2.5
+  show_cut_lines: true
+cells:
+  - position:
+      - 0
+      - 0
+    content: "**GIT**\n\nDistributed version control.\nKeep history safe."
+  - position:
+      - 0
+      - 1
+    content: "**PANDOC**\n\nUniversal document converter.\nMarkdown → anything."
+  - position:
+      - 1
+      - 0
+    content: "**XELATEX**\n\nUnicode-aware TeX engine.\nBeautiful typography."
+  - position:
+      - 1
+      - 1
+    content: "**FORGE**\n\nReliable build loop.\nPackets → artifacts."

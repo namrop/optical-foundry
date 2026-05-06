@@ -1,0 +1,16 @@
+kind: forge_packet_review
+schema_version: packet_review_manifest_v1
+profile: prometheus-packet
+packet:
+  path: ~/Digital_Workspace/20_digital_architecture/project_prometheus/optical_foundry_packet_v0
+  include:
+    - GOAL.md
+    - CONSTRAINTS.md
+    - PLAN.md
+    - STATE.json
+    - PROGRESS.md
+    - VALIDATION.md
+  exclude_generated: true
+render:
+  include_questions: true
+  include_dirty_state_summary: true

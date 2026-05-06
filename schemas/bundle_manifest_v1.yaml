@@ -77,6 +77,15 @@ properties:
           type: string
           enum: [full, summary, none]
           default: full
+        suppress_frontmatter:
+          type: boolean
+          default: false
+          description: >
+            When true, the YAML frontmatter block is completely
+            stripped from this source before rendering. Use this for
+            sources whose internal headings/ToC would duplicate the
+            bundle-level structure, or when frontmatter display is
+            not desired for a specific artifact.
         order:
           type: integer
           minimum: 1

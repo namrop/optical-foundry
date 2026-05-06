@@ -199,10 +199,6 @@ class CompositeBundleCompiler(ManifestCompiler):
                 lines.append(section_line)
                 lines.append("")
 
-        # source inventory table in reader guide or provenance section
-        if render_cfg.get("include_toc", True):
-            lines.append("\\newpage\\tableofcontents")
-
         # source sections
         source_order_uid = []
         for src in sorted(sources, key=lambda s: s.get("order", 99)):
@@ -211,6 +207,7 @@ class CompositeBundleCompiler(ManifestCompiler):
             src_role = src.get("role", "primary_anchor")
             src_title = src.get("title", uid)
             inc_fm = src.get("include_frontmatter", "full")
+            suppress_fm = src.get("suppress_frontmatter", False)
 
             assembly.source_order.append(uid)
             assembly.source_paths[uid] = str(src_path)
@@ -228,7 +225,7 @@ class CompositeBundleCompiler(ManifestCompiler):
             lines.append(f"# {src_title}")
 
             # frontmatter block
-            if inc_fm == "full" and fm:
+            if not suppress_fm and inc_fm == "full" and fm:
                 try:
                     import yaml as _yaml
                     fm_yaml = _yaml.dump(fm, default_flow_style=False, allow_unicode=True)
@@ -240,7 +237,7 @@ class CompositeBundleCompiler(ManifestCompiler):
                 lines.append(fm_yaml.rstrip())
                 lines.append("```")
                 lines.append("")
-            elif inc_fm == "summary" and fm:
+            elif not suppress_fm and inc_fm == "summary" and fm:
                 lines.append("\\textbf{Source Frontmatter (summary)}")
                 lines.append("")
                 for k, v in sorted(fm.items()):
