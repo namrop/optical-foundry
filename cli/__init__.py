@@ -28,6 +28,7 @@ from engine.manifest_compiler import (
 )
 from renderers.pandoc_renderer import PandocRenderer
 from renderers.document_renderer import DocumentRenderer
+from engine.profile_checker import check_all_profiles, check_all_profiles_json, check_profile
 
 
 def _default_registry() -> ManifestRegistry:
@@ -194,6 +195,69 @@ def cmd_manifest(args: argparse.Namespace) -> int:
     return 0 if success else 1
 
 
+def cmd_profiles(args: argparse.Namespace) -> int:
+    """Check and report profile capabilities."""
+    if args.json:
+        print(check_all_profiles_json())
+        return 0
+
+    if args.profile:
+        cap = check_profile(args.profile)
+        _print_profile_table_row(cap)
+        return 0
+
+    # Print table for all profiles
+    caps = check_all_profiles()
+    _print_profiles_table(caps)
+    return 0
+
+
+def _print_profiles_table(caps: dict) -> None:
+    """Pretty-print a table of all profile capabilities."""
+    # Header
+    hdr = f"{'Profile':<28} {'Defaults':<8} {'Template':<8} {'TOC':<5} {'Bundle':<14} {'Notes'}"
+    print(hdr)
+    print("-" * len(hdr))
+
+    badge = {"ok": "✅ ok", "partial": "⚠️  partial", "incompatible": "❌ incompatible"}
+
+    for pid, cap in sorted(caps.items()):
+        has_d = "✓" if cap.defaults_found else "✗"
+        has_t = "✓" if cap.template_found else "✗"
+        has_toc = "✓" if cap.supports_toc else "✗"
+        b = badge.get(cap.bundle_compatibility, cap.bundle_compatibility)
+        reasons = "; ".join(cap.bundle_reasons[:2])  # first two reasons
+        print(f"{pid:<28} {has_d:<8} {has_t:<8} {has_toc:<5} {b:<14} {reasons}")
+
+    # Summary
+    from engine.profile_checker import _build_summary
+    s = _build_summary(caps)
+    print()
+    print(f"Total: {s['total']} | Bundle: {s['bundle_ok']} ok, {s['bundle_partial']} partial, "
+          f"{s['bundle_incompatible']} incompatible | "
+          f"Defaults: {s['with_defaults']}/{s['total']} | "
+          f"Templates: {s['with_templates']}/{s['total']} | "
+          f"TOC: {s['with_toc_support']}/{s['total']}")
+
+
+def _print_profile_table_row(cap: "ProfileCapability") -> None:
+    """Pretty-print a single profile check."""
+    print(f"Profile: {cap.profile_id}")
+    print(f"  Defaults:    {cap.defaults_found or 'MISSING'}")
+    print(f"  Template:    {cap.template_found or 'MISSING'}  (inferred: {cap.template_inferred})")
+    print(f"  Uses 40_latex: {cap.uses_40_latex}")
+    print(f"  TOC support:   {cap.supports_toc}")
+    print(f"  Tightlist:     {cap.has_tightlist}")
+    print(f"  Longtable:     {cap.has_longtable}")
+    print(f"  Bundle compat: {cap.bundle_compatibility}")
+    if cap.bundle_reasons:
+        for r in cap.bundle_reasons:
+            print(f"    → {r}")
+    if cap.warnings:
+        for w in cap.warnings:
+            print(f"  ⚠  {w}")
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(prog="foundry", description="Optical Foundry CLI")
     sub = ap.add_subparsers(dest="command")
@@ -210,6 +274,12 @@ def main() -> int:
     mf_ap.add_argument("input", help="Manifest YAML file path")
     mf_ap.add_argument("--output", default="generated/manifests")
     mf_ap.set_defaults(func=cmd_manifest)
+
+    # profiles
+    pf_ap = sub.add_parser("profiles", help="Check profile capabilities and bundle compatibility")
+    pf_ap.add_argument("--json", action="store_true", help="Output full JSON report")
+    pf_ap.add_argument("--profile", help="Check a single profile")
+    pf_ap.set_defaults(func=cmd_profiles)
 
     args = ap.parse_args()
     if args.command is None:

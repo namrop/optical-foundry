@@ -85,3 +85,55 @@ alone are sufficient; otherwise the profile needs a template.
 The `mythic-letter-johannah` template has a known `\tightlist` gap
 documented in the packet. This is a target `40_latex` mutation and requires
 explicit Luis approval.
+
+## Profile Capability Checker
+
+```bash
+# List all profiles with bundle compatibility status
+python -m cli profiles
+
+# Check a single profile in detail
+python -m cli profiles --profile mythic-letter-johannah
+
+# JSON report for automation
+python -m cli profiles --json
+```
+
+Implemented in `engine/profile_checker.py`. Reports for each profile:
+- `defaults_found` — resolved path to defaults YAML (40_latex or greenfield)
+- `template_found` — resolved path to template .tex (40_latex)
+- `supports_toc` — template has `$if(toc)$` guard (pandoc `--toc` engages it)
+- `has_tightlist` — template defines `\tightlist`
+- `has_longtable` — template supports longtable
+- `bundle_compatibility` — ok / partial / incompatible with reasons
+
+### Bundle Compatibility Summary (20 profiles)
+
+| Status | Count | Profiles |
+|--------|-------|----------|
+| ✅ ok | 10 | generic-report, risk, tech, creative, cam, mythic, convergence, keeper, yugen-brand, yugen-brand-elevated |
+| ⚠️ partial | 5 | mythic-letter-johannah, letter, mythic-letter, prometheus-packet, resume |
+| ❌ incompatible | 5 | elian-packet, elian-poster, labels-avery-5164, labels-avery-15264, sticker-sheet |
+
+### Known Template Mapping Corrections
+
+The `_infer_template()` mapping in PandocRenderer has some entries that don't
+match filenames on disk. The profile checker applies known corrections:
+
+| Profile | Mapped → | Actual template |
+|---------|----------|-----------------|
+| risk | risk.tex | base.tex |
+| tech | tech.tex | base.tex |
+| creative | creative.tex | base.tex |
+| letter | letter.tex | personal_letter.tex |
+| mythic-letter | mythic_letter.tex | personal_letter.tex |
+| prometheus-packet | prometheus_packet.tex | generic_report.tex |
+| labels-avery-5164 | labels_avery_5164.tex | label_sheet.tex |
+| labels-avery-15264 | labels_avery_5164.tex | label_sheet.tex |
+| sticker-sheet | sticker_sheet.tex | label_sheet.tex |
+| yugen-brand | yugen_brand.tex | generic_report.tex |
+| yugen-brand-elevated | yugen_brand_elevated.tex | generic_report.tex |
+
+These corrections are embedded in the profile checker's `TEMPLATE_CORRECTIONS`
+dict. The PandocRenderer's `_infer_template()` still uses the raw mapping;
+updating it requires a separate implementation pass (and does not mutate 40_latex).
