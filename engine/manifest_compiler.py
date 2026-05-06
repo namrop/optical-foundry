@@ -186,8 +186,8 @@ class CompositeBundleCompiler(ManifestCompiler):
             lines.append(f"> {abstract}")
             lines.append("")
 
-        if render_cfg.get("include_toc", True):
-            lines.append("\\newpage\\tableofcontents")
+        # TOC is handled by PandocRenderer's --toc flag via ProjectionPlan.toc.
+        # Do not emit \tableofcontents here (would duplicate pandoc --toc).
 
         # reader guide
         rg = gen_cfg.get("reader_guide", {})

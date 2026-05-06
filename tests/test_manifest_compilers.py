@@ -154,7 +154,7 @@ def test_sticker_sheet_validate():
 
 
 def test_bundle_toc_not_duplicated():
-    """CompositeBundleCompiler assembled Markdown must contain \\tableofcontents only once."""
+    """TOC handled by PandocRenderer --toc flag only; compiler must NOT emit \\tableofcontents."""
     compiler = CompositeBundleCompiler()
     manifest = {
         "kind": "composite_bundle", "schema_version": "bundle_manifest_v1",
@@ -168,9 +168,13 @@ def test_bundle_toc_not_duplicated():
     }
     plan = compiler.compile(manifest)
     assembled = plan.render_source.read_text()
-    # Count occurrences of \tableofcontents
-    toc_count = assembled.count("\\tableofcontents")
-    assert toc_count == 1, f"Expected 1 \\tableofcontents, found {toc_count}"
+    # Compiler must NOT embed \tableofcontents — pandoc --toc flag handles it
+    assert "\\tableofcontents" not in assembled, (
+        f"assembled Markdown must not contain \\tableofcontents; pandoc --toc handles TOC"
+    )
+    # Plan should signal toc=True so PandocRenderer adds --toc
+    assert plan.toc is True
+    assert plan.toc_depth == 2
 
 
 def test_bundle_suppress_frontmatter_true():

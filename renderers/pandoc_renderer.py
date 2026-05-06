@@ -55,10 +55,12 @@ class PandocRenderer(Renderer):
 
         # template
         template = plan.template or self._infer_template(plan.profile_id)
+        template_has_toc = False
         if template:
             tpath = LATEX40 / "templates" / template
             if tpath.exists():
                 cmd += ["--template", str(tpath)]
+                template_has_toc = "\\tableofcontents" in tpath.read_text()
 
         # metadata
         if plan.title:
@@ -69,7 +71,8 @@ class PandocRenderer(Renderer):
             cmd += ["--metadata", f"author={plan.author}"]
         if plan.date:
             cmd += ["--metadata", f"date={plan.date}"]
-        if plan.toc:
+        # Only add --toc if the template doesn't already emit \tableofcontents
+        if plan.toc and not template_has_toc:
             cmd += ["--toc", "--toc-depth", str(plan.toc_depth)]
         if plan.numbersections:
             cmd += ["--number-sections"]
