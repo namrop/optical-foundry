@@ -476,6 +476,14 @@ class LabelRunCompiler(ManifestCompiler):
                 }
                 for uid in assembly.source_order
             ],
+            boundary_assertions={
+                "layout_mode": "content_driven_placeholder",
+                "grid_validated": False,
+                "warnings": [
+                    "Label run currently renders slot-ordered content as a synthetic placeholder document.",
+                    "Physical Avery/grid placement remains content-driven and is not validated by this compiler.",
+                ],
+            },
         )
         return plan
 
@@ -610,6 +618,14 @@ class StickerSheetCompiler(ManifestCompiler):
                 }
                 for uid in assembly.source_order
             ],
+            boundary_assertions={
+                "layout_mode": "content_driven_placeholder",
+                "grid_validated": False,
+                "warnings": [
+                    "Sticker sheet currently renders cell-ordered content as a synthetic placeholder document.",
+                    "Physical sticker grid placement remains content-driven and is not validated by this compiler.",
+                ],
+            },
         )
         return plan
 

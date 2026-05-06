@@ -179,11 +179,12 @@ class PandocRenderer(Renderer):
                 "toc_depth": plan.toc_depth,
                 "figures_validated": len(plan.figure_inventory) == 0,
             },
-            "warnings": [],
+            "warnings": list(plan.boundary_assertions.get("warnings", [])),
             "boundary": {
                 "target_40_latex_mutated": False,
                 "production_output": False,
                 "packet_local_generated_only": True,
+                **plan.boundary_assertions,
             },
             "command": " ".join(cmd),
             "logs": str(log_file),
@@ -234,9 +235,9 @@ class PandocRenderer(Renderer):
             "yugen-brand-elevated": "yugen_brand_elevated.tex",
             "elian-packet": "elian_packet.tex",
             "elian-poster": "elian_poster.tex",
-            "labels-avery-5164": "labels_avery_5164.tex",
-            "labels-avery-15264": "labels_avery_5164.tex",
-            "sticker-sheet": "sticker_sheet.tex",
+            "labels-avery-5164": "label_sheet.tex",
+            "labels-avery-15264": "label_sheet.tex",
+            "sticker-sheet": "label_sheet.tex",
         }
         return mapping.get(profile_id)
 

@@ -40,9 +40,9 @@ PROFILE_TEMPLATE_MAP: dict[str, str] = {
     "yugen-brand-elevated": "yugen_brand_elevated.tex",
     "elian-packet": "elian_packet.tex",
     "elian-poster": "elian_poster.tex",
-    "labels-avery-5164": "labels_avery_5164.tex",
-    "labels-avery-15264": "labels_avery_5164.tex",
-    "sticker-sheet": "sticker_sheet.tex",
+    "labels-avery-5164": "label_sheet.tex",
+    "labels-avery-15264": "label_sheet.tex",
+    "sticker-sheet": "label_sheet.tex",
 }
 
 # Profile IDs to check (canonical forms only — no aliases).
@@ -87,9 +87,6 @@ TEMPLATE_CORRECTIONS: dict[str, str] = {
     "tech": "base.tex",           # technology.yaml defaults point to base.tex
     "creative": "base.tex",       # creative.yaml defaults point to base.tex
     "prometheus-packet": "generic_report.tex",  # prometheus_packet.yaml → generic_report.tex
-    "labels-avery-5164": "label_sheet.tex",     # actual file is label_sheet.tex
-    "labels-avery-15264": "label_sheet.tex",    # same template
-    "sticker-sheet": "label_sheet.tex",         # sticker_sheet.yaml → label_sheet.tex
     "yugen-brand": "generic_report.tex",        # yugenbase.yaml → generic_report.tex
     "yugen-brand-elevated": "generic_report.tex",
 }

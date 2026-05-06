@@ -134,6 +134,9 @@ def test_label_run_compile_produces_plan():
     assert plan.has_assembly
     assert len(plan.assembly.source_order) == 2
     assert plan.render_source.exists()
+    assert plan.boundary_assertions["layout_mode"] == "content_driven_placeholder"
+    assert plan.boundary_assertions["grid_validated"] is False
+    assert any("Physical Avery/grid placement" in w for w in plan.boundary_assertions["warnings"])
 
 
 def test_sticker_sheet_validate():
@@ -151,6 +154,25 @@ def test_sticker_sheet_validate():
     }
     errors = compiler.validate(manifest)
     assert errors == [], errors
+
+
+def test_sticker_sheet_compile_marks_placeholder_layout():
+    compiler = StickerSheetCompiler()
+    manifest = {
+        "kind": "sticker_sheet", "schema_version": "sticker_sheet_v1",
+        "sheet_id": "test-stickers", "profile": "sticker-sheet",
+        "layout": {"grid": [2, 2], "cell_size": [2.5, 2.5]},
+        "cells": [
+            {"position": [0, 0], "content": "Sticker A"},
+            {"position": [0, 1], "content": "Sticker B"},
+            {"position": [1, 0], "content": "Sticker C"},
+            {"position": [1, 1], "content": "Sticker D"},
+        ],
+    }
+    plan = compiler.compile(manifest)
+    assert plan.boundary_assertions["layout_mode"] == "content_driven_placeholder"
+    assert plan.boundary_assertions["grid_validated"] is False
+    assert any("Physical sticker grid placement" in w for w in plan.boundary_assertions["warnings"])
 
 
 def test_bundle_toc_not_duplicated():

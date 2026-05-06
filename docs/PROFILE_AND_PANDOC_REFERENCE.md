@@ -162,12 +162,22 @@ map directly to `personal_letter.tex` in PandocRenderer and the profile checker:
 | tech | tech.tex | base.tex |
 | creative | creative.tex | base.tex |
 | prometheus-packet | prometheus_packet.tex | generic_report.tex |
-| labels-avery-5164 | labels_avery_5164.tex | label_sheet.tex |
-| labels-avery-15264 | labels_avery_5164.tex | label_sheet.tex |
-| sticker-sheet | sticker_sheet.tex | label_sheet.tex |
 | yugen-brand | yugen_brand.tex | generic_report.tex |
 | yugen-brand-elevated | yugen_brand_elevated.tex | generic_report.tex |
 
 Remaining corrections are embedded in the profile checker's `TEMPLATE_CORRECTIONS`
-dict. Aligning additional renderer mappings is a separate local-import-only
+dict. Aligning additional renderer mappings remains a local-import-only
 implementation pass if/when those profiles become active render targets.
+
+## Label / sticker placeholder E2E posture
+
+`label-run` and `sticker-sheet` now have explicit synthetic placeholder E2E
+behavior in Optical Foundry:
+- both render through normal `foundry manifest` with local imported assets only
+- evidence marks `boundary.layout_mode = content_driven_placeholder`
+- evidence marks `boundary.grid_validated = false`
+- warnings explain that physical Avery/sticker grid placement is still
+  content-driven and not validated by the current compiler
+
+This makes the current limitation honest and testable without pretending a full
+grid engine exists.

@@ -41,4 +41,6 @@ def test_pandoc_renderer_template_inference():
     assert r._infer_template("risk") == "risk.tex"
     assert r._infer_template("letter") == "personal_letter.tex"
     assert r._infer_template("mythic-letter") == "personal_letter.tex"
+    assert r._infer_template("labels-avery-5164") == "label_sheet.tex"
+    assert r._infer_template("sticker-sheet") == "label_sheet.tex"
     assert r._infer_template("unknown") is None
