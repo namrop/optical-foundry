@@ -2,7 +2,7 @@
 
 ## Ownership boundary (2026-05-06)
 
-As of commit `a4d7788`, Optical Foundry owns editable copies of all
+As of commit `32b1358`, Optical Foundry owns editable copies of all
 40_latex profile assets in `profiles/40_latex_import/`:
 
 ```
@@ -115,9 +115,11 @@ Some profiles may have defaults files but no corresponding template (e.g.,
 gap report. The greenfield can still render through them if `pandoc` defaults
 alone are sufficient; otherwise the profile needs a template.
 
-The `mythic-letter-johannah` template has a known `\tightlist` gap
-documented in the packet. This is a target `40_latex` mutation and requires
-explicit Luis approval.
+The source `40_latex` `mythic-letter-johannah` template has a known
+`\tightlist` gap documented in the packet. Optical Foundry's **local imported
+copy** now carries bundle compatibility support (`\tightlist`, longtable/
+booktabs/array, and a `$if(toc)$`-guarded TOC slot) without mutating source
+`40_latex`.
 
 ## Profile Capability Checker
 
@@ -144,8 +146,8 @@ Implemented in `engine/profile_checker.py`. Reports for each profile:
 
 | Status | Count | Profiles |
 |--------|-------|----------|
-| ✅ ok | 10 | generic-report, risk, tech, creative, cam, mythic, convergence, keeper, yugen-brand, yugen-brand-elevated |
-| ⚠️ partial | 5 | mythic-letter-johannah, letter, mythic-letter, prometheus-packet, resume |
+| ✅ ok | 11 | generic-report, risk, tech, creative, cam, mythic, mythic-letter-johannah, convergence, keeper, yugen-brand, yugen-brand-elevated |
+| ⚠️ partial | 4 | letter, mythic-letter, prometheus-packet, resume |
 | ❌ incompatible | 5 | elian-packet, elian-poster, labels-avery-5164, labels-avery-15264, sticker-sheet |
 
 ### Known Template Mapping Corrections

@@ -99,14 +99,14 @@ TEMPLATE_CORRECTIONS: dict[str, str] = {
 # Profiles with TOC guard ($if(toc)$) in their effective template.
 TOC_GUARD_PROFILES = {
     "generic-report", "risk", "tech", "creative", "cam",
-    "mythic", "convergence", "keeper",
+    "mythic", "mythic-letter-johannah", "convergence", "keeper",
     "yugen-brand", "yugen-brand-elevated", "prometheus-packet",
 }
 
 # Profiles whose effective template defines \tightlist.
 TIGHTLIST_PROFILES = {
     "generic-report", "risk", "tech", "creative", "cam",
-    "mythic", "convergence", "keeper",
+    "mythic", "mythic-letter-johannah", "convergence", "keeper",
     "yugen-brand", "yugen-brand-elevated", "prometheus-packet",
     "elian-packet", "resume", "labels-avery-5164", "labels-avery-15264",
     "sticker-sheet",
@@ -115,7 +115,7 @@ TIGHTLIST_PROFILES = {
 # Profiles whose effective template defines \longtable.
 LONGTABLE_PROFILES = {
     "generic-report", "risk", "tech", "creative", "cam",
-    "mythic", "convergence", "keeper",
+    "mythic", "mythic-letter-johannah", "convergence", "keeper",
     "yugen-brand", "yugen-brand-elevated", "prometheus-packet",
     "elian-packet",
 }
@@ -125,19 +125,13 @@ LONGTABLE_PROFILES = {
 # Profiles fully compatible with composite_bundle rendering.
 BUNDLE_OK = {
     "generic-report", "risk", "tech", "creative", "cam",
-    "mythic", "convergence", "keeper",
+    "mythic", "mythic-letter-johannah", "convergence", "keeper",
     "yugen-brand", "yugen-brand-elevated",
 }
 
 # Profiles partially compatible (template exists, renders documents,
 # but missing one or more bundle features).
 BUNDLE_PARTIAL: dict[str, list[str]] = {
-    "mythic-letter-johannah": [
-        "No TOC guard — --toc flag has no effect; TOC not rendered",
-        "Missing \\tightlist — bullet lists cause XeLaTeX error",
-        "Missing longtable support — tables may fail",
-        "Custom font paths fragile (see G7 in gap report)",
-    ],
     "letter": [
         "No TOC guard — --toc flag has no effect; TOC not rendered",
         "Memoir class — letter-centric layout, not designed for multi-section bundles",

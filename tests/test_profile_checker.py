@@ -65,19 +65,16 @@ def test_cam_is_bundle_ok():
     assert cap.template_found is not None
 
 
-def test_mythic_letter_johannah_is_partial():
+def test_mythic_letter_johannah_is_bundle_ok():
     cap = check_profile("mythic-letter-johannah")
-    assert cap.bundle_compatibility == "partial"
-    assert cap.supports_toc is False
-    assert cap.has_tightlist is False
-    assert cap.has_longtable is False
-    # Defaults should exist
+    assert cap.bundle_compatibility == "ok"
+    assert cap.supports_toc is True
+    assert cap.has_tightlist is True
+    assert cap.has_longtable is True
     assert cap.defaults_found is not None
-    # Template should exist
     assert cap.template_found is not None
-    # Should have reasons about tightlist and longtable
-    reasons_text = " ".join(cap.bundle_reasons).lower()
-    assert "tightlist" in reasons_text, f"Expected tightlist mention in reasons: {cap.bundle_reasons}"
+    assert cap.defaults_source == "local"
+    assert cap.template_source == "local"
 
 
 def test_letter_is_partial():
