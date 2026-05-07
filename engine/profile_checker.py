@@ -16,6 +16,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from engine.profile_resolver import resolve_profile
+
 # Read-only reference path for 40_latex.
 LATEX40 = Path("~/Digital_Workspace/40_latex")
 
@@ -220,53 +222,28 @@ class ProfileCapability:
 
 
 def check_profile(profile_id: str) -> ProfileCapability:
-    """Check a single profile's capabilities against 40_latex resources."""
+    """Check a single profile's capabilities using the shared profile resolver."""
 
     cap = ProfileCapability(profile_id=profile_id)
 
-    gf_root = Path(__file__).resolve().parents[1]
-    local_import = gf_root / "profiles" / "40_latex_import"
+    resolved = resolve_profile(profile_id)
 
-    # ── defaults ──────────────────────────────────────────────────
-    local_defaults, remote_defaults = _find_defaults_local_remote(profile_id, local_import)
-    if local_defaults is not None:
-        cap.defaults_found = str(local_defaults)
-        cap.defaults_source = "local"
-    elif remote_defaults is not None:
-        cap.defaults_found = str(remote_defaults)
-        cap.defaults_source = "40_latex"
+    cap.defaults_found = str(resolved.defaults_stack[-1]) if resolved.defaults_stack else None
+    cap.defaults_source = resolved.boundary.get("defaults_source", "missing")
+    cap.template_inferred = resolved.template_path.name if resolved.template_path else ""
+    if resolved.template_path and resolved.template_path.exists():
+        cap.template_found = str(resolved.template_path)
+        cap.template_source = resolved.boundary.get("template_source", "missing")
     else:
-        cap.defaults_found = None
-        cap.defaults_source = "missing"
-        cap.warnings.append(f"No defaults file found for {profile_id}")
+        cap.template_found = None
+        cap.template_source = "missing"
 
-    # ── template ──────────────────────────────────────────────────
-    inferred = PROFILE_TEMPLATE_MAP.get(profile_id, "")
-    cap.template_inferred = inferred
-
-    effective_template = TEMPLATE_CORRECTIONS.get(profile_id, inferred)
-    if not effective_template:
-        cap.warnings.append(f"No template mapping for {profile_id}")
-    else:
-        local_tpath = local_import / "templates" / effective_template
-        remote_tpath = LATEX40 / "templates" / effective_template
-        uncorrected_tpath = LATEX40 / "templates" / inferred
-
-        if local_tpath.exists():
-            cap.template_found = str(local_tpath)
-            cap.template_source = "local"
-        elif remote_tpath.exists():
-            cap.template_found = str(remote_tpath)
-            cap.template_source = "40_latex"
-        elif effective_template != inferred and uncorrected_tpath.exists():
-            cap.template_found = str(uncorrected_tpath)
-            cap.template_source = "40_latex"
-            cap.warnings.append(
-                f"Template mapping says {inferred} but {effective_template} "
-                f"found (correction applied)"
-            )
-        else:
-            cap.warnings.append(f"No template found for {profile_id} (expected {inferred})")
+    for warning in resolved.warnings:
+        # The current checker intentionally reports legacy asset fallback as a
+        # boundary fact, not a per-profile capability warning, until the asset
+        # import phase lands.
+        if "legacy 40_latex/assets" not in warning:
+            cap.warnings.append(warning)
 
     # ── feature checks ────────────────────────────────────────────
     cap.supports_toc = profile_id in TOC_GUARD_PROFILES

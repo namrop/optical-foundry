@@ -333,3 +333,54 @@ def test_packet_review_compile_summarizes_json_instead_of_fencing_full_block():
     assert "# `STATE.json`" in assembled
     assert "**JSON summary**" in assembled
     assert "```json" not in assembled
+
+
+def test_composite_bundle_plan_records_manifest_family_and_child_profiles():
+    compiler = CompositeBundleCompiler()
+    manifest = {
+        "kind": "composite_bundle", "schema_version": "bundle_manifest_v1",
+        "bundle_id": "profile-evidence-bundle", "profile": "generic-report",
+        "render": {"assembly_strategy": "combined_markdown", "numbering_strategy": "continuous"},
+        "sources": [
+            {"uid": "tech-child", "path": str(SRC / "source-001.md"), "role": "primary_anchor", "order": 1, "profile_id": "tech"},
+            {"uid": "letter-child", "path": str(SRC / "source-002.md"), "role": "appendix", "order": 2, "profile_id": "mythic-letter"},
+        ],
+    }
+    plan = compiler.compile(manifest)
+
+    assert plan.assembly.manifest_family == "bundle_longform"
+    assert plan.assembly.assembly_strategy == "combined_markdown"
+    assert plan.assembly.numbering_strategy == "continuous"
+    assert [c["resolved_profile_id"] for c in plan.assembly.child_profiles] == ["yugen_tech", "mythic-letter"]
+    assert [c["profile_family"] for c in plan.assembly.child_profiles] == ["document_spine", "stationery_art"]
+    assert [c["defaults_stack"] for c in plan.assembly.child_profiles][0] == ["document_spine.yaml", "yugenbase.yaml", "technology.yaml"]
+    assert plan.source_inventory[0]["requested_profile_id"] == "tech"
+    assert plan.source_inventory[0]["resolved_profile_id"] == "yugen_tech"
+    assert plan.source_inventory[1]["profile_family"] == "stationery_art"
+
+
+def test_packet_review_plan_records_manifest_family_and_child_profiles():
+    compiler = ForgePacketReviewCompiler()
+    manifest = {
+        "kind": "forge_packet_review", "schema_version": "packet_review_manifest_v1",
+        "profile": "prometheus-packet",
+        "packet": {
+            "path": str(GF),
+            "include": ["STATE.json", "PROGRESS.md"],
+        },
+        "render": {
+            "include_questions": False,
+            "include_dirty_state_summary": False,
+            "assembly_strategy": "combined_markdown",
+            "numbering_strategy": "continuous",
+        },
+    }
+    plan = compiler.compile(manifest)
+
+    assert plan.assembly.manifest_family == "packet_review"
+    assert plan.assembly.assembly_strategy == "combined_markdown"
+    assert [c["object_id"] for c in plan.assembly.child_profiles] == ["STATE_json", "PROGRESS_md"]
+    assert all(c["requested_profile_id"] == "prometheus-packet" for c in plan.assembly.child_profiles)
+    assert all(c["profile_family"] == "document_spine" for c in plan.assembly.child_profiles)
+    assert plan.boundary_assertions["manifest_family"] == "packet_review"
+    assert plan.boundary_assertions["profile_manifest_axes_separate"] is True

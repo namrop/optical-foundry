@@ -26,12 +26,17 @@ class AssemblyView:
 
     assembly_kind: str  # manifest kind (composite_bundle, label_run, etc.)
     schema_version: str = SCHEMA_VERSION
+    manifest_family: str = ""
+    manifest_subtype: str = ""
+    assembly_strategy: str = ""
+    numbering_strategy: str = ""
     assembly_title: str = ""
     assembly_subtitle: str = ""
     source_order: list[str] = field(default_factory=list)  # ordered UIDs
     source_paths: dict[str, str] = field(default_factory=dict)  # UID → path
     source_roles: dict[str, str] = field(default_factory=dict)  # UID → role
     source_digests: dict[str, str] = field(default_factory=dict)  # UID → sha256
+    child_profiles: list[dict[str, Any]] = field(default_factory=list)
     generated_sections: list[str] = field(default_factory=list)
     figure_slots: list[str] = field(default_factory=list)
 

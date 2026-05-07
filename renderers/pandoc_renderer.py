@@ -17,15 +17,9 @@ import time
 from pathlib import Path
 from typing import Any
 
+from engine.profile_resolver import LOCAL_IMPORT, LATEX40, ResolvedProfile, resolve_profile
 from engine.projection_plan import ProjectionPlan
 from renderers.base import Renderer
-
-# Read-only reference path for 40_latex templates, styles, fonts.
-LATEX40 = Path("~/Digital_Workspace/40_latex")
-
-# Local copy of 40_latex profile assets (editable Optical Foundry copies).
-# Prefer these over 40_latex when they exist.
-LOCAL_IMPORT = Path(__file__).resolve().parents[1] / "profiles" / "40_latex_import"
 
 
 class PandocRenderer(Renderer):
@@ -40,7 +34,7 @@ class PandocRenderer(Renderer):
 
     def render(self, plan: ProjectionPlan, output_dir: str | None = None) -> dict[str, Any]:
         start = time.monotonic()
-        out_dir = Path(output_dir) if output_dir else Path.cwd()
+        out_dir = (Path(output_dir) if output_dir else Path.cwd()).resolve()
         out_dir.mkdir(parents=True, exist_ok=True)
 
         output_pdf = out_dir / f"{plan.render_id}{plan.output_extension}"
@@ -49,24 +43,26 @@ class PandocRenderer(Renderer):
         text_file = out_dir / f"{plan.render_id}.txt"
 
         # --- build pandoc command ---
-        cmd = ["pandoc", str(plan.render_source), "-o", str(output_pdf)]
+        render_source = plan.render_source.resolve()
+        cmd = ["pandoc", str(render_source), "-o", str(output_pdf)]
 
-        # profile defaults: look for profile YAML in 40_latex defaults/
-        defaults_file = self._find_profile_defaults(plan.profile_id)
+        # profile defaults/template/resource environment: single-object profile
+        # resolution is centralized in engine.profile_resolver. Manifest-family
+        # assembly decisions remain outside this renderer.
+        resolved_profile = resolve_profile(plan.profile_id)
         defaults_meta: dict[str, Any] = {}
-        if defaults_file:
+        for defaults_file in resolved_profile.defaults_stack:
             cmd += ["--defaults", str(defaults_file)]
-            defaults_meta = self._read_defaults_metadata(defaults_file)
+            defaults_meta = self._merge_defaults_metadata(defaults_meta, self._read_defaults_metadata(defaults_file))
 
-        # template — prefer local import, fall back to 40_latex
-        template = plan.template or self._infer_template(plan.profile_id)
-        if template:
-            tpath_local = LOCAL_IMPORT / "templates" / template
-            tpath_40 = LATEX40 / "templates" / template
-            if tpath_local.exists():
-                cmd += ["--template", str(tpath_local)]
-            elif tpath_40.exists():
-                cmd += ["--template", str(tpath_40)]
+        # template — prefer explicit plan override, otherwise resolved profile
+        if plan.template:
+            template_path = self._resolve_template_override(plan.template)
+        else:
+            template_path = resolved_profile.template_path
+        template = template_path.name if template_path else ""
+        if template_path and template_path.exists():
+            cmd += ["--template", str(template_path)]
 
         # metadata
         if plan.title:
@@ -87,16 +83,18 @@ class PandocRenderer(Renderer):
 
         # tex engine
         xe = shutil.which("xelatex") or "xelatex"
-        cmd += ["--pdf-engine", str(xe)]
+        cmd += [
+            "--pdf-engine", str(xe),
+            "--pdf-engine-opt=-interaction=nonstopmode",
+            "--pdf-engine-opt=-halt-on-error",
+        ]
 
-        # texmf path for styles — prefer local import, fall back to 40_latex
-        local_texmf = LOCAL_IMPORT / "styles" / "texmf"
-        texmf40 = LATEX40 / "styles" / "texmf"
         env = os.environ.copy()
-        if local_texmf.exists():
-            env["TEXMFHOME"] = str(local_texmf)
-        elif texmf40.exists():
-            env["TEXMFHOME"] = str(texmf40)
+        env.update(resolved_profile.render_environment.env_overrides())
+
+        for resource_path in resolved_profile.render_environment.resource_paths:
+            if resource_path.exists():
+                cmd += ["--resource-path", str(resource_path)]
 
         # page geometry
         if plan.page_size and plan.page_size != "letter":
@@ -110,6 +108,7 @@ class PandocRenderer(Renderer):
                 text=True,
                 timeout=300,
                 env=env,
+                cwd=resolved_profile.render_environment.cwd,
             )
         except subprocess.TimeoutExpired:
             elapsed = time.monotonic() - start
@@ -148,7 +147,7 @@ class PandocRenderer(Renderer):
         evidence = {
             "schema_version": "render_evidence_v1",
             "render_id": plan.render_id,
-            "profile": {"profile_id": plan.profile_id},
+            "profile": self._profile_evidence(resolved_profile, template_path),
             "input": {
                 "path": str(plan.render_source),
                 "digest_sha256": self._sha256_file(plan.render_source),
@@ -156,9 +155,13 @@ class PandocRenderer(Renderer):
             },
             "source_inventory": plan.source_inventory,
             "figure_inventory": plan.figure_inventory,
+            "assembly": self._assembly_evidence(plan),
             "render_metadata": {
                 "profile": plan.profile_id,
+                "canonical_profile": resolved_profile.canonical_profile_id,
+                "profile_family": resolved_profile.profile_family,
                 "template": template,
+                "defaults_stack": [str(p) for p in resolved_profile.defaults_stack],
                 "command": " ".join(cmd),
                 "pandoc_version": self._pandoc_version(),
                 "tex_engine": xe,
@@ -181,11 +184,12 @@ class PandocRenderer(Renderer):
                 "toc_depth": plan.toc_depth,
                 "figures_validated": len(plan.figure_inventory) == 0,
             },
-            "warnings": list(plan.boundary_assertions.get("warnings", [])) + defaults_meta.get("warnings", []),
+            "warnings": list(plan.boundary_assertions.get("warnings", [])) + defaults_meta.get("warnings", []) + resolved_profile.warnings,
             "boundary": {
                 "target_40_latex_mutated": False,
                 "production_output": False,
                 "packet_local_generated_only": True,
+                **resolved_profile.boundary,
                 **defaults_meta.get("boundary", {}),
                 **plan.boundary_assertions,
             },
@@ -199,50 +203,72 @@ class PandocRenderer(Renderer):
     # ── helpers ──────────────────────────────
 
     def _find_profile_defaults(self, profile_id: str) -> Path | None:
-        # Prefer local import, then 40_latex, then greenfield profiles/
-        for pattern in [f"{profile_id}.yaml", f"{profile_id.replace('_', '-')}.yaml",
-                        f"{profile_id.replace('-', '_')}.yaml"]:
-            local = LOCAL_IMPORT / "defaults" / pattern
-            if local.exists():
-                return local
-            remote = LATEX40 / "defaults" / pattern
-            if remote.exists():
-                return remote
-        # Also check profiles/ in greenfield
-        for pdir in (Path("profiles") / "reports", Path("profiles") / "labels",
-                      Path("profiles") / "stickers", Path("profiles") / "letters",
-                      Path("profiles") / "resumes"):
-            candidate = pdir / f"{profile_id}.yaml"
-            if candidate.exists():
-                return candidate
-        return None
+        """Compatibility helper: return the final defaults file for a profile.
+
+        New code should use engine.profile_resolver.resolve_profile() directly.
+        """
+        resolved = resolve_profile(profile_id)
+        return resolved.defaults_stack[-1] if resolved.defaults_stack else None
 
     def _infer_template(self, profile_id: str) -> str | None:
-        # Map profile IDs to known template names from 40_latex.
-        mapping = {
-            "generic-report": "generic_report.tex",
-            "generic_report": "generic_report.tex",
-            "risk": "risk.tex",
-            "tech": "tech.tex",
-            "creative": "creative.tex",
-            "cam": "cam.tex",
-            "mythic": "mythic.tex",
-            "mythic-letter": "personal_letter.tex",
-            "mythic-letter-johannah": "mythic_letter_johannah.tex",
-            "letter": "personal_letter.tex",
-            "resume": "resume.tex",
-            "prometheus-packet": "generic_report.tex",
-            "convergence": "convergence.tex",
-            "keeper": "keeper.tex",
-            "yugen-brand": "yugen_brand.tex",
-            "yugen-brand-elevated": "yugen_brand_elevated.tex",
-            "elian-packet": "elian_packet.tex",
-            "elian-poster": "elian_poster.tex",
-            "labels-avery-5164": "label_sheet.tex",
-            "labels-avery-15264": "label_sheet.tex",
-            "sticker-sheet": "label_sheet.tex",
+        """Compatibility helper backed by the shared profile resolver."""
+        resolved = resolve_profile(profile_id)
+        return resolved.template_path.name if resolved.template_path else None
+
+    def _resolve_template_override(self, template: str) -> Path:
+        """Resolve an explicit plan template using the same local-first order."""
+        template_path = Path(template)
+        if template_path.is_absolute():
+            return template_path
+        local = LOCAL_IMPORT / "templates" / template
+        if local.exists():
+            return local
+        remote = LATEX40 / "templates" / template
+        if remote.exists():
+            return remote
+        return local
+
+    @staticmethod
+    def _merge_defaults_metadata(left: dict[str, Any], right: dict[str, Any]) -> dict[str, Any]:
+        merged = {
+            "warnings": list(left.get("warnings", [])) + list(right.get("warnings", [])),
+            "boundary": {**left.get("boundary", {}), **right.get("boundary", {})},
         }
-        return mapping.get(profile_id)
+        return merged
+
+    @staticmethod
+    def _profile_evidence(resolved: ResolvedProfile, template_path: Path | None) -> dict[str, Any]:
+        return {
+            "profile_id": resolved.profile_id,
+            "canonical_profile_id": resolved.canonical_profile_id,
+            "profile_family": resolved.profile_family,
+            "defaults_stack": [str(p) for p in resolved.defaults_stack],
+            "template_path": str(template_path) if template_path else "",
+            "asset_roots": [str(p) for p in resolved.asset_roots],
+            "environment": {
+                "TEXMFHOME": str(resolved.render_environment.texmfhome) if resolved.render_environment.texmfhome else "",
+                "TEXINPUTS": resolved.render_environment.texinputs,
+                "resource_paths": [str(p) for p in resolved.render_environment.resource_paths],
+            },
+            "boundary": resolved.boundary,
+        }
+
+    @staticmethod
+    def _assembly_evidence(plan: ProjectionPlan) -> dict[str, Any]:
+        if plan.assembly is None:
+            return {}
+        return {
+            "assembly_kind": plan.assembly.assembly_kind,
+            "schema_version": plan.assembly.schema_version,
+            "manifest_family": plan.assembly.manifest_family,
+            "manifest_subtype": plan.assembly.manifest_subtype,
+            "assembly_strategy": plan.assembly.assembly_strategy,
+            "numbering_strategy": plan.assembly.numbering_strategy,
+            "assembly_title": plan.assembly.assembly_title,
+            "source_order": plan.assembly.source_order,
+            "source_roles": plan.assembly.source_roles,
+            "child_profiles": plan.assembly.child_profiles,
+        }
 
     @staticmethod
     def _read_defaults_metadata(path: Path) -> dict[str, Any]:

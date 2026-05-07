@@ -23,15 +23,18 @@ properties:
 
   profile_class:
     type: string
-    description: Layout/profile family. Render-target dispatch comes from Markdown input or manifest kind/schema_version, not from profile_class alone.
+    description: >
+      Profile family for individual document/object rendering.
+      This enum covers only per-document/profile families.
+      Manifest families (bundle_longform, packet_review, physical_sheet,
+      campaign_packet) and bundle/packet-review assembled artifacts are
+      resolved through manifest kind/schema_version, not profile_class.
     enum:
-      - document      # Single document renderer
-      - letter        # Letter stationery (uses DocumentRenderer)
-      - resume        # Resume/CV (uses DocumentRenderer with special args)
-      - label         # Label sheet profile family; normally used by label_run manifests
-      - sticker       # Sticker sheet profile family; normally used by sticker_sheet manifests
-      - bundle        # Composite bundle styling family; target comes from manifest kind
-      - packet_review # Packet review styling family; target comes from forge_packet_review manifest
+      - document_spine       # Neutral long-form documents, reports, Atrium notes, context objects
+      - stationery_art       # Mythic letter, Johannah, one-off art/stationery with image/opacity/TikZ
+      - resume               # Resume/CV; structurally distinct enough to stay its own family
+      - campaign_art         # Elian packet/poster; production-art dependent, placeholder-safe locally
+      - physical_sheet_profile # Per-object profile substrate for label/sticker content (grid is manifest)
 
   profile_version:
     type: string

@@ -1,0 +1,22 @@
+from: markdown+footnotes+yaml_metadata_block+table_captions+smart
+to: pdf
+pdf-engine: xelatex
+template: templates/base.tex
+# listings: true
+top-level-division: section
+
+# Neutral long-form document spine.
+# Brand overlays such as yugenbase.yaml may override link colors,
+# pagestyle, division, footer, logo, and style package selection.
+variables:
+  documentclass: memoir
+  classoption: [11pt, oneside]
+  colorlinks: true
+  linkcolor: YugenNavy
+  urlcolor: YugenGold
+  pagestyle: plain
+  mainfont: "Helvetica"
+  sansfont: "Helvetica"
+  monofont: "Menlo"
+  geometry:
+    - margin=1in

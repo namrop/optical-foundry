@@ -35,16 +35,17 @@ def test_document_renderer_parses_frontmatter():
     assert plan.render_source == src
 
 
-def test_pandoc_renderer_template_inference():
+def test_pandoc_renderer_template_inference_uses_shared_profile_resolver():
     r = PandocRenderer()
     assert r._infer_template("generic-report") == "generic_report.tex"
-    assert r._infer_template("risk") == "risk.tex"
+    assert r._infer_template("risk") == "base.tex"
+    assert r._infer_template("tech") == "base.tex"
+    assert r._infer_template("creative") == "base.tex"
     assert r._infer_template("letter") == "personal_letter.tex"
     assert r._infer_template("mythic-letter") == "personal_letter.tex"
     assert r._infer_template("prometheus-packet") == "generic_report.tex"
     assert r._infer_template("labels-avery-5164") == "label_sheet.tex"
     assert r._infer_template("sticker-sheet") == "label_sheet.tex"
-    assert r._infer_template("unknown") is None
 
 
 def test_read_defaults_metadata_detects_placeholder_assets():

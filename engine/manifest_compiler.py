@@ -21,6 +21,7 @@ from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Any
 
+from engine.render_planner import RenderPlan, plan_manifest_render
 from engine.projection_plan import AssemblyView, ProjectionPlan
 
 
@@ -129,6 +130,66 @@ def _write_temp_markdown(prefix: str, content: str) -> Path:
     return Path(path)
 
 
+def _apply_manifest_resolution(manifest: dict[str, Any], assembly: AssemblyView) -> tuple[RenderPlan, dict[str, dict[str, Any]]]:
+    """Populate assembly-family fields and return child profile evidence by object id."""
+
+    render_plan = plan_manifest_render(manifest)
+    resolved = render_plan.manifest
+    if resolved is None:
+        return render_plan, {}
+
+    assembly.manifest_family = resolved.manifest_family
+    assembly.manifest_subtype = resolved.manifest_subtype
+    assembly.assembly_strategy = resolved.assembly_strategy
+    assembly.numbering_strategy = resolved.numbering_strategy
+
+    child_profiles: list[dict[str, Any]] = []
+    for child in render_plan.children:
+        evidence = {
+            "object_id": child.object_id,
+            "source_path": str(child.source_path) if child.source_path else "",
+            "role": child.role,
+            "order": child.order,
+            "requested_profile_id": child.requested_profile_id,
+            "requested_profile_family": child.requested_profile_family,
+            "resolved_profile_id": child.resolved_profile.canonical_profile_id,
+            "resolved_profile_request_id": child.resolved_profile.profile_id,
+            "profile_family": child.resolved_profile.profile_family,
+            "defaults_stack": [path.name for path in child.resolved_profile.defaults_stack],
+            "template": child.resolved_profile.template_path.name,
+        }
+        child_profiles.append(evidence)
+
+    assembly.child_profiles = child_profiles
+    return render_plan, {entry["object_id"]: entry for entry in child_profiles}
+
+
+def _manifest_boundary_assertions(render_plan: RenderPlan) -> dict[str, Any]:
+    resolved = render_plan.manifest
+    assembly = render_plan.assembly
+    if resolved is None or assembly is None:
+        return {}
+    return {
+        "manifest_family": resolved.manifest_family,
+        "manifest_subtype": resolved.manifest_subtype,
+        "assembly_strategy": assembly.strategy,
+        "numbering_strategy": assembly.numbering_strategy,
+        **resolved.boundary,
+    }
+
+
+def _inventory_profile_fields(child_profile_by_id: dict[str, dict[str, Any]], uid: str) -> dict[str, Any]:
+    child = child_profile_by_id.get(uid)
+    if child is None:
+        return {}
+    return {
+        "requested_profile_id": child.get("requested_profile_id"),
+        "requested_profile_family": child.get("requested_profile_family"),
+        "resolved_profile_id": child.get("resolved_profile_id"),
+        "profile_family": child.get("profile_family"),
+    }
+
+
 # ──────────────────────────────────────────────
 #  Concrete manifest compilers
 # ──────────────────────────────────────────────
@@ -175,6 +236,7 @@ class CompositeBundleCompiler(ManifestCompiler):
             source_roles={},
             source_digests={},
         )
+        render_plan, child_profile_by_id = _apply_manifest_resolution(manifest, assembly)
 
         # --- assemble intermediate Markdown ---
         lines: list[str] = []
@@ -314,6 +376,7 @@ class CompositeBundleCompiler(ManifestCompiler):
                     "path": assembly.source_paths.get(uid),
                     "role": assembly.source_roles.get(uid),
                     "digest_sha256": assembly.source_digests.get(uid),
+                    **_inventory_profile_fields(child_profile_by_id, uid),
                 }
                 for uid in assembly.source_order
             ],
@@ -321,6 +384,7 @@ class CompositeBundleCompiler(ManifestCompiler):
                 {"path": f.get("path"), "caption": f.get("caption"), "placement": f.get("placement")}
                 for f in figures
             ],
+            boundary_assertions=_manifest_boundary_assertions(render_plan),
         )
         return plan
 
@@ -416,6 +480,7 @@ class LabelRunCompiler(ManifestCompiler):
             assembly_title=f"Label Run: {run_id}",
             assembly_subtitle=f"Sheet spec: {sheet_spec}",
         )
+        render_plan, child_profile_by_id = _apply_manifest_resolution(manifest, assembly)
 
         # assemble intermediate Markdown — one section per slot
         lines: list[str] = []
@@ -473,10 +538,12 @@ class LabelRunCompiler(ManifestCompiler):
                     "slot": int(uid.split("-")[1]) if uid.startswith("slot-") else 0,
                     "path": assembly.source_paths.get(uid),
                     "digest_sha256": assembly.source_digests.get(uid),
+                    **_inventory_profile_fields(child_profile_by_id, uid),
                 }
                 for uid in assembly.source_order
             ],
             boundary_assertions={
+                **_manifest_boundary_assertions(render_plan),
                 "layout_mode": "content_driven_placeholder",
                 "grid_validated": False,
                 "warnings": [
@@ -560,6 +627,7 @@ class StickerSheetCompiler(ManifestCompiler):
             assembly_title=f"Sticker Sheet: {sheet_id}",
             assembly_subtitle=f"Grid: {max_row}×{max_col}",
         )
+        render_plan, child_profile_by_id = _apply_manifest_resolution(manifest, assembly)
 
         lines: list[str] = []
         lines.append(f"# Sticker Sheet: {sheet_id}")
@@ -615,10 +683,12 @@ class StickerSheetCompiler(ManifestCompiler):
                     "uid": uid,
                     "path": assembly.source_paths.get(uid),
                     "digest_sha256": assembly.source_digests.get(uid),
+                    **_inventory_profile_fields(child_profile_by_id, uid),
                 }
                 for uid in assembly.source_order
             ],
             boundary_assertions={
+                **_manifest_boundary_assertions(render_plan),
                 "layout_mode": "content_driven_placeholder",
                 "grid_validated": False,
                 "warnings": [
@@ -717,6 +787,7 @@ class ForgePacketReviewCompiler(ManifestCompiler):
             assembly_title=f"Packet Review: {pkt_path.name if pkt_path else 'unknown'}",
             assembly_subtitle=str(pkt_path),
         )
+        render_plan, child_profile_by_id = _apply_manifest_resolution(manifest, assembly)
 
         lines: list[str] = []
         lines.append(f"# Packet Review: {pkt_path.name if pkt_path else 'Packet State'}")
@@ -819,10 +890,12 @@ class ForgePacketReviewCompiler(ManifestCompiler):
                     "uid": uid,
                     "path": assembly.source_paths.get(uid),
                     "digest_sha256": assembly.source_digests.get(uid),
+                    **_inventory_profile_fields(child_profile_by_id, uid),
                 }
                 for uid in assembly.source_order
             ],
             boundary_assertions={
+                **_manifest_boundary_assertions(render_plan),
                 "projection_mode": "packet_review",
                 "packet_review_fixture": True,
                 "include_questions": render_cfg.get("include_questions", True),
