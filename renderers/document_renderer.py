@@ -10,6 +10,7 @@ import hashlib
 import uuid
 from pathlib import Path
 
+from engine.profile_resolver import resolve_profile
 from engine.projection_plan import ProjectionPlan
 from renderers.pandoc_renderer import PandocRenderer
 
@@ -40,6 +41,20 @@ def _parse_frontmatter(text: str) -> tuple[dict, str]:
     return fm, body
 
 
+def _profile_default_toc(profile_id: str) -> bool:
+    """Return the single-document TOC default for a profile.
+
+    Letter/stationery profiles are authored artifacts, not reports. They should
+    not grow a table of contents unless source frontmatter explicitly asks for
+    one.
+    """
+    try:
+        resolved = resolve_profile(profile_id)
+    except Exception:
+        return True
+    return False if resolved.profile_family == "stationery_art" else True
+
+
 class DocumentRenderer:
     """Render a single Markdown file through Pandoc."""
 
@@ -61,7 +76,7 @@ class DocumentRenderer:
             subtitle=fm.get("subtitle", ""),
             author=fm.get("author", ""),
             date=fm.get("date", ""),
-            toc=fm.get("toc", True),
+            toc=fm.get("toc", _profile_default_toc(profile_id)),
             toc_depth=fm.get("toc-depth", 3),
             numbersections=fm.get("numbersections", True),
             source_inventory=[

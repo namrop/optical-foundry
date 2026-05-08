@@ -14,6 +14,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from engine.font_resolver import POLICY_NAME, resolve_fonts_from_defaults
+
 GF_ROOT = Path(__file__).resolve().parents[1]
 LATEX40 = Path("~/Digital_Workspace/40_latex")
 LOCAL_IMPORT = GF_ROOT / "profiles" / "40_latex_import"
@@ -48,6 +50,7 @@ class ResolvedProfile:
     template_path: Path
     asset_roots: list[Path]
     render_environment: RenderEnvironment
+    font_policy: dict[str, Any]
     boundary: dict[str, Any]
     warnings: list[str] = field(default_factory=list)
 
@@ -96,7 +99,11 @@ PROFILE_SPECS: dict[str, dict[str, Any]] = {
     "prometheus-packet": {"family": "document_spine", "defaults": ["prometheus_packet.yaml"], "template": "generic_report.tex"},
     "letter": {"family": "stationery_art", "defaults": ["letter.yaml"], "template": "personal_letter.tex"},
     "mythic-letter": {"family": "stationery_art", "defaults": ["mythic_letter.yaml"], "template": "personal_letter.tex"},
-    "mythic-letter-johannah": {"family": "stationery_art", "defaults": ["mythic_letter_johannah.yaml"], "template": "mythic_letter_johannah.tex"},
+    "mythic-letter-johannah": {
+        "family": "stationery_art",
+        "defaults": ["yugenbase.yaml", "personal_letter.yaml", "mythic_letter_johannah.yaml"],
+        "template": "mythic_letter_johannah.tex",
+    },
     "resume": {"family": "resume", "defaults": ["resume_resume.yaml"], "template": "resume.tex"},
     "elian-packet": {"family": "campaign_art", "defaults": ["elian_packet.yaml"], "template": "elian_packet.tex"},
     "elian-poster": {"family": "campaign_art", "defaults": ["elian_poster.yaml"], "template": "elian_poster.tex"},
@@ -143,6 +150,7 @@ def resolve_profile(profile_id: str) -> ResolvedProfile:
 
     uses_local = any(source == "local" for source in defaults_sources) or template_source == "local"
     uses_40 = any(source == "40_latex" for source in defaults_sources) or template_source == "40_latex"
+    font_policy = resolve_fonts_from_defaults(defaults_stack)
     warnings: list[str] = []
     if not defaults_stack:
         warnings.append(f"No defaults resolved for profile {profile_id}")
@@ -167,12 +175,14 @@ def resolve_profile(profile_id: str) -> ResolvedProfile:
             texinputs=texinputs,
             resource_paths=resource_paths,
         ),
+        font_policy=font_policy,
         boundary={
             "target_40_latex_mutated": False,
             "uses_local_imports": uses_local,
             "reads_40_latex_readonly": uses_40 or (LATEX40 / "assets").exists(),
             "defaults_source": _summarize_sources(defaults_sources),
             "template_source": template_source,
+            "font_policy": POLICY_NAME,
         },
         warnings=warnings,
     )

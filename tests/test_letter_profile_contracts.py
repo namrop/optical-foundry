@@ -1,0 +1,51 @@
+from pathlib import Path
+
+import pytest
+
+from renderers import document_renderer
+from renderers.document_renderer import DocumentRenderer
+
+
+class RecordingPandocRenderer:
+    plans = []
+
+    def render(self, plan, output_dir=None):
+        self.__class__.plans.append(plan)
+        return {"status": "ok", "render_id": plan.render_id, "plan_toc": plan.toc}
+
+
+@pytest.fixture(autouse=True)
+def reset_recorded_plans(monkeypatch):
+    RecordingPandocRenderer.plans = []
+    monkeypatch.setattr(document_renderer, "PandocRenderer", RecordingPandocRenderer)
+
+
+def test_stationery_letter_profiles_default_to_no_toc_when_source_is_silent(tmp_path):
+    source = tmp_path / "letter.md"
+    source.write_text("---\nuid: letter-test\ntitle: Letter Test\n---\n\nMy love,\n\nBody.")
+
+    for profile in ["mythic-letter", "mythic-letter-johannah"]:
+        DocumentRenderer().render(source, profile_id=profile, output_dir=str(tmp_path / profile))
+
+    assert [plan.profile_id for plan in RecordingPandocRenderer.plans] == [
+        "mythic-letter",
+        "mythic-letter-johannah",
+    ]
+    assert [plan.toc for plan in RecordingPandocRenderer.plans] == [False, False]
+
+
+def test_explicit_source_toc_still_overrides_letter_profile_default(tmp_path):
+    source = tmp_path / "letter-with-toc.md"
+    source.write_text("---\nuid: letter-test\ntitle: Letter Test\ntoc: true\n---\n\n# Body\n")
+
+    DocumentRenderer().render(source, profile_id="mythic-letter-johannah", output_dir=str(tmp_path))
+
+    assert RecordingPandocRenderer.plans[-1].toc is True
+
+
+def test_johannah_letter_template_keeps_body_clear_of_header_rule():
+    template = Path("profiles/40_latex_import/templates/mythic_letter_johannah.tex").read_text()
+
+    assert "\\vspace*{-" not in template
+    assert "$if(body_top_vspace)$" in template
+    assert "\\vspace*{$body_top_vspace$}" in template

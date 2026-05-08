@@ -44,16 +44,22 @@ class PandocRenderer(Renderer):
 
         # --- build pandoc command ---
         render_source = plan.render_source.resolve()
-        cmd = ["pandoc", str(render_source), "-o", str(output_pdf)]
 
         # profile defaults/template/resource environment: single-object profile
         # resolution is centralized in engine.profile_resolver. Manifest-family
         # assembly decisions remain outside this renderer.
         resolved_profile = resolve_profile(plan.profile_id)
+        cmd_source = self._stationery_normalized_source(
+            render_source, out_dir, plan.render_id, resolved_profile.profile_family
+        )
+        cmd = ["pandoc", str(cmd_source), "-o", str(output_pdf)]
         defaults_meta: dict[str, Any] = {}
         for defaults_file in resolved_profile.defaults_stack:
             cmd += ["--defaults", str(defaults_file)]
             defaults_meta = self._merge_defaults_metadata(defaults_meta, self._read_defaults_metadata(defaults_file))
+        frontmatter_variables_defaults = self._frontmatter_variables_defaults(render_source, out_dir, plan.render_id)
+        if frontmatter_variables_defaults is not None:
+            cmd += ["--defaults", str(frontmatter_variables_defaults)]
 
         # template — prefer explicit plan override, otherwise resolved profile
         if plan.template:
@@ -82,7 +88,11 @@ class PandocRenderer(Renderer):
             cmd += ["--number-sections"]
 
         # tex engine
-        xe = shutil.which("xelatex") or "xelatex"
+        # Preserve the engine selected by the profile defaults stack. The legacy
+        # Johannah-letter lane uses lualatex; forcing xelatex changes the output
+        # metrics and breaks render parity.
+        pdf_engine = self._resolved_pdf_engine(resolved_profile.defaults_stack)
+        xe = shutil.which(pdf_engine) or pdf_engine
         cmd += [
             "--pdf-engine", str(xe),
             "--pdf-engine-opt=-interaction=nonstopmode",
@@ -245,6 +255,7 @@ class PandocRenderer(Renderer):
             "defaults_stack": [str(p) for p in resolved.defaults_stack],
             "template_path": str(template_path) if template_path else "",
             "asset_roots": [str(p) for p in resolved.asset_roots],
+            "font_policy": resolved.font_policy,
             "environment": {
                 "TEXMFHOME": str(resolved.render_environment.texmfhome) if resolved.render_environment.texmfhome else "",
                 "TEXINPUTS": resolved.render_environment.texinputs,
@@ -289,6 +300,150 @@ class PandocRenderer(Renderer):
             out["warnings"].append(str(note))
             out["boundary"]["placeholder_assets"] = True
         return out
+
+    @staticmethod
+    def _stationery_normalized_source(
+        render_source: Path, out_dir: Path, render_id: str, profile_family: str
+    ) -> Path:
+        """Return a render-only Markdown copy with duplicate salutation removed.
+
+        Atrium letter sources often keep `variables.opening` for templates while
+        also keeping the salutation in body Markdown for source readability. The
+        imported Johannah stationery template renders `opening` itself, so the
+        first body line must be removed only for the render copy when it matches
+        the template opening exactly. The canonical source is not modified.
+        """
+        if profile_family != "stationery_art" or not render_source.exists():
+            return render_source
+        text = render_source.read_text(encoding="utf-8", errors="ignore")
+        if not text.startswith("---\n"):
+            return render_source
+        end = text.find("\n---", 4)
+        if end == -1:
+            return render_source
+        frontmatter_raw = text[4:end]
+        body = text[end + 4:]
+        try:
+            import yaml
+            frontmatter = yaml.safe_load(frontmatter_raw) or {}
+        except Exception:
+            return render_source
+        if not isinstance(frontmatter, dict):
+            return render_source
+        variables = frontmatter.get("variables", {})
+        if not isinstance(variables, dict):
+            return render_source
+        opening = variables.get("opening") or frontmatter.get("opening")
+        if not isinstance(opening, str) or not opening.strip():
+            return render_source
+
+        def _plain_markdown_line(line: str) -> str:
+            plain = line.strip()
+            # Salutations are sometimes kept source-readable as **My love,**
+            # while the template variable is unadorned. Compare the textual
+            # value, not the Markdown emphasis wrapper.
+            plain = re.sub(r"^([*_`]+)(.*)\1$", r"\2", plain).strip()
+            return plain
+
+        leading_newlines = len(body) - len(body.lstrip("\n"))
+        body_after_leading = body[leading_newlines:]
+        first_line, sep, rest = body_after_leading.partition("\n")
+        normalized_body = "\n" + body_after_leading.lstrip("\n")
+        if sep and _plain_markdown_line(first_line) == _plain_markdown_line(opening):
+            normalized_body = "\n" + rest.lstrip("\n")
+
+        lines = normalized_body.splitlines()
+        nonempty = [(idx, line.strip()) for idx, line in enumerate(lines) if line.strip()]
+        if len(nonempty) >= 2 and nonempty[-1][1] in {"Luis", "Luis E. Ramirez"}:
+            closing_idx, closing_line = nonempty[-2]
+            if closing_line.startswith("With ") or closing_line.endswith(","):
+                normalized_body = "\n" + "\n".join(lines[:closing_idx]).strip() + "\n"
+        normalized = text[: end + 4] + normalized_body
+        path = out_dir / f"{render_id}.stationery_source.md"
+        path.write_text(normalized, encoding="utf-8")
+        return path
+
+    @staticmethod
+    def _resolved_pdf_engine(defaults_stack: list[Path]) -> str:
+        """Return the last pdf-engine declared by the defaults stack.
+
+        Legacy 40_latex lets profile defaults choose the engine. Personal-letter
+        profiles intentionally switch from the yugen base xelatex default to
+        lualatex; forcing xelatex in Foundry changes output metrics and breaks
+        visual parity.
+        """
+        engine = "xelatex"
+        try:
+            import yaml
+        except Exception:
+            return engine
+        for defaults_file in defaults_stack:
+            try:
+                data = yaml.safe_load(defaults_file.read_text()) or {}
+            except Exception:
+                continue
+            if isinstance(data, dict) and data.get("pdf-engine"):
+                engine = str(data["pdf-engine"])
+        return engine
+
+    @staticmethod
+    def _frontmatter_variables_defaults(render_source: Path, out_dir: Path, render_id: str) -> Path | None:
+        """Materialize nested frontmatter `variables:` as a final defaults file.
+
+        40_latex promotes simple source-frontmatter variables into Pandoc
+        template variables after the profile defaults stack. Foundry needs the
+        same behavior for letter profiles so fields such as `opening`,
+        `penned_date`, and `signature_name` reach the imported templates without
+        mutating the Atrium source.
+        """
+        if not render_source.exists():
+            return None
+        text = render_source.read_text(encoding="utf-8", errors="ignore")
+        if not text.startswith("---\n"):
+            return None
+        end = text.find("\n---", 4)
+        if end == -1:
+            return None
+        try:
+            import yaml
+            frontmatter = yaml.safe_load(text[4:end]) or {}
+        except Exception:
+            return None
+        if not isinstance(frontmatter, dict):
+            return None
+        variables = frontmatter.get("variables")
+        if not isinstance(variables, dict) or not variables:
+            return None
+        body = text[end + 4:]
+        nonempty_body_lines = [line.strip() for line in body.splitlines() if line.strip()]
+        manual_closing = ""
+        manual_signature = ""
+        if len(nonempty_body_lines) >= 2 and nonempty_body_lines[-1] in {"Luis", "Luis E. Ramirez"}:
+            candidate_closing = nonempty_body_lines[-2]
+            if candidate_closing.startswith("With ") or candidate_closing.endswith(","):
+                manual_closing = candidate_closing
+                manual_signature = nonempty_body_lines[-1]
+        safe_variables = {}
+        for key, value in variables.items():
+            if not isinstance(key, str) or not isinstance(value, (str, int, float, bool)):
+                continue
+            # If the body already carries a manual signoff, render that signoff
+            # through the stationery template instead of appending the default
+            # `signature_name` after a second body-level signature.
+            if key in {"closing", "signature_name"} and manual_signature:
+                continue
+            if isinstance(value, str):
+                value = value.replace("\\", "\\\\").replace("#", "\\#")
+            safe_variables[str(key)] = value
+        if manual_signature:
+            safe_variables["closing"] = manual_closing.replace("\\", "\\\\").replace("#", "\\#")
+            safe_variables["signature_name"] = manual_signature.replace("\\", "\\\\").replace("#", "\\#")
+        if not safe_variables:
+            return None
+        path = out_dir / f"{render_id}.frontmatter_variables.yaml"
+        import yaml
+        path.write_text(yaml.safe_dump({"variables": safe_variables}, sort_keys=False), encoding="utf-8")
+        return path
 
     @staticmethod
     def _sha256_file(path: Path) -> str:

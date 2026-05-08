@@ -339,9 +339,9 @@ $if(titlepage)$
   \thispagestyle{empty}
   \begin{center}
     \vspace{1em}
+    $if(logo_path)$
     \includegraphics[height=5cm]{$logo_path$}\par
     \vspace{5em}
-    $if(logo_path)$
     $endif$
     $if(title)${\LARGE\bfseries $title$ \par}\vspace{0.75em}$endif$
     $if(subtitle)$\textit{$subtitle$}\par\vspace{0.5em}$endif$
