@@ -5,7 +5,7 @@ note_role: architecture-design
 validation_profile: standard
 status: active
 created: 2026-05-09T01:45:00-04:00
-updated: 2026-05-09T02:03:00-04:00
+updated: 2026-05-09T02:07:00-04:00
 beam_home: 42_optical_foundry_greenfield
 title: "Illuminated Letter Profile Path"
 summary: "Future path for Optical Foundry mythic-letter evolution after comparing a typeset letter with a hand-made one and gpt-image-2 mode concepts: stationery-plus is explicitly wanted, illuminated mode / Mode 2 is confirmed as the current new-profile target, Codex 0 should eventually get an analogous illuminated artifact treatment, and page-composition mode is deferred until after Codex 0 except for ad-hoc manual experiments."
@@ -91,6 +91,35 @@ Potential future profile family names:
 - `illuminated-codex` for Codex 0 / book-scale mythic objects.
 
 The Codex 0 analogue should remain compatible with the existing codex bundle / manifest architecture. It should be a render profile or profile family applied to the compiled Codex artifact, not a replacement for Codex 0 source assembly governance.
+
+
+## Visual target asset
+
+The confirmed Mode 2 concept render is committed as a durable Foundry planning asset:
+
+![Mode 2 illuminated letter concept](assets/illuminated_letter_profile_path_2026-05-09/mode_2_illuminated_letter_concept_gpt_image_2_2026-05-09.png)
+
+Use this image as a **visual target reference**, not as a literal template. It captures the desired direction: readable typeset prose, semantic color, integrated motif art, illuminated emphasis, margin/threshold ornaments, and a closing ritual layer.
+
+## One-shot image generation hypothesis
+
+A promising near-term implementation path is **not** one-shot generation of the final page with text baked in. Image models are still unreliable for exact text, pagination, and revision control.
+
+The better fit is a **one-shot decorative-asset pipeline**:
+
+1. Foundry/agent derives a motif packet from the letter or codex section.
+2. A prompt template generates transparent or white-background raster assets for specific slots:
+   - margin cutouts;
+   - opening threshold art;
+   - quote/highlight ornaments;
+   - emphasis panels;
+   - closing seals/tailpieces;
+   - watermark sigils.
+3. A deterministic pass converts white/flat backgrounds to alpha when needed.
+4. LaTeX/Pandoc owns all real text, line breaks, quotes, and semantic emphasis boxes.
+5. Foundry composes the generated art modules into named slots and emits contact-sheet evidence for review.
+
+This fits inside illuminated mode because it keeps the renderer deterministic where determinism matters, while letting image generation supply the mythic ornament layer.
 
 ## Out of scope for now
 
