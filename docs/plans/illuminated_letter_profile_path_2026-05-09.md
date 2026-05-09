@@ -5,10 +5,10 @@ note_role: architecture-design
 validation_profile: standard
 status: active
 created: 2026-05-09T01:45:00-04:00
-updated: 2026-05-09T01:45:00-04:00
+updated: 2026-05-09T02:03:00-04:00
 beam_home: 42_optical_foundry_greenfield
 title: "Illuminated Letter Profile Path"
-summary: "Future path for Optical Foundry mythic-letter evolution after comparing a typeset letter with a hand-made one: stationery-plus is explicitly wanted, illuminated mode is the current new-profile goal, and page-composition mode is deferred until after Codex 0 except for ad-hoc manual experiments."
+summary: "Future path for Optical Foundry mythic-letter evolution after comparing a typeset letter with a hand-made one and gpt-image-2 mode concepts: stationery-plus is explicitly wanted, illuminated mode / Mode 2 is confirmed as the current new-profile target, Codex 0 should eventually get an analogous illuminated artifact treatment, and page-composition mode is deferred until after Codex 0 except for ad-hoc manual experiments."
 tags:
   - optical-foundry
   - mythic-letter
@@ -53,9 +53,11 @@ Likely features:
 
 This is the practical bridge between current typeset-letter rendering and more embodied mythic artifacts.
 
-### 2. Illuminated mode — current goal for the new profile
+### 2. Illuminated mode — confirmed current goal for the new profile
 
-The current goal for the new profile is an **illuminated letter** mode.
+After generating three `gpt-image-2` concept renders for stationery-plus, illuminated letter, and page-composition modes, Luis confirmed that **Mode 2 / illuminated letter** is what he wants.
+
+The current goal for the new profile is therefore an **illuminated letter** mode.
 
 This should remain Pandoc/LaTeX-backed, but allow source annotations and YAML/frontmatter fields to carry intentional artifact semantics.
 
@@ -69,6 +71,26 @@ Likely capabilities:
 - evidence outputs that include page screenshots/contact sheets, not only the final PDF.
 
 This should be the near-term profile-design target.
+
+## Codex 0 analogue
+
+Luis also wants something like Mode 2 for **Codex 0**.
+
+This should not be interpreted as immediately pulling generalized page-composition mode into scope. The safer architecture is to treat Codex 0 as needing an **illuminated codex artifact treatment** that borrows Mode 2's principles at book/section scale:
+
+- motif-driven section openers;
+- semantic color roles for vows, theses, blessings, and warnings;
+- integrated raster illustrations, diagrams, seals, and tailpieces;
+- page/contact-sheet evidence for artifact rhythm;
+- readable typeset prose as the base layer;
+- mythic visual language that makes Codex 0 feel embodied rather than merely compiled.
+
+Potential future profile family names:
+
+- `illuminated-letter` for personal letter artifacts;
+- `illuminated-codex` for Codex 0 / book-scale mythic objects.
+
+The Codex 0 analogue should remain compatible with the existing codex bundle / manifest architecture. It should be a render profile or profile family applied to the compiled Codex artifact, not a replacement for Codex 0 source assembly governance.
 
 ## Out of scope for now
 
@@ -98,8 +120,9 @@ But implementing that as a general Foundry subsystem would be a larger architect
 1. Keep the existing Johannah mythic-letter profile stable.
 2. Add stationery-plus support first: additional art slots, semantic color roles, contact-sheet evidence.
 3. Use a typeset letter and a hand-made letter as reference artifacts for validating the feel.
-4. Build illuminated mode as the new profile target with explicit source annotations and motif-art slots.
-5. Defer generalized page-composition planning until after Codex 0, except for manual one-off experiments.
+4. Build illuminated mode / Mode 2 as the new profile target with explicit source annotations and motif-art slots.
+5. Preserve the Codex 0 analogue as a desired future illuminated-codex treatment that remains compatible with codex bundle/manifest assembly.
+6. Defer generalized page-composition planning until after Codex 0, except for manual one-off experiments.
 
 ## Design compression
 
