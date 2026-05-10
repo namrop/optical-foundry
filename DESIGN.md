@@ -6,7 +6,7 @@ validation_profile: standard
 status: active
 created: 2026-05-03T20:17:00-04:00
 updated: 2026-05-04T23:15:00-04:00
-beam_home: 42_optical_foundry_greenfield
+beam_home: 42_optical_foundry
 title: "Optical Foundry — Greenfield Architecture Design"
 summary: >
   Greenfield architecture for Optical Foundry: Pandoc-driven render engine
@@ -122,7 +122,7 @@ state artifact remain distinct projections.
 ## 1. Folder Structure
 
 ```
-42_optical_foundry_greenfield/
+42_optical_foundry/
 │
 ├── DESIGN.md                         # This file — architecture design doc
 ├── README.md                         # Quickstart and operational overview

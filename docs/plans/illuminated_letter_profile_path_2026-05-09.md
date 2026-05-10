@@ -6,7 +6,7 @@ validation_profile: standard
 status: active
 created: 2026-05-09T01:45:00-04:00
 updated: 2026-05-09T02:16:00-04:00
-beam_home: 42_optical_foundry_greenfield
+beam_home: 42_optical_foundry
 title: "Illuminated Letter Profile Path"
 summary: "Future path for Optical Foundry mythic-letter evolution after comparing a typeset letter with a hand-made one and gpt-image-2 mode concepts: stationery-plus is explicitly wanted, illuminated mode / Mode 2 is confirmed as the current new-profile target, Codex 0 should eventually get an analogous illuminated artifact treatment, and page-composition mode is deferred until after Codex 0 except for ad-hoc manual experiments."
 tags:

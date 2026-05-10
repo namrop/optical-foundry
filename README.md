@@ -1,6 +1,6 @@
-# Optical Foundry — Greenfield Architecture
+# Optical Foundry
 
-Pandoc-driven render engine. Profile-first architecture with two stable input classes: Markdown documents and typed render manifests. Manifests can target packets, bundles, label runs, sticker sheets, CAM Stack, Codex 0, or any recurring render case that earns a subtype. Greenfield design — no mutation of 40_latex.
+Pandoc-driven render engine. Profile-first architecture with two stable input classes: Markdown documents and typed render manifests. Manifests can target packets, bundles, label runs, sticker sheets, CAM Stack, Codex 0, or any recurring render case that earns a subtype. This is still the clean replacement architecture lane during migration, with no mutation of 40_latex.
 
 ## Quickstart
 

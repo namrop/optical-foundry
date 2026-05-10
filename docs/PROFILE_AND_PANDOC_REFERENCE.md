@@ -33,13 +33,13 @@ local import, not in `40_latex/`.
 
 ## Original reference wiring
 
-How the greenfield `42_optical_foundry_greenfield` pipeline references `40_latex`
+How the greenfield `42_optical_foundry` pipeline references `40_latex`
 as a read-only template/style/defaults source.
 
 ## Architecture
 
 ```
-42_optical_foundry_greenfield (greenfield)
+42_optical_foundry (greenfield)
   │
   ├── renderers/pandoc_renderer.py       ← PandocRenderDispatch
   │     │

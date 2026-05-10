@@ -526,7 +526,7 @@ Add sections for:
 Run before considering refactor complete:
 
 ```bash
-cd ~/Digital_Workspace/42_optical_foundry_greenfield
+cd ~/Digital_Workspace/42_optical_foundry
 python3.14 -m pytest -q
 python3.14 -m cli profiles --json
 python3.14 -m cli doc ~/Digital_Workspace/40_latex/input/financial_report_dec2025.md --profile tech --output generated/refactor_smoke/financial_report_tech

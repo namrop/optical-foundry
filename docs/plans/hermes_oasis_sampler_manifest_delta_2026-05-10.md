@@ -6,7 +6,7 @@ validation_profile: standard
 status: active
 created: 2026-05-10T01:00:07-04:00
 updated: 2026-05-10T01:00:07-04:00
-beam_home: 42_optical_foundry_greenfield
+beam_home: 42_optical_foundry
 title: "Hermes/Oasis Sampler Manifest Fidelity Delta"
 summary: "Records the approved Hermes/Oasis sampler PDF path, the current YAML manifest path, and the Optical Foundry manifest-system deltas needed for faithful PDF recreation rather than approximate composite-bundle rendering."
 tags:
@@ -31,25 +31,25 @@ The current manifest is useful as a smoke-test and provenance anchor, but it is 
 Approved/reference PDF:
 
 ```text
-~/Digital_Workspace/42_optical_foundry_greenfield/generated/hermes_oasis_profile_sampler_20260509/oasis_mythic_two_page_sampler.pdf
+~/Digital_Workspace/42_optical_foundry/generated/hermes_oasis_profile_sampler_20260509/oasis_mythic_two_page_sampler.pdf
 ```
 
 Reference source Markdown:
 
 ```text
-~/Digital_Workspace/42_optical_foundry_greenfield/generated/hermes_oasis_profile_sampler_20260509/oasis_mythic_two_page_sampler.md
+~/Digital_Workspace/42_optical_foundry/generated/hermes_oasis_profile_sampler_20260509/oasis_mythic_two_page_sampler.md
 ```
 
 Reference evidence sidecar:
 
 ```text
-~/Digital_Workspace/42_optical_foundry_greenfield/generated/hermes_oasis_profile_sampler_20260509/oasis_mythic_two_page_sampler.evidence.json
+~/Digital_Workspace/42_optical_foundry/generated/hermes_oasis_profile_sampler_20260509/oasis_mythic_two_page_sampler.evidence.json
 ```
 
 Important visual asset:
 
 ```text
-~/Digital_Workspace/42_optical_foundry_greenfield/profiles/40_latex_import/assets/logo_oasis_2b.png
+~/Digital_Workspace/42_optical_foundry/profiles/40_latex_import/assets/logo_oasis_2b.png
 ```
 
 The approved PDF has no inline Markdown figures. The visible image comes from the `mythic` profile logo path rather than the document body.
@@ -59,7 +59,7 @@ The approved PDF has no inline Markdown figures. The visible image comes from th
 Manifest file:
 
 ```text
-~/Digital_Workspace/42_optical_foundry_greenfield/manifests/hermes_oasis_profile_sampler_2026-05-09.composite-bundle.yaml
+~/Digital_Workspace/42_optical_foundry/manifests/hermes_oasis_profile_sampler_2026-05-09.composite-bundle.yaml
 ```
 
 Committed in Optical Foundry Greenfield as:
@@ -83,7 +83,7 @@ The manifest references the approved source Markdown and renders successfully th
 Smoke render output:
 
 ```text
-~/Digital_Workspace/42_optical_foundry_greenfield/generated/manifests/hermes_oasis_profile_sampler_20260509_manifest_smoke_2/hermes-oasis-profile-sampler-2026-05-09.pdf
+~/Digital_Workspace/42_optical_foundry/generated/manifests/hermes_oasis_profile_sampler_20260509_manifest_smoke_2/hermes-oasis-profile-sampler-2026-05-09.pdf
 ```
 
 Observed difference:

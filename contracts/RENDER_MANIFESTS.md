@@ -6,7 +6,7 @@ validation_profile: standard
 status: active
 created: 2026-05-04T23:15:00-04:00
 updated: 2026-05-04T23:15:00-04:00
-beam_home: 42_optical_foundry_greenfield
+beam_home: 42_optical_foundry
 title: "Optical Foundry — Render Manifest Contract"
 summary: "Defines render manifests as the primary non-Markdown input to Optical Foundry, with typed subtypes for packets, bundles, labels, stickers, CAM Stack, Codex 0, and other recurring render targets."
 tags:
