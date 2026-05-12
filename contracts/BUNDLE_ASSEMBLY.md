@@ -52,6 +52,11 @@ section_dividers:
     title: "Evidence Field"
     subtitle: "Local strain, legitimacy, and civic coordination"
     body: "Optional one-paragraph orientation for this section."
+    force_right_page: true       # default
+    blank_after: false           # default for dividers
+    profile_id: mythic           # optional profile-aware divider style/evidence
+    profile_family: document_spine
+    background_image: assets/section_background.png
   - uid: designed-divider
     before_source_order: 4
     source:
@@ -79,6 +84,7 @@ figures:
 render:
   include_toc: true
   toc_depth: 3
+  numbering_strategy: continuous | section_dividers | faithful_section_dividers
   preserve_source_provenance: true
   text_integrity_check: true
   visual_page_samples: true
@@ -114,10 +120,12 @@ validation:
    ├── \newpage + \tableofcontents (if render.include_toc)
    │
    ├── For each source (ordered by sources[].order):
+   │   ├── Frontmatter/mainmatter/appendix transition commands when roles require them
    │   ├── Section divider pages targeting this source (if any)
+   │   │   ├── Recto/right-page opening by default, with labeled intentional blanks as needed
+   │   │   ├── Optional divider-local profile hook and full-page background image
    │   │   ├── Generic divider page from manifest title/subtitle/body; or
    │   │   └── Source-backed divider page from section_dividers[].source.path
-   │   ├── \newpage
    │   ├── Source section header (## Source Title)
    │   ├── Frontmatter block (if include_frontmatter != none)
    │   │   ├── Raw YAML code block (full)
