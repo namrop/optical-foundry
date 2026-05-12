@@ -526,8 +526,9 @@ def test_composite_bundle_section_divider_numbering_demotes_source_headings_and_
     assert "\\frontmatter" in assembled
     assert "\\mainmatter" in assembled
     assert "\\OFBeginAppendices" in assembled
-    assert "\\section{Body Section}" in assembled
-    assert "\\section{Appendix Section}" in assembled
+    assert "\\refstepcounter{section}" in assembled
+    assert "\\addcontentsline{toc}{section}{\\protect\\numberline{\\thesection}Body Section}" in assembled
+    assert "\\addcontentsline{toc}{section}{\\protect\\numberline{\\thesection}Appendix Section}" in assembled
     assert "## Supporting Synthetic Source" in assembled
     assert "\n# Supporting Synthetic Source" not in assembled
     assert assembled.find("# Supporting Synthetic Source") == -1 or assembled.find("# Supporting Synthetic Source") == assembled.find("## Supporting Synthetic Source") + 1
@@ -557,9 +558,11 @@ def test_source_backed_section_divider_preserves_authored_heading_for_numbering(
 
     plan = compiler.compile(manifest)
     assembled = plan.render_source.read_text()
-    divider_to_source = assembled.split("# Data Appendix", 1)[1].split("Supporting material", 1)[0]
+    divider_to_source = assembled.split("Data Appendix", 1)[1].split("Supporting material", 1)[0]
 
-    assert "# Data Appendix" in assembled
+    assert "\\addcontentsline{toc}{section}{\\protect\\numberline{\\thesection}Data Appendix}" in assembled
+    assert "{\\Huge\\bfseries \\thesection\\quad Data Appendix\\par}" in assembled
+    assert "# Data Appendix" not in assembled
     assert "## Data Appendix" not in assembled
     assert "## Supporting Synthetic Source" in divider_to_source
     assert plan.boundary_assertions["section_divider_numbering"] == "section_dividers"

@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import hashlib
 import os
+import re
 import tempfile
 import uuid
 from abc import ABC, abstractmethod
@@ -389,6 +390,33 @@ def _section_divider_end_lines(divider: dict[str, Any]) -> list[str]:
     return lines
 
 
+def _centered_numbered_divider_heading(title: str) -> list[str]:
+    """Emit section-counter/TOC plumbing plus a divider-safe visible heading.
+
+    Callers place these lines inside an explicit LaTeX center environment. We avoid Pandoc's
+    normal `\\section{...}` because the CAM template left-aligns normal body sections, while
+    divider pages need centered threshold titles.
+    """
+    escaped = _latex_escape_text(title)
+    return [
+        "\\refstepcounter{section}",
+        f"\\addcontentsline{{toc}}{{section}}{{\\protect\\numberline{{\\thesection}}{escaped}}}",
+        f"\\markright{{{escaped}}}",
+        f"{{\\Huge\\bfseries \\thesection\\quad {escaped}\\par}}",
+    ]
+
+
+def _extract_leading_markdown_h1(body: str) -> tuple[str | None, str]:
+    """Return the first leading H1 title and body with that heading removed."""
+    stripped = body.lstrip()
+    match = re.match(r"^#(?!#)\s+(.+?)\s*$", stripped, flags=re.MULTILINE)
+    if not match or match.start() != 0:
+        return None, body
+    title = match.group(1).strip()
+    remainder = stripped[match.end():].lstrip("\n")
+    return title, remainder
+
+
 def _render_source_divider(source_cfg: dict[str, Any], divider: dict[str, Any], numbering_strategy: str = "continuous") -> list[str]:
     path = Path(source_cfg["path"])
     raw_text = path.read_text()
@@ -409,10 +437,15 @@ def _render_source_divider(source_cfg: dict[str, Any], divider: dict[str, Any], 
                 continue
             lines.append(f"- **{k}**: {v}")
         lines.append("")
-    # Source-backed dividers are designed divider objects; preserve their authored
-    # heading structure so a `#` heading can serve as the actual numbered divider
-    # section under section-divider numbering.
-    lines.extend([body.strip(), "", *_section_divider_end_lines(divider)])
+    rendered_body = body.strip()
+    if numbering_strategy == "section_dividers":
+        heading_title, remainder = _extract_leading_markdown_h1(rendered_body)
+        if heading_title:
+            lines.append("\\begin{center}")
+            lines.extend(_centered_numbered_divider_heading(heading_title))
+            lines.append("\\end{center}")
+            rendered_body = remainder.strip()
+    lines.extend([rendered_body, "", *_section_divider_end_lines(divider)])
     return lines
 
 
@@ -427,7 +460,7 @@ def _render_generic_section_divider(divider: dict[str, Any], numbering_strategy:
         "\\begin{center}",
     ]
     if numbering_strategy == "section_dividers":
-        lines.append(f"\\section{{{title}}}")
+        lines.extend(_centered_numbered_divider_heading(title))
     else:
         lines.append(f"{{\\Huge\\bfseries {title}\\par}}")
     if subtitle:
