@@ -25,6 +25,7 @@ from typing import Any
 
 from engine.render_planner import RenderPlan, plan_manifest_render
 from engine.projection_plan import AssemblyView, ProjectionPlan
+from engine.profile_resolver import resolve_profile
 
 
 class ManifestCompiler(ABC):
@@ -327,6 +328,25 @@ def _resolved_section_divider_target(
     return "", 0
 
 
+def _section_divider_profile_fields(divider: dict[str, Any]) -> dict[str, Any]:
+    """Resolve optional divider-local profile hints into evidence fields."""
+    requested_profile_id = divider.get("profile_id") or divider.get("profile")
+    requested_profile_family = divider.get("profile_family")
+    if not requested_profile_id and not requested_profile_family:
+        return {}
+    profile_id = str(requested_profile_id or "document-spine")
+    resolved = resolve_profile(profile_id)
+    return {
+        "requested_profile_id": requested_profile_id,
+        "requested_profile_family": requested_profile_family,
+        "resolved_profile_id": resolved.canonical_profile_id,
+        "resolved_profile_request_id": resolved.profile_id,
+        "profile_family": resolved.profile_family,
+        "defaults_stack": [path.name for path in resolved.defaults_stack],
+        "template": resolved.template_path.name,
+    }
+
+
 def _section_divider_inventory_entry(
     divider: dict[str, Any],
     sources_by_uid: dict[str, dict[str, Any]],
@@ -339,18 +359,42 @@ def _section_divider_inventory_entry(
         "before_source_uid": before_uid,
         "before_source_order": before_order,
         "kind": "source" if source_cfg else "generic",
+        "force_right_page": divider.get("force_right_page", True) is not False,
+        "blank_after": divider.get("blank_after", False) is True,
+        "background_image": str(divider.get("background_image", "") or ""),
     }
+    entry.update(_section_divider_profile_fields(divider))
     if source_cfg:
         entry["source_path"] = str(source_cfg.get("path", ""))
     return entry
 
 
-def _render_source_divider(source_cfg: dict[str, Any]) -> list[str]:
+def _section_divider_start_lines(divider: dict[str, Any]) -> list[str]:
+    lines = ["\\OFEnsureRightPage" if divider.get("force_right_page", True) is not False else "\\clearpage"]
+    background_image = divider.get("background_image")
+    if background_image:
+        lines.append(f"\\OFSectionDividerBackground{{{background_image}}}")
+    profile = _section_divider_profile_fields(divider)
+    if profile:
+        lines.append(
+            f"\\OFApplySectionDividerProfile{{{profile.get('resolved_profile_id', '')}}}{{{profile.get('profile_family', '')}}}"
+        )
+    return lines
+
+
+def _section_divider_end_lines(divider: dict[str, Any]) -> list[str]:
+    lines = ["\\clearpage"]
+    if divider.get("blank_after", False) is True:
+        lines.append("\\OFIntentionalBlankPage")
+    return lines
+
+
+def _render_source_divider(source_cfg: dict[str, Any], divider: dict[str, Any], numbering_strategy: str = "continuous") -> list[str]:
     path = Path(source_cfg["path"])
     raw_text = path.read_text()
     fm, body = _split_frontmatter_and_body(raw_text)
     include_frontmatter = source_cfg.get("include_frontmatter", "none")
-    lines = ["\\OFEnsureRightPage"]
+    lines = _section_divider_start_lines(divider)
     if include_frontmatter == "full" and fm:
         try:
             import yaml as _yaml
@@ -365,34 +409,40 @@ def _render_source_divider(source_cfg: dict[str, Any]) -> list[str]:
                 continue
             lines.append(f"- **{k}**: {v}")
         lines.append("")
-    lines.extend([body.strip(), "", "\\clearpage"])
+    # Source-backed dividers are designed divider objects; preserve their authored
+    # heading structure so a `#` heading can serve as the actual numbered divider
+    # section under section-divider numbering.
+    lines.extend([body.strip(), "", *_section_divider_end_lines(divider)])
     return lines
 
 
-def _render_generic_section_divider(divider: dict[str, Any]) -> list[str]:
+def _render_generic_section_divider(divider: dict[str, Any], numbering_strategy: str = "continuous") -> list[str]:
     title = _latex_escape_text(divider.get("title") or divider.get("uid") or "Section")
     subtitle = _latex_escape_text(divider.get("subtitle", ""))
     body = _latex_escape_text(divider.get("body", ""))
     lines = [
-        "\\OFEnsureRightPage",
+        *_section_divider_start_lines(divider),
         "\\thispagestyle{empty}",
         "\\vspace*{0.30\\textheight}",
         "\\begin{center}",
-        f"{{\\Huge\\bfseries {title}\\par}}",
     ]
+    if numbering_strategy == "section_dividers":
+        lines.append(f"\\section{{{title}}}")
+    else:
+        lines.append(f"{{\\Huge\\bfseries {title}\\par}}")
     if subtitle:
         lines.extend(["\\vspace{0.85em}", f"{{\\Large {subtitle}\\par}}"])
     if body:
         lines.extend(["\\vspace{1.5em}", f"{{\\normalsize {body}\\par}}"])
-    lines.extend(["\\end{center}", "\\clearpage"])
+    lines.extend(["\\end{center}", *_section_divider_end_lines(divider)])
     return lines
 
 
-def _render_section_divider(divider: dict[str, Any]) -> list[str]:
+def _render_section_divider(divider: dict[str, Any], numbering_strategy: str = "continuous") -> list[str]:
     source_cfg = divider.get("source")
     if isinstance(source_cfg, dict):
-        return _render_source_divider(source_cfg)
-    return _render_generic_section_divider(divider)
+        return _render_source_divider(source_cfg, divider, numbering_strategy=numbering_strategy)
+    return _render_generic_section_divider(divider, numbering_strategy=numbering_strategy)
 
 
 def _title_page_variables_from_presentation(presentation: dict[str, Any]) -> dict[str, Any]:
@@ -404,13 +454,13 @@ def _title_page_variables_from_presentation(presentation: dict[str, Any]) -> dic
     variables: dict[str, Any] = {}
     enabled = title_page.get("enabled")
     background_image = title_page.get("background_image")
-    blank_after = title_page.get("blank_after")
+    blank_after = title_page.get("blank_after", True)
 
     if enabled is True or background_image:
         variables["titlepage"] = True
     if background_image and enabled is not False:
         variables["titlepage_background_image"] = background_image
-    if blank_after is True and (enabled is True or background_image):
+    if blank_after is not False and (enabled is True or background_image):
         variables["titlepage_blank_after"] = True
     return variables
 
@@ -588,8 +638,13 @@ class CompositeBundleCompiler(ManifestCompiler):
             section_divider_inventory.append(_section_divider_inventory_entry(divider, sources_by_uid, sources_by_order))
         assembly_strategy = str(render_cfg.get("assembly_strategy", ""))
         faithful_stack = assembly_strategy == "faithful_stack"
+        requested_numbering_strategy = str(render_cfg.get("numbering_strategy") or render_cfg.get("numbering") or "continuous")
+        section_divider_numbering = "section_dividers" if requested_numbering_strategy in {
+            "section_dividers",
+            "faithful_section_dividers",
+        } else "continuous"
         suppress_source_wrapper_headings = bool(
-            render_cfg.get("suppress_source_wrapper_headings", faithful_stack)
+            render_cfg.get("suppress_source_wrapper_headings", faithful_stack or section_divider_numbering == "section_dividers")
         )
         preserve_source_heading_levels = bool(
             render_cfg.get("preserve_source_heading_levels", faithful_stack)
@@ -634,14 +689,27 @@ class CompositeBundleCompiler(ManifestCompiler):
 
         # source sections
         source_order_uid = []
+        frontmatter_seen = False
+        mainmatter_started = False
+        appendices_started = False
         for src in sorted_sources:
             uid = src["uid"]
+            src_role = src.get("role", "primary_anchor")
+            if src_role == "frontmatter" and not frontmatter_seen:
+                lines.append("\\frontmatter")
+                frontmatter_seen = True
+            elif src_role != "frontmatter" and frontmatter_seen and not mainmatter_started:
+                lines.append("\\mainmatter")
+                mainmatter_started = True
+            if src_role == "appendix" and not appendices_started:
+                lines.append("\\OFBeginAppendices")
+                appendices_started = True
+            source_has_divider = bool(dividers_by_before_uid.get(uid, []))
             for divider in dividers_by_before_uid.get(uid, []):
-                lines.extend(_render_section_divider(divider))
+                lines.extend(_render_section_divider(divider, numbering_strategy=section_divider_numbering))
                 lines.append("")
                 assembly.generated_sections.append(f"section_divider:{divider.get('uid', '')}")
             src_path = Path(src["path"])
-            src_role = src.get("role", "primary_anchor")
             src_title = src.get("title", uid)
             inc_fm = src.get("include_frontmatter", "full")
             suppress_fm = src.get("suppress_frontmatter", False)
@@ -687,7 +755,10 @@ class CompositeBundleCompiler(ManifestCompiler):
             # source body; default bundle behavior demotes headings below the
             # wrapper heading, while faithful-stack renders preserve source
             # heading hierarchy so canonical longform sources remain intact.
-            source_body = body if preserve_source_heading_levels else _demote_headings(body)
+            if section_divider_numbering == "section_dividers" and source_has_divider:
+                source_body = _demote_headings(body, levels=1)
+            else:
+                source_body = body if preserve_source_heading_levels else _demote_headings(body)
             lines.append(source_body.rstrip())
             lines.append("")
 
@@ -777,8 +848,10 @@ class CompositeBundleCompiler(ManifestCompiler):
                 "preserve_source_heading_levels": preserve_source_heading_levels,
                 "title_page_background_enabled": "titlepage_background_image" in accepted_title_page_variables,
                 "titlepage_background_image": accepted_title_page_variables.get("titlepage_background_image", ""),
+                "titlepage_blank_after": "titlepage_blank_after" in accepted_title_page_variables,
                 "accepted_title_page_variables": sorted(accepted_title_page_variables.keys()),
                 "rejected_title_page_variables": rejected_title_page_variables,
+                "section_divider_numbering": section_divider_numbering,
                 "section_dividers_enabled": bool(section_divider_inventory),
                 "section_divider_count": len(section_divider_inventory),
                 "section_dividers": section_divider_inventory,
@@ -851,7 +924,7 @@ class CompositeBundleCompiler(ManifestCompiler):
                     errors.append(f"source[{i}] path not found: {path}")
 
                 role = src.get("role")
-                if role not in {"primary_anchor", "supporting_anchor", "appendix", "reference"}:
+                if role not in {"frontmatter", "primary_anchor", "supporting_anchor", "appendix", "reference"}:
                     errors.append(f"source[{i}] unknown role: {role}")
 
         # figures
@@ -912,10 +985,32 @@ class CompositeBundleCompiler(ManifestCompiler):
                 elif not divider.get("title"):
                     errors.append(f"section_divider[{i}] missing title for generic divider")
 
-                for key in ("title", "subtitle", "body"):
+                for key in ("title", "subtitle", "body", "profile_id", "profile", "profile_family"):
                     value = divider.get(key)
                     if value is not None and not isinstance(value, str):
                         errors.append(f"section_divider[{i}] {key} must be a string")
+
+                background_image = divider.get("background_image")
+                if background_image and not _safe_render_resource_path(background_image):
+                    errors.append(
+                        f"section_divider[{i}] background_image must be a relative PNG/JPG/PDF path inside the render resource roots"
+                    )
+                for key in ("force_right_page", "blank_after"):
+                    value = divider.get(key)
+                    if value is not None and not isinstance(value, bool):
+                        errors.append(f"section_divider[{i}] {key} must be a boolean")
+                requested_profile_id = divider.get("profile_id") or divider.get("profile")
+                requested_profile_family = divider.get("profile_family")
+                if requested_profile_id or requested_profile_family:
+                    try:
+                        resolved = resolve_profile(str(requested_profile_id or "document-spine"))
+                        if requested_profile_family and resolved.profile_family != requested_profile_family:
+                            errors.append(
+                                f"section_divider[{i}] requested profile_family={requested_profile_family} "
+                                f"but {requested_profile_id or 'document-spine'} resolves to {resolved.profile_family}"
+                            )
+                    except Exception as exc:
+                        errors.append(f"section_divider[{i}] profile resolution failed: {exc}")
 
         return errors
 

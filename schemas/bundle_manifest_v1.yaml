@@ -67,10 +67,11 @@ properties:
             default: false
           blank_after:
             type: boolean
-            default: false
+            default: true
             description: >
               When true, compatible templates insert one intentional blank page
-              after the title page before the table of contents.
+              after the title page before the table of contents. Defaults true
+              for enabled full title pages.
           background_image:
             type: string
 
@@ -89,7 +90,7 @@ properties:
           description: Path to source Markdown file
         role:
           type: string
-          enum: [primary_anchor, supporting_anchor, appendix, reference]
+          enum: [frontmatter, primary_anchor, supporting_anchor, appendix, reference]
         title:
           type: string
           description: Display title for section header
@@ -162,6 +163,26 @@ properties:
           type: string
         body:
           type: string
+        profile_id:
+          type: string
+          description: Optional divider-local profile ID for profile-aware divider styling/evidence.
+        profile:
+          type: string
+          description: Alias for profile_id.
+        profile_family:
+          type: string
+          description: Optional guard; validation fails if profile_id resolves to a different family.
+        background_image:
+          type: string
+          description: Relative PNG/JPG/PDF background image for the divider page.
+        force_right_page:
+          type: boolean
+          default: true
+          description: Insert a labeled intentional blank page as needed so the divider opens on a recto/right page.
+        blank_after:
+          type: boolean
+          default: false
+          description: Insert a labeled intentional blank page immediately after the divider.
         source:
           type: object
           description: Optional Markdown source to use as the divider page.
@@ -197,6 +218,14 @@ properties:
       include_toc:
         type: boolean
         default: true
+      numbering_strategy:
+        type: string
+        enum: [continuous, section_dividers, faithful_section_dividers]
+        default: continuous
+        description: >
+          Use section_dividers/faithful_section_dividers to make manifest section
+          dividers own numbered top-level sections, demote source headings below
+          their divider, and emit frontmatter/mainmatter/appendix transitions.
       toc_depth:
         type: integer
         default: 3

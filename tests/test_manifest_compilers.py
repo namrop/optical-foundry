@@ -378,6 +378,9 @@ def test_composite_bundle_inserts_source_backed_section_divider_before_source_or
             "before_source_uid": "fixture-src-002",
             "before_source_order": 2,
             "kind": "source",
+            "force_right_page": True,
+            "blank_after": False,
+            "background_image": "",
             "source_path": str(SRC / "source-003.md"),
         }
     ]
@@ -401,6 +404,171 @@ def test_composite_bundle_validates_section_divider_targets_and_source_paths():
 
     assert any("section_divider[0] before_source_uid not found" in e for e in errors)
     assert any("section_divider[1] source path not found" in e for e in errors)
+
+
+def test_composite_bundle_defaults_title_blank_after_and_section_divider_recto():
+    compiler = CompositeBundleCompiler()
+    manifest = {
+        "kind": "composite_bundle", "schema_version": "bundle_manifest_v1",
+        "bundle_id": "divider-recto-defaults", "profile": "cam",
+        "presentation": {"title": "Recto Defaults", "title_page": {"enabled": True}},
+        "sources": [
+            {"uid": "fixture-src-001", "path": str(SRC / "source-001.md"), "role": "primary_anchor", "order": 1},
+            {"uid": "fixture-src-002", "path": str(SRC / "source-002.md"), "role": "supporting_anchor", "order": 2},
+        ],
+        "section_dividers": [
+            {"uid": "evidence", "before_source_uid": "fixture-src-002", "title": "Evidence"},
+        ],
+    }
+
+    plan = compiler.compile(manifest)
+    assembled = plan.render_source.read_text()
+
+    assert "titlepage_blank_after: true" in assembled
+    assert "\\OFEnsureRightPage" in assembled
+    assert "\\OFIntentionalBlankPage" not in assembled.split("Evidence")[1].split("# Supporting Synthetic Source")[0]
+    assert plan.boundary_assertions["titlepage_blank_after"] is True
+    assert plan.boundary_assertions["section_dividers"][0]["force_right_page"] is True
+    assert plan.boundary_assertions["section_dividers"][0]["blank_after"] is False
+
+
+def test_composite_bundle_section_divider_profile_background_and_blank_after():
+    compiler = CompositeBundleCompiler()
+    manifest = {
+        "kind": "composite_bundle", "schema_version": "bundle_manifest_v1",
+        "bundle_id": "divider-presentation", "profile": "cam",
+        "sources": [
+            {"uid": "fixture-src-001", "path": str(SRC / "source-001.md"), "role": "primary_anchor", "order": 1},
+            {"uid": "fixture-src-002", "path": str(SRC / "source-002.md"), "role": "supporting_anchor", "order": 2},
+        ],
+        "section_dividers": [
+            {
+                "uid": "profiled",
+                "before_source_uid": "fixture-src-002",
+                "title": "Profiled Divider",
+                "profile_id": "mythic",
+                "background_image": "assets/logo_oasis_cam.png",
+                "force_right_page": False,
+                "blank_after": True,
+            },
+        ],
+    }
+
+    plan = compiler.compile(manifest)
+    assembled = plan.render_source.read_text()
+    divider_block = assembled.split("Profiled Divider")[0]
+
+    assert "\\OFSectionDividerBackground{assets/logo_oasis_cam.png}" in assembled
+    assert "\\OFApplySectionDividerProfile{mythic}{document_spine}" in assembled
+    assert "\\clearpage" in divider_block
+    assert "\\OFEnsureRightPage" not in divider_block
+    assert "\\OFIntentionalBlankPage" in assembled.split("Profiled Divider")[1].split("# Supporting Synthetic Source")[0]
+    inventory = plan.boundary_assertions["section_dividers"][0]
+    assert inventory["requested_profile_id"] == "mythic"
+    assert inventory["resolved_profile_id"] == "mythic"
+    assert inventory["profile_family"] == "document_spine"
+    assert inventory["background_image"] == "assets/logo_oasis_cam.png"
+    assert inventory["force_right_page"] is False
+    assert inventory["blank_after"] is True
+
+
+def test_composite_bundle_validates_section_divider_background_and_profile_family():
+    compiler = CompositeBundleCompiler()
+    manifest = {
+        "kind": "composite_bundle", "schema_version": "bundle_manifest_v1",
+        "bundle_id": "bad-divider-presentation", "profile": "cam",
+        "sources": [
+            {"uid": "fixture-src-001", "path": str(SRC / "source-001.md"), "role": "primary_anchor", "order": 1},
+        ],
+        "section_dividers": [
+            {
+                "uid": "unsafe-bg",
+                "before_source_uid": "fixture-src-001",
+                "title": "Bad BG",
+                "background_image": "../secrets/bg.png",
+            },
+            {
+                "uid": "wrong-family",
+                "before_source_uid": "fixture-src-001",
+                "title": "Wrong Family",
+                "profile_id": "mythic-letter",
+                "profile_family": "document_spine",
+            },
+        ],
+    }
+
+    errors = compiler.validate(manifest)
+
+    assert any("section_divider[0] background_image" in e for e in errors)
+    assert any("section_divider[1] requested profile_family=document_spine" in e for e in errors)
+
+
+def test_composite_bundle_section_divider_numbering_demotes_source_headings_and_marks_appendices():
+    compiler = CompositeBundleCompiler()
+    manifest = {
+        "kind": "composite_bundle", "schema_version": "bundle_manifest_v1",
+        "bundle_id": "faithful-divider-numbering", "profile": "cam",
+        "render": {"numbering_strategy": "section_dividers", "assembly_strategy": "faithful_stack"},
+        "sources": [
+            {"uid": "preface", "path": str(SRC / "source-001.md"), "role": "frontmatter", "order": 1},
+            {"uid": "body", "path": str(SRC / "source-002.md"), "role": "primary_anchor", "order": 2},
+            {"uid": "appendix-a", "path": str(SRC / "source-003.md"), "role": "appendix", "order": 3},
+        ],
+        "section_dividers": [
+            {"uid": "body-section", "before_source_uid": "body", "title": "Body Section"},
+            {"uid": "appendix-section", "before_source_uid": "appendix-a", "title": "Appendix Section"},
+        ],
+    }
+
+    plan = compiler.compile(manifest)
+    assembled = plan.render_source.read_text()
+
+    assert "\\frontmatter" in assembled
+    assert "\\mainmatter" in assembled
+    assert "\\OFBeginAppendices" in assembled
+    assert "\\section{Body Section}" in assembled
+    assert "\\section{Appendix Section}" in assembled
+    assert "## Supporting Synthetic Source" in assembled
+    assert "\n# Supporting Synthetic Source" not in assembled
+    assert assembled.find("# Supporting Synthetic Source") == -1 or assembled.find("# Supporting Synthetic Source") == assembled.find("## Supporting Synthetic Source") + 1
+    assert "## Data Appendix" in assembled
+    assert plan.boundary_assertions["section_divider_numbering"] == "section_dividers"
+    assert plan.assembly.numbering_strategy == "section_dividers"
+
+
+def test_source_backed_section_divider_preserves_authored_heading_for_numbering():
+    compiler = CompositeBundleCompiler()
+    manifest = {
+        "kind": "composite_bundle", "schema_version": "bundle_manifest_v1",
+        "bundle_id": "source-backed-divider-numbering", "profile": "cam",
+        "render": {"numbering_strategy": "section_dividers", "assembly_strategy": "faithful_stack"},
+        "sources": [
+            {"uid": "fixture-src-001", "path": str(SRC / "source-001.md"), "role": "primary_anchor", "order": 1},
+            {"uid": "fixture-src-002", "path": str(SRC / "source-002.md"), "role": "supporting_anchor", "order": 2},
+        ],
+        "section_dividers": [
+            {
+                "uid": "designed-divider",
+                "before_source_uid": "fixture-src-002",
+                "source": {"path": str(SRC / "source-003.md"), "include_frontmatter": "none"},
+            },
+        ],
+    }
+
+    plan = compiler.compile(manifest)
+    assembled = plan.render_source.read_text()
+    divider_to_source = assembled.split("# Data Appendix", 1)[1].split("Supporting material", 1)[0]
+
+    assert "# Data Appendix" in assembled
+    assert "## Data Appendix" not in assembled
+    assert "## Supporting Synthetic Source" in divider_to_source
+    assert plan.boundary_assertions["section_divider_numbering"] == "section_dividers"
+
+
+def test_latex_templates_use_required_intentional_blank_page_text():
+    template = (Path(__file__).resolve().parents[1] / "profiles" / "40_latex_import" / "templates" / "cam.tex").read_text()
+    assert "this page was intentionally left blank" in template
+    assert "This page intentionally left blank" not in template
 
 
 def test_cam_stack_compile_uses_bundle_semantics_with_cam_kind():

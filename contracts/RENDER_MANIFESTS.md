@@ -48,6 +48,16 @@ breaks:
 - A source-backed divider uses `source.path` to render a Markdown object as the
   divider page. This is the right lane when the section title page is a designed
   object rather than a simple generated heading.
+- Divider pagination defaults to recto/right-page opening (`force_right_page: true`).
+  Inserted blank pages use the explicit text `this page was intentionally left blank`.
+- Dividers may set `profile_id` / `profile_family` for profile-aware divider
+  styling/evidence and `background_image` for a full-page divider background.
+- `blank_after: true` inserts an intentional blank page after a divider; default
+  is false for section dividers.
+- `render.numbering_strategy: section_dividers` makes dividers own numbered
+  top-level sections, demotes source headings below their divider, emits
+  frontmatter/mainmatter/appendix transitions, and lets the memoir/Pandoc TOC
+  reflect that section structure.
 
 For title pages:
 
@@ -58,6 +68,9 @@ For title pages:
 - `bundle_manifest_v1.presentation.title_page.background_image: assets/path.png`
   sets the same title-page background for bundle-family manifests and implicitly
   enables the full title-page path unless `enabled: false` is set.
+- `bundle_manifest_v1.presentation.title_page.blank_after` defaults to true for
+  enabled full title pages. The inserted page is labeled
+  `this page was intentionally left blank`.
 
 Title-page image paths are guarded render-resource paths: relative PNG/JPG/PDF
 paths only, no absolute paths, parent traversal, URLs, or LaTeX control-token

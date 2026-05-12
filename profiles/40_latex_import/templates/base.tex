@@ -48,6 +48,44 @@
 \usepackage{graphicx}
 \usepackage{eso-pic}
 
+% Intentional blank / recto-start helpers for packet title/divider pages.
+% Page 1 is treated as recto/right; if the next page number is even, insert a labeled blank.
+\newcommand{\OFIntentionalBlankPage}{%
+  \thispagestyle{empty}%
+  \vspace*{\fill}%
+  \begin{center}{\small\itshape this page was intentionally left blank}\end{center}%
+  \vspace*{\fill}%
+  \clearpage%
+}
+\newcommand{\OFEnsureRightPage}{%
+  \clearpage%
+  \ifodd\value{page}\relax%
+  \else%
+    \OFIntentionalBlankPage%
+  \fi%
+}
+\newcommand{\OFSectionDividerBackground}[1]{%
+  \AddToShipoutPictureBG*{%
+    \AtPageLowerLeft{%
+      \includegraphics[width=\paperwidth,height=\paperheight]{#1}%
+    }%
+  }%
+}
+\newcommand{\OFApplySectionDividerProfile}[2]{%
+  % Divider-local profile hook. The assembled document still renders through one
+  % Pandoc profile; this command gives templates a stable surface for
+  % profile-aware divider styling without mutating source content.
+}
+\newcommand{\OFBeginAppendices}{%
+  \clearpage%
+  \appendix%
+  \setcounter{section}{0}%
+  \renewcommand{\thesection}{\Alph{section}}%
+  \renewcommand{\thesubsection}{\thesection.\arabic{subsection}}%
+  \renewcommand{\thesubsubsection}{\thesubsection.\arabic{subsubsection}}%
+}
+
+
 
 %boxes
 \usepackage{amssymb}

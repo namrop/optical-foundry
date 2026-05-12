@@ -36,7 +36,7 @@ Implemented and exercised code surfaces:
 - Bundle-family manifest lane: `composite_bundle`, `cam_stack`, `codex_bundle`.
 - Local imported `40_latex` profile stack under `profiles/40_latex_import`.
 - CAM/Yugen Civic profile rendering.
-- Title pages, optional blank-after-title, and guarded title-page background images.
+- Title pages, default blank-after-title behavior, and guarded title-page background images.
 - Generated figure preprocessors for Mermaid, Vega, D2, and Graphviz/DOT.
 - Evidence JSON sidecars with profile, boundary, output, source, and figure assertions.
 - Bundle section dividers via top-level `section_dividers:` in bundle-family manifests.
@@ -65,7 +65,7 @@ Bundle-family manifests own assembly-level presentation between source objects:
 
 - `presentation.title_page.*` controls packet title-page behavior.
 - `generated.reader_guide` and `generated.afterword` can generate simple bundle sections where enabled.
-- `section_dividers[]` inserts title/divider pages before target sources. Dividers can be generic manifest-authored pages or source-backed Markdown divider pages.
+- `section_dividers[]` inserts title/divider pages before target sources. Dividers can be generic manifest-authored pages or source-backed Markdown divider pages. Divider options include recto/right-page forcing, divider-local profile hooks, background images, blank-after insertion, and divider-faithful numbering/TOC via `render.numbering_strategy: section_dividers`.
 - Manifest `figures:` is appropriate for compiler-controlled/appended figure material.
 
 Exact mid-source full-page figure placement is still a source/staged-source concern. If exact placement should become manifest-owned, add a dedicated anchor-placement contract rather than overloading `figures:`.
