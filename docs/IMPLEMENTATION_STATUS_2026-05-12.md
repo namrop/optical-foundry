@@ -122,3 +122,19 @@ For exact intra-source full-page figures, the current safe boundary is:
 5. verify evidence, `pdfimages`, page count, text markers, and `target_40_latex_mutated: false`.
 
 If exact full-page figure placement should become manifest-owned later, it needs a separate anchored-placement contract rather than overloading `figures:`.
+
+## Roadmap — next code surfaces
+
+### 1. `--format docx` CLI adapter
+
+The CLI currently renders only to PDF. DOCX output is possible via a manual workaround (compile manifest → strip LaTeX-only commands → Pandoc direct), but there is no first-class `python3.14 -m cli manifest <manifest.yaml> --format docx` path.
+
+What it needs:
+
+- a `format` / `output_format` argument on `cmd_manifest` and `cmd_doc` that is not just `--output` directory naming;
+- a Pandoc render path that targets `--to docx` instead of `--to pdf` through `--pdf-engine xelatex`;
+- evidence sidecars appropriate to DOCX output — media count, zip-internal markers, raw-LaTeX leakage check — instead of PDF-only fields;
+- DOCX-safe preprocessing for source-backed dividers and body figures that currently emit raw `\includegraphics` or `\begin{figure}` blocks;
+- tests for DOCX-path detection, evidence shape, and LaTeX-stripping correctness without requiring a full DOCX file.
+
+Tracking label: `of-docx-cli-adapter`
