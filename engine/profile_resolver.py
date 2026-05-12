@@ -59,6 +59,8 @@ ALIASES: dict[str, str] = {
     "tech": "yugen_tech",
     "risk": "yugen_risk",
     "creative": "yugen_creative",
+    "civic": "yugen_civic",
+    "yugen-civic": "yugen_civic",
     "generic_report": "generic-report",
     "mythic_letter": "mythic-letter",
     "mythic_letter_johannah": "mythic-letter-johannah",
@@ -92,6 +94,11 @@ PROFILE_SPECS: dict[str, dict[str, Any]] = {
         "defaults": ["document_spine.yaml", "yugenbase.yaml", "creative.yaml"],
         "template": "base.tex",
     },
+    "yugen_civic": {
+        "family": "document_spine",
+        "defaults": ["document_spine.yaml", "yugenbase.yaml", "civic.yaml"],
+        "template": "base.tex",
+    },
     "cam": {"family": "document_spine", "defaults": ["document_spine.yaml", "yugenbase.yaml", "cam.yaml"], "template": "cam.tex"},
     "mythic": {"family": "document_spine", "defaults": ["document_spine.yaml", "yugenbase.yaml", "mythic.yaml"], "template": "mythic.tex"},
     "convergence": {"family": "document_spine", "defaults": ["document_spine.yaml", "yugenbase.yaml", "convergence.yaml"], "template": "convergence.tex"},
@@ -110,6 +117,11 @@ PROFILE_SPECS: dict[str, dict[str, Any]] = {
     "labels-avery-5164": {"family": "physical_sheet_profile", "defaults": ["labels_avery_5164.yaml"], "template": "label_sheet.tex"},
     "labels-avery-15264": {"family": "physical_sheet_profile", "defaults": ["labels_base.yaml"], "template": "label_sheet.tex"},
     "sticker-sheet": {"family": "physical_sheet_profile", "defaults": ["sticker_sheet.yaml"], "template": "label_sheet.tex"},
+    "life": {
+        "family": "document_spine",
+        "defaults": ["document_spine.yaml", "yugenbase.yaml", "life.yaml"],
+        "template": "base.tex",
+    },
     "yugen-brand": {"family": "document_spine", "defaults": ["document_spine.yaml", "yugenbase.yaml"], "template": "generic_report.tex"},
     "yugen-brand-elevated": {"family": "document_spine", "defaults": ["document_spine.yaml", "yugenbase.yaml"], "template": "generic_report.tex"},
 }

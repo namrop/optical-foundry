@@ -36,6 +36,7 @@ class ResolvedManifest:
 
 KIND_TO_FAMILY = {
     "composite_bundle": "bundle_longform",
+    "markdown_document": "document",
     "forge_packet_review": "packet_review",
     "label_run": "physical_sheet",
     "sticker_sheet": "physical_sheet",
@@ -44,6 +45,7 @@ KIND_TO_FAMILY = {
 
 DEFAULT_ASSEMBLY_STRATEGY = {
     "bundle_longform": "combined_markdown",
+    "document": "direct_markdown",
     "packet_review": "combined_markdown",
     "physical_sheet": "content_driven_placeholder",
     "campaign_packet": "pdf_stitch",
@@ -85,6 +87,8 @@ def resolve_manifest(manifest: dict[str, Any]) -> ResolvedManifest:
 
 
 def _children_for_manifest(manifest: dict[str, Any], manifest_family: str) -> list[ManifestChildSpec]:
+    if manifest_family == "document":
+        return _document_children(manifest)
     if manifest_family == "bundle_longform":
         return _bundle_children(manifest)
     if manifest_family == "packet_review":
@@ -94,6 +98,22 @@ def _children_for_manifest(manifest: dict[str, Any], manifest_family: str) -> li
     if manifest.get("kind") == "sticker_sheet":
         return _sticker_sheet_children(manifest)
     return []
+
+
+def _document_children(manifest: dict[str, Any]) -> list[ManifestChildSpec]:
+    source = manifest.get("source", {}) if isinstance(manifest.get("source", {}), dict) else {}
+    path = Path(source["path"]) if source.get("path") else None
+    object_id = str(manifest.get("document_id") or manifest.get("render_id") or (path.stem if path else "document"))
+    return [
+        ManifestChildSpec(
+            object_id=object_id,
+            source_path=path,
+            role=str(source.get("role", "document_source")),
+            requested_profile_id=manifest.get("profile"),
+            order=1,
+            metadata={k: v for k, v in source.items() if k not in {"path", "role"}},
+        )
+    ]
 
 
 def _default_child_profile(manifest: dict[str, Any]) -> str | None:

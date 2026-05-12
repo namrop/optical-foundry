@@ -10,6 +10,25 @@ GF = Path(__file__).resolve().parents[1]
 SRC = GF / "fixtures" / "sources"
 
 
+def test_markdown_document_resolves_as_document_manifest_family():
+    manifest = {
+        "kind": "markdown_document",
+        "schema_version": "document_manifest_v1",
+        "document_id": "doc-lane-test",
+        "profile": "generic-report",
+        "source": {"path": str(SRC / "source-001.md")},
+        "render": {"assembly_strategy": "direct_markdown"},
+    }
+
+    resolved = resolve_manifest(manifest)
+
+    assert resolved.manifest_family == "document"
+    assert resolved.assembly_strategy == "direct_markdown"
+    assert [child.object_id for child in resolved.children] == ["doc-lane-test"]
+    assert resolved.children[0].requested_profile_id == "generic-report"
+    assert resolved.children[0].role == "document_source"
+
+
 def test_packet_review_resolves_as_manifest_family_not_profile_family(tmp_path):
     packet = tmp_path / "packet"
     packet.mkdir()

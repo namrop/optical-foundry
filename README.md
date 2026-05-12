@@ -1,50 +1,101 @@
 # Optical Foundry
 
-Pandoc-driven render engine. Profile-first architecture with two stable input classes: Markdown documents and typed render manifests. Manifests can target packets, bundles, label runs, sticker sheets, CAM Stack, Codex 0, or any recurring render case that earns a subtype. This is still the clean replacement architecture lane during migration, with no mutation of 40_latex.
+Pandoc-backed render engine and greenfield replacement lane for the current `40_latex` renderer. Optical Foundry now has working local runtime surfaces: profile resolution, typed render manifests, document rendering, bundle/CAM/Codex assembly, generated-figure preprocessors, title-page controls, bundle section dividers, and evidence sidecars.
+
+`40_latex` remains the known-good behavioral reference. Normal Foundry renders may read it as fallback/reference but should not mutate it.
 
 ## Quickstart
 
+Run from the repository root:
+
 ```bash
-# (Not yet implemented — architecture phase)
-foundry render input.md --profile risk
-foundry render bundle.bundle.yaml --output out.pdf
-foundry profiles list
-foundry validate profile_id
+cd ~/Digital_Workspace/42_optical_foundry
+
+# Render one Markdown document through a profile.
+python3.14 -m cli doc path/to/source.md --profile cam --output generated/<run-name>
+
+# Render a typed manifest: markdown_document, composite_bundle, cam_stack, codex_bundle, etc.
+python3.14 -m cli manifest manifests/<manifest>.yaml --output generated/manifests/<run-name>
+
+# Inspect available profiles.
+python3.14 -m cli profiles
+
+# Validate a manifest.
+python3.14 -m cli validate manifests/<manifest>.yaml
 ```
 
-## Architecture
+The current validated interpreter is `python3.14`. Older examples using a hypothetical `foundry` executable or `python -m cli.render` are stale.
 
-See `DESIGN.md` for the complete architecture design document.
+## Current status
 
-## Conceptual Split
+**Phase:** active local implementation / migration proving ground.
 
-- **Markdown document**: direct Foundry input for one canonical source object.
-- **Render manifest**: direct Foundry input for every recurring assembled/projection case.
-- **Manifest subtype**: named contract such as `label_run`, `sticker_sheet`, `composite_bundle`, `cam_stack`, `codex_bundle`, or `forge_packet_review`.
-- **Bundle**: source graph/content grouping, usually rendered through a manifest.
-- **Packet**: work/lifecycle container; rendered only through a packet-review manifest that projects packet state.
-- **Projection plan / assembly view**: internal compiled render plan derived from Markdown or a manifest.
-- **Rendered artifact**: PDF/DOCX/HTML output plus evidence sidecars.
+Implemented and exercised code surfaces:
 
-## Folder Map
+- `markdown_document` render lane for single canonical Markdown objects.
+- Bundle-family manifest lane: `composite_bundle`, `cam_stack`, `codex_bundle`.
+- Local imported `40_latex` profile stack under `profiles/40_latex_import`.
+- CAM/Yugen Civic profile rendering.
+- Title pages, optional blank-after-title, and guarded title-page background images.
+- Generated figure preprocessors for Mermaid, Vega, D2, and Graphviz/DOT.
+- Evidence JSON sidecars with profile, boundary, output, source, and figure assertions.
+- Bundle section dividers via top-level `section_dividers:` in bundle-family manifests.
 
-| Directory | Purpose |
-|---|---|
-| `profiles/` | Profile registry — YAML declarations organized by output class |
-| `templates/` | LaTeX templates (Pandoc `--template`) |
-| `styles/` | LaTeX style packages (TEXMFHOME) |
-| `assets/` | Fonts, logos, figures |
-| `engine/` | Core engine: registry, dispatch, Pandoc, frontmatter |
-| `renderers/` | Render executors and manifest compilers: document, manifest, bundle/composite, packet review, label, sticker |
-| `schemas/` | Schema definitions for profiles, manifests, evidence |
-| `contracts/` | Expansion and assembly contracts |
-| `cli/` | CLI entrypoints |
-| `validators/` | Validation tools |
-| `fixtures/` | Synthetic test inputs |
-| `tests/` | Test suite |
-| `generated/` | Render outputs (gitignored) |
+Current code-change status is tracked in:
 
-## Status
+```text
+docs/IMPLEMENTATION_STATUS_2026-05-12.md
+```
 
-**Phase**: Architecture design (complete)
-**Next**: Implementation Phase 0 — Scaffold role surfaces, projection-plan model, and profile registry
+That status document intentionally excludes packet-specific document-content notes.
+
+## Conceptual split
+
+- **Markdown document:** direct Foundry input for one canonical source object.
+- **Render manifest:** direct Foundry input for recurring assembled/projection cases.
+- **Manifest subtype:** named contract such as `markdown_document`, `label_run`, `sticker_sheet`, `composite_bundle`, `cam_stack`, `codex_bundle`, or `forge_packet_review`.
+- **Bundle:** source graph/content grouping, usually rendered through a bundle-family manifest.
+- **Packet:** work/lifecycle container; rendered only through a packet-review manifest that projects packet state.
+- **Projection plan / assembly view:** internal compiled render plan derived from Markdown or a manifest.
+- **Rendered artifact:** PDF/DOCX/HTML output plus evidence sidecars.
+
+## Packet and bundle presentation controls
+
+Bundle-family manifests own assembly-level presentation between source objects:
+
+- `presentation.title_page.*` controls packet title-page behavior.
+- `generated.reader_guide` and `generated.afterword` can generate simple bundle sections where enabled.
+- `section_dividers[]` inserts title/divider pages before target sources. Dividers can be generic manifest-authored pages or source-backed Markdown divider pages.
+- Manifest `figures:` is appropriate for compiler-controlled/appended figure material.
+
+Exact mid-source full-page figure placement is still a source/staged-source concern. If exact placement should become manifest-owned, add a dedicated anchor-placement contract rather than overloading `figures:`.
+
+## Folder map
+
+- `profiles/` — profile registry and imported profile stack.
+- `profiles/40_latex_import/` — active local defaults/templates/styles/assets imported from the known-good 40_latex profile family.
+- `engine/` — manifest compilers, registry/resolver code, profile checks, generated-figure preprocessors.
+- `renderers/` — Pandoc-backed document renderer.
+- `schemas/` — YAML schemas for manifests and profile surfaces.
+- `contracts/` — render, bundle, label, sticker, and expansion contracts.
+- `cli/` — CLI entrypoint used as `python3.14 -m cli ...`.
+- `validators/` — manifest validation.
+- `fixtures/` — synthetic test sources/manifests.
+- `tests/` — pytest suite.
+- `manifests/` — user-facing and smoke manifest files.
+- `generated/` — render outputs and staged generated sources; normally gitignored.
+- `docs/` — implementation status and design plans.
+
+## Core documentation
+
+- `DESIGN.md` — architecture design plus implementation delta.
+- `INDEX.md` — beam index and navigation anchors.
+- `docs/IMPLEMENTATION_STATUS_2026-05-12.md` — current code-change status.
+- `contracts/RENDER_MANIFESTS.md` — manifest taxonomy and runtime contract.
+- `contracts/BUNDLE_ASSEMBLY.md` — bundle assembly contract, including section dividers.
+- `contracts/EXPANSION.md` — adding new profiles.
+- `docs/PROFILE_AND_PANDOC_REFERENCE.md` — profile/Pandoc operational notes.
+
+## Validation posture
+
+Before reporting a render or code surface as ready, inspect the evidence JSON for `render_metadata.success`, `warnings`, page count, SHA-256, `target_40_latex_mutated: false`, relevant title-page or section-divider boundary assertions, and required text markers.

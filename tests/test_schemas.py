@@ -17,6 +17,10 @@ def test_detect_packet_review():
     assert detect_subtype({"kind": "forge_packet_review", "schema_version": "packet_review_manifest_v1"}) == "packet_review"
 
 
+def test_detect_markdown_document():
+    assert detect_subtype({"kind": "markdown_document", "schema_version": "document_manifest_v1"}) == "document"
+
+
 def test_detect_unknown_returns_none():
     assert detect_subtype({"kind": "unknown", "schema_version": "v9"}) is None
     assert detect_subtype({}) is None

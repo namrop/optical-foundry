@@ -53,6 +53,26 @@ properties:
         type: string
       abstract:
         type: string
+      title_page:
+        type: object
+        description: >
+          Optional full title-page controls for bundle-family renders. When
+          `background_image` is set, compilers enable the full title page and
+          expose `titlepage_background_image` to compatible LaTeX templates.
+          The path must be relative to render resource roots; absolute paths,
+          parent traversal, URLs, and LaTeX control tokens are rejected.
+        properties:
+          enabled:
+            type: boolean
+            default: false
+          blank_after:
+            type: boolean
+            default: false
+            description: >
+              When true, compatible templates insert one intentional blank page
+              after the title page before the table of contents.
+          background_image:
+            type: string
 
   sources:
     type: array
@@ -113,6 +133,45 @@ properties:
             type: string
           content:
             type: string
+
+  section_dividers:
+    type: array
+    description: >
+      Optional section-title/divider pages inserted before selected sources.
+      Generic dividers render from title/subtitle/body. Source-backed dividers
+      render a Markdown source as the divider page, leaving canonical content
+      sources unchanged.
+    items:
+      type: object
+      required: [uid]
+      properties:
+        uid:
+          type: string
+          description: Unique divider identifier for evidence.
+        before_source_uid:
+          type: string
+          description: Insert the divider immediately before this source UID.
+        before_source_order:
+          type: integer
+          minimum: 1
+          description: Insert the divider immediately before the source with this order.
+        title:
+          type: string
+          description: Generic divider title when no source is provided.
+        subtitle:
+          type: string
+        body:
+          type: string
+        source:
+          type: object
+          description: Optional Markdown source to use as the divider page.
+          properties:
+            path:
+              type: string
+            include_frontmatter:
+              type: string
+              enum: [full, summary, none]
+              default: none
 
   figures:
     type: array

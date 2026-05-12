@@ -6,8 +6,10 @@ dedicated compiler registered through the ManifestRegistry.
 
 Concrete compilers:
   - CompositeBundleCompiler: composite_bundle / bundle_manifest_v1
-  - LabelRunCompiler:          label_run / label_run_v1
-  - StickerSheetCompiler:      sticker_sheet / sticker_sheet_v1
+  - CAMStackCompiler:        cam_stack / bundle_manifest_v1
+  - CodexBundleCompiler:     codex_bundle / bundle_manifest_v1
+  - LabelRunCompiler:        label_run / label_run_v1
+  - StickerSheetCompiler:    sticker_sheet / sticker_sheet_v1
   - ForgePacketReviewCompiler: forge_packet_review / packet_review_manifest_v1
 """
 
@@ -195,6 +197,353 @@ def _inventory_profile_fields(child_profile_by_id: dict[str, dict[str, Any]], ui
 # ──────────────────────────────────────────────
 
 
+DOCUMENT_VARIABLE_ALLOWLIST = {
+    "sample",
+    "draft",
+    "titlepage",
+    "titlepage_background_image",
+    "titlepage_blank_after",
+    "logo_path",
+    "division",
+    "tagline",
+    "footeremail",
+    "footer_email",
+    "chart_primary",
+    "chart_accent",
+    "chart_secondary",
+    "chart_background",
+    "chart_surface",
+    "chart_text",
+    "chart_muted",
+}
+
+RESOURCE_PATH_VARIABLES = {"logo_path", "titlepage_background_image"}
+RESOURCE_IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".pdf"}
+
+LATEX_INJECTION_TOKENS = ("\\input", "\\include", "\\write", "\\openout", "\\catcode", "\\usepackage")
+
+
+
+def _safe_scalar(value: Any) -> bool:
+    return isinstance(value, (str, int, float, bool)) or value is None
+
+
+def _safe_template_string(value: str) -> bool:
+    lowered = value.lower()
+    return not any(token in lowered for token in LATEX_INJECTION_TOKENS)
+
+
+def _safe_render_resource_path(value: Any) -> bool:
+    if not isinstance(value, str) or not value.strip() or "\x00" in value or "://" in value:
+        return False
+    if any(ch in value for ch in ("{", "}", "$", "`")):
+        return False
+    path = Path(value)
+    if path.is_absolute():
+        return False
+    if ".." in path.parts:
+        return False
+    return path.suffix.lower() in RESOURCE_IMAGE_EXTENSIONS
+
+
+def _safe_logo_path(value: Any) -> bool:
+    return _safe_render_resource_path(value)
+
+
+def _guard_manifest_variables(variables: dict[str, Any]) -> tuple[dict[str, Any], dict[str, str]]:
+    accepted: dict[str, Any] = {}
+    rejected: dict[str, str] = {}
+    for key, value in variables.items():
+        if key not in DOCUMENT_VARIABLE_ALLOWLIST:
+            rejected[key] = "variable key is not allowlisted for document manifests"
+            continue
+        if not _safe_scalar(value):
+            rejected[key] = "variable value must be a scalar"
+            continue
+        if key in RESOURCE_PATH_VARIABLES and not _safe_render_resource_path(value):
+            rejected[key] = f"{key} must be a relative image/PDF path inside the render resource roots"
+            continue
+        if isinstance(value, str) and not _safe_template_string(value):
+            rejected[key] = "variable value contains disallowed LaTeX control tokens"
+            continue
+        accepted[key] = value
+    return accepted, rejected
+
+
+def _frontmatter_to_markdown(frontmatter: dict[str, Any], body: str) -> str:
+    try:
+        import yaml as _yaml
+        fm_yaml = _yaml.safe_dump(frontmatter, default_flow_style=False, allow_unicode=True, sort_keys=False).rstrip()
+    except ImportError:
+        fm_yaml = "\n".join(f"{k}: {v}" for k, v in frontmatter.items())
+    separator = "" if body.startswith("\n") else "\n"
+    return f"---\n{fm_yaml}\n---{separator}{body}"
+
+
+def _latex_escape_text(value: Any) -> str:
+    """Escape scalar text for raw LaTeX divider blocks."""
+    text = "" if value is None else str(value)
+    replacements = {
+        "\\": r"\textbackslash{}",
+        "&": r"\&",
+        "%": r"\%",
+        "$": r"\$",
+        "#": r"\#",
+        "_": r"\_",
+        "{": r"\{",
+        "}": r"\}",
+        "~": r"\textasciitilde{}",
+        "^": r"\textasciicircum{}",
+    }
+    return "".join(replacements.get(ch, ch) for ch in text)
+
+
+def _source_order_lookup(sources: list[dict[str, Any]]) -> tuple[dict[str, dict[str, Any]], dict[int, dict[str, Any]]]:
+    by_uid: dict[str, dict[str, Any]] = {}
+    by_order: dict[int, dict[str, Any]] = {}
+    for src in sources:
+        uid = src.get("uid")
+        order = src.get("order")
+        if uid:
+            by_uid[str(uid)] = src
+        if isinstance(order, int):
+            by_order[order] = src
+    return by_uid, by_order
+
+
+def _resolved_section_divider_target(
+    divider: dict[str, Any],
+    sources_by_uid: dict[str, dict[str, Any]],
+    sources_by_order: dict[int, dict[str, Any]],
+) -> tuple[str, int]:
+    before_uid = divider.get("before_source_uid")
+    before_order = divider.get("before_source_order")
+    if before_uid:
+        target = sources_by_uid.get(str(before_uid), {})
+        return str(before_uid), int(target.get("order", 0) or 0)
+    if isinstance(before_order, int):
+        target = sources_by_order.get(before_order, {})
+        return str(target.get("uid", "")), before_order
+    return "", 0
+
+
+def _section_divider_inventory_entry(
+    divider: dict[str, Any],
+    sources_by_uid: dict[str, dict[str, Any]],
+    sources_by_order: dict[int, dict[str, Any]],
+) -> dict[str, Any]:
+    before_uid, before_order = _resolved_section_divider_target(divider, sources_by_uid, sources_by_order)
+    source_cfg = divider.get("source") if isinstance(divider.get("source"), dict) else None
+    entry = {
+        "uid": divider.get("uid", ""),
+        "before_source_uid": before_uid,
+        "before_source_order": before_order,
+        "kind": "source" if source_cfg else "generic",
+    }
+    if source_cfg:
+        entry["source_path"] = str(source_cfg.get("path", ""))
+    return entry
+
+
+def _render_source_divider(source_cfg: dict[str, Any]) -> list[str]:
+    path = Path(source_cfg["path"])
+    raw_text = path.read_text()
+    fm, body = _split_frontmatter_and_body(raw_text)
+    include_frontmatter = source_cfg.get("include_frontmatter", "none")
+    lines = ["\\OFEnsureRightPage"]
+    if include_frontmatter == "full" and fm:
+        try:
+            import yaml as _yaml
+            fm_yaml = _yaml.dump(fm, default_flow_style=False, allow_unicode=True)
+        except ImportError:
+            fm_yaml = str(fm)
+        lines.extend(["\\textbf{Divider Source Frontmatter}", "", "```yaml", fm_yaml.rstrip(), "```", ""])
+    elif include_frontmatter == "summary" and fm:
+        lines.extend(["\\textbf{Divider Source Frontmatter (summary)}", ""])
+        for k, v in sorted(fm.items()):
+            if isinstance(v, (list, dict)):
+                continue
+            lines.append(f"- **{k}**: {v}")
+        lines.append("")
+    lines.extend([body.strip(), "", "\\clearpage"])
+    return lines
+
+
+def _render_generic_section_divider(divider: dict[str, Any]) -> list[str]:
+    title = _latex_escape_text(divider.get("title") or divider.get("uid") or "Section")
+    subtitle = _latex_escape_text(divider.get("subtitle", ""))
+    body = _latex_escape_text(divider.get("body", ""))
+    lines = [
+        "\\OFEnsureRightPage",
+        "\\thispagestyle{empty}",
+        "\\vspace*{0.30\\textheight}",
+        "\\begin{center}",
+        f"{{\\Huge\\bfseries {title}\\par}}",
+    ]
+    if subtitle:
+        lines.extend(["\\vspace{0.85em}", f"{{\\Large {subtitle}\\par}}"])
+    if body:
+        lines.extend(["\\vspace{1.5em}", f"{{\\normalsize {body}\\par}}"])
+    lines.extend(["\\end{center}", "\\clearpage"])
+    return lines
+
+
+def _render_section_divider(divider: dict[str, Any]) -> list[str]:
+    source_cfg = divider.get("source")
+    if isinstance(source_cfg, dict):
+        return _render_source_divider(source_cfg)
+    return _render_generic_section_divider(divider)
+
+
+def _title_page_variables_from_presentation(presentation: dict[str, Any]) -> dict[str, Any]:
+    """Return canonical Pandoc variables for a bundle title-page surface."""
+    title_page = presentation.get("title_page", {}) if isinstance(presentation, dict) else {}
+    if not isinstance(title_page, dict):
+        return {}
+
+    variables: dict[str, Any] = {}
+    enabled = title_page.get("enabled")
+    background_image = title_page.get("background_image")
+    blank_after = title_page.get("blank_after")
+
+    if enabled is True or background_image:
+        variables["titlepage"] = True
+    if background_image and enabled is not False:
+        variables["titlepage_background_image"] = background_image
+    if blank_after is True and (enabled is True or background_image):
+        variables["titlepage_blank_after"] = True
+    return variables
+
+
+class MarkdownDocumentCompiler(ManifestCompiler):
+    """Compile markdown_document / document_manifest_v1.
+
+    This is the faithful single-document manifest lane. It preserves the source
+    Markdown body and routes the document through the same profile/render path as
+    a direct document render while allowing manifest-visible metadata overrides,
+    render controls, and guarded profile/template variables.
+    """
+
+    kind = "markdown_document"
+    schema_version = "document_manifest_v1"
+
+    def compile(self, manifest: dict[str, Any], **kwargs: Any) -> ProjectionPlan:
+        errors = self.validate(manifest)
+        if errors:
+            raise ValueError(f"manifest validation failed: {'; '.join(errors)}")
+
+        source_cfg = manifest.get("source", {})
+        source_path = Path(source_cfg["path"])
+        profile = manifest["profile"]
+        render_cfg = manifest.get("render", {}) if isinstance(manifest.get("render", {}), dict) else {}
+        metadata = manifest.get("metadata", {}) if isinstance(manifest.get("metadata", {}), dict) else {}
+        variables = manifest.get("variables", {}) if isinstance(manifest.get("variables", {}), dict) else {}
+
+        raw_text = source_path.read_text()
+        source_fm, body = _split_frontmatter_and_body(raw_text)
+        source_fm = source_fm or {}
+
+        preserve_source_metadata = render_cfg.get("preserve_source_metadata", True)
+        merge_policy = render_cfg.get("metadata_merge_policy", "source_then_manifest_override")
+        if merge_policy != "source_then_manifest_override":
+            raise ValueError(f"unsupported metadata_merge_policy: {merge_policy}")
+
+        accepted_variables, rejected_variables = _guard_manifest_variables(variables)
+        merged_fm: dict[str, Any] = dict(source_fm) if preserve_source_metadata else {}
+        merged_fm.update(metadata)
+        if accepted_variables:
+            existing_vars = merged_fm.get("variables", {}) if isinstance(merged_fm.get("variables", {}), dict) else {}
+            merged_fm["variables"] = {**existing_vars, **accepted_variables}
+            # Also expose common Pandoc template variables at top level because
+            # imported 40_latex defaults/templates expect scalar variables there.
+            for key, value in accepted_variables.items():
+                merged_fm[key] = value
+
+        title = metadata.get("title", merged_fm.get("title", source_path.stem))
+        subtitle = metadata.get("subtitle", merged_fm.get("subtitle", ""))
+        author = metadata.get("author", merged_fm.get("author", ""))
+        date = metadata.get("date", merged_fm.get("date", ""))
+        toc = bool(render_cfg["include_toc"]) if "include_toc" in render_cfg else bool(merged_fm.get("toc", True))
+        toc_depth = int(render_cfg.get("toc_depth", merged_fm.get("toc-depth", 3)))
+        numbersections = bool(render_cfg["numbersections"]) if "numbersections" in render_cfg else bool(merged_fm.get("numbersections", True))
+
+        render_id = manifest.get("document_id") or manifest.get("render_id") or merged_fm.get("uid") or source_path.stem
+        compiled_text = _frontmatter_to_markdown(merged_fm, body)
+        render_source = _write_temp_markdown(f"document_{render_id}", compiled_text)
+
+        source_digest = _sha256_hex(source_path)
+        boundary_assertions = {
+            "target_40_latex_mutated": False,
+            "profile_manifest_axes_separate": True,
+            "document_manifest_lane": True,
+            "manifest_family": "document",
+            "manifest_subtype": self.kind,
+            "assembly_strategy": "direct_markdown",
+            "metadata_merge_policy": merge_policy,
+            "preserve_source_metadata": preserve_source_metadata,
+            "heading_transform": render_cfg.get("heading_transform", source_cfg.get("heading_transform", "preserve")),
+            "emit_visible_provenance": render_cfg.get("emit_visible_provenance", False),
+            "preserve_source_provenance": render_cfg.get("preserve_source_provenance", True),
+            "accepted_manifest_variables": sorted(accepted_variables.keys()),
+            "rejected_manifest_variables": rejected_variables,
+        }
+        if rejected_variables:
+            boundary_assertions["warnings"] = [
+                f"Rejected document manifest variable {key}: {reason}"
+                for key, reason in sorted(rejected_variables.items())
+            ]
+
+        return ProjectionPlan(
+            profile_id=profile,
+            render_id=str(render_id),
+            render_source=render_source,
+            title=str(title) if title is not None else "",
+            subtitle=str(subtitle) if subtitle is not None else "",
+            author=str(author) if author is not None else "",
+            date=str(date) if date is not None else "",
+            toc=toc,
+            toc_depth=toc_depth,
+            numbersections=numbersections,
+            source_inventory=[
+                {
+                    "uid": str(render_id),
+                    "path": str(source_path),
+                    "role": source_cfg.get("role", "document_source"),
+                    "digest_sha256": source_digest,
+                    "manifest_lane": self.kind,
+                }
+            ],
+            boundary_assertions=boundary_assertions,
+        )
+
+    def validate(self, manifest: dict[str, Any]) -> list[str]:
+        errors: list[str] = []
+        if not isinstance(manifest, dict):
+            return ["manifest is not a dict"]
+        if manifest.get("kind") != self.kind:
+            errors.append(f"expected kind={self.kind}, got {manifest.get('kind')}")
+        if manifest.get("schema_version") != self.schema_version:
+            errors.append(f"expected schema_version={self.schema_version}, got {manifest.get('schema_version')}")
+        if not manifest.get("profile"):
+            errors.append("missing profile")
+        source = manifest.get("source")
+        if not isinstance(source, dict):
+            errors.append("source must be a mapping with path")
+        else:
+            path = source.get("path")
+            if not path:
+                errors.append("source.path is required")
+            elif not Path(path).exists():
+                errors.append(f"source.path not found: {path}")
+        render_cfg = manifest.get("render", {})
+        if render_cfg is not None and not isinstance(render_cfg, dict):
+            errors.append("render must be a mapping")
+        variables = manifest.get("variables", {})
+        if variables is not None and not isinstance(variables, dict):
+            errors.append("variables must be a mapping")
+        return errors
+
+
 class CompositeBundleCompiler(ManifestCompiler):
     """Compile a composite_bundle / bundle_manifest_v1 manifest.
 
@@ -221,9 +570,31 @@ class CompositeBundleCompiler(ManifestCompiler):
 
         render_cfg = manifest.get("render", {})
         gen_cfg = manifest.get("generated", {})
+        title_page_variables = _title_page_variables_from_presentation(pres)
+        accepted_title_page_variables, rejected_title_page_variables = _guard_manifest_variables(title_page_variables)
 
         sources = manifest.get("sources", [])
         figures = manifest.get("figures", [])
+        section_dividers = manifest.get("section_dividers", [])
+        sorted_sources = sorted(sources, key=lambda s: s.get("order", 99))
+        sources_by_uid, sources_by_order = _source_order_lookup(sorted_sources)
+        dividers_by_before_uid: dict[str, list[dict[str, Any]]] = {}
+        section_divider_inventory: list[dict[str, Any]] = []
+        for divider in section_dividers if isinstance(section_dividers, list) else []:
+            before_uid, _before_order = _resolved_section_divider_target(divider, sources_by_uid, sources_by_order)
+            if not before_uid:
+                continue
+            dividers_by_before_uid.setdefault(before_uid, []).append(divider)
+            section_divider_inventory.append(_section_divider_inventory_entry(divider, sources_by_uid, sources_by_order))
+        assembly_strategy = str(render_cfg.get("assembly_strategy", ""))
+        faithful_stack = assembly_strategy == "faithful_stack"
+        suppress_source_wrapper_headings = bool(
+            render_cfg.get("suppress_source_wrapper_headings", faithful_stack)
+        )
+        preserve_source_heading_levels = bool(
+            render_cfg.get("preserve_source_heading_levels", faithful_stack)
+        )
+        emit_visible_provenance = bool(render_cfg.get("emit_visible_provenance", not faithful_stack))
 
         # --- build assembly view ---
         assembly = AssemblyView(
@@ -263,8 +634,12 @@ class CompositeBundleCompiler(ManifestCompiler):
 
         # source sections
         source_order_uid = []
-        for src in sorted(sources, key=lambda s: s.get("order", 99)):
+        for src in sorted_sources:
             uid = src["uid"]
+            for divider in dividers_by_before_uid.get(uid, []):
+                lines.extend(_render_section_divider(divider))
+                lines.append("")
+                assembly.generated_sections.append(f"section_divider:{divider.get('uid', '')}")
             src_path = Path(src["path"])
             src_role = src.get("role", "primary_anchor")
             src_title = src.get("title", uid)
@@ -284,7 +659,8 @@ class CompositeBundleCompiler(ManifestCompiler):
             fm, body = _split_frontmatter_and_body(raw_text)
 
             lines.append("\\newpage")
-            lines.append(f"# {src_title}")
+            if not suppress_source_wrapper_headings:
+                lines.append(f"# {src_title}")
 
             # frontmatter block
             if not suppress_fm and inc_fm == "full" and fm:
@@ -308,9 +684,11 @@ class CompositeBundleCompiler(ManifestCompiler):
                     lines.append(f"- **{k}**: {v}")
                 lines.append("")
 
-            # source body with demoted headings
-            demoted = _demote_headings(body)
-            lines.append(demoted.rstrip())
+            # source body; default bundle behavior demotes headings below the
+            # wrapper heading, while faithful-stack renders preserve source
+            # heading hierarchy so canonical longform sources remain intact.
+            source_body = body if preserve_source_heading_levels else _demote_headings(body)
+            lines.append(source_body.rstrip())
             lines.append("")
 
             # figures placed after this source
@@ -339,23 +717,30 @@ class CompositeBundleCompiler(ManifestCompiler):
             lines.append("")
 
         # provenance block
-        lines.append("\\newpage")
-        lines.append("# Provenance & Evidence")
-        lines.append("\\textbf{Source Inventory}")
-        lines.append("")
-        for uid in assembly.source_order:
-            path = assembly.source_paths.get(uid, "")
-            role = assembly.source_roles.get(uid, "")
-            digest = assembly.source_digests.get(uid, "(missing)")
-            lines.append(f"- **{uid}** ({role}): `{path}` [sha256: `{digest[:16]}...`]")
-        if figures:
+        if emit_visible_provenance:
+            lines.append("\\newpage")
+            lines.append("# Provenance & Evidence")
+            lines.append("\\textbf{Source Inventory}")
             lines.append("")
-            lines.append("\\textbf{Figure Inventory}")
-            lines.append("")
-            for fig in figures:
-                lines.append(f"- {fig.get('caption', fig.get('path', 'unknown'))}: `{fig.get('path', '?')}`")
+            for uid in assembly.source_order:
+                path = assembly.source_paths.get(uid, "")
+                role = assembly.source_roles.get(uid, "")
+                digest = assembly.source_digests.get(uid, "(missing)")
+                lines.append(f"- **{uid}** ({role}): `{path}` [sha256: `{digest[:16]}...`]")
+            if figures:
+                lines.append("")
+                lines.append("\\textbf{Figure Inventory}")
+                lines.append("")
+                for fig in figures:
+                    lines.append(f"- {fig.get('caption', fig.get('path', 'unknown'))}: `{fig.get('path', '?')}`")
 
         assembled_content = "\n".join(lines)
+        if accepted_title_page_variables:
+            frontmatter = {
+                **accepted_title_page_variables,
+                "variables": dict(accepted_title_page_variables),
+            }
+            assembled_content = _frontmatter_to_markdown(frontmatter, assembled_content)
         render_source = _write_temp_markdown(f"bundle_{bundle_id}", assembled_content)
 
         # --- build ProjectionPlan ---
@@ -369,6 +754,7 @@ class CompositeBundleCompiler(ManifestCompiler):
             date=date,
             toc=render_cfg.get("include_toc", True),
             toc_depth=render_cfg.get("toc_depth", 3),
+            numbersections=render_cfg.get("numbersections", True),
             assembly=assembly,
             source_inventory=[
                 {
@@ -384,7 +770,19 @@ class CompositeBundleCompiler(ManifestCompiler):
                 {"path": f.get("path"), "caption": f.get("caption"), "placement": f.get("placement")}
                 for f in figures
             ],
-            boundary_assertions=_manifest_boundary_assertions(render_plan),
+            boundary_assertions={
+                **_manifest_boundary_assertions(render_plan),
+                "emit_visible_provenance": emit_visible_provenance,
+                "suppress_source_wrapper_headings": suppress_source_wrapper_headings,
+                "preserve_source_heading_levels": preserve_source_heading_levels,
+                "title_page_background_enabled": "titlepage_background_image" in accepted_title_page_variables,
+                "titlepage_background_image": accepted_title_page_variables.get("titlepage_background_image", ""),
+                "accepted_title_page_variables": sorted(accepted_title_page_variables.keys()),
+                "rejected_title_page_variables": rejected_title_page_variables,
+                "section_dividers_enabled": bool(section_divider_inventory),
+                "section_divider_count": len(section_divider_inventory),
+                "section_dividers": section_divider_inventory,
+            },
         )
         return plan
 
@@ -407,6 +805,20 @@ class CompositeBundleCompiler(ManifestCompiler):
 
         if not manifest.get("profile"):
             errors.append("missing profile")
+
+        pres = manifest.get("presentation", {})
+        if pres is not None and not isinstance(pres, dict):
+            errors.append("presentation must be a mapping")
+        elif isinstance(pres, dict):
+            title_page = pres.get("title_page", {})
+            if title_page is not None and not isinstance(title_page, dict):
+                errors.append("presentation.title_page must be a mapping")
+            elif isinstance(title_page, dict):
+                background_image = title_page.get("background_image")
+                if background_image and not _safe_render_resource_path(background_image):
+                    errors.append(
+                        "presentation.title_page.background_image must be a relative PNG/JPG/PDF path inside the render resource roots"
+                    )
 
         # sources
         sources = manifest.get("sources")
@@ -449,7 +861,75 @@ class CompositeBundleCompiler(ManifestCompiler):
                 if not fig.get("path"):
                     errors.append(f"figure[{i}] missing path")
 
+        # section dividers
+        section_dividers = manifest.get("section_dividers", [])
+        if section_dividers is None:
+            section_dividers = []
+        if not isinstance(section_dividers, list):
+            errors.append("section_dividers must be a list")
+        else:
+            sources_for_lookup = manifest.get("sources", []) if isinstance(manifest.get("sources", []), list) else []
+            sources_by_uid, sources_by_order = _source_order_lookup(sources_for_lookup)
+            seen_divider_uids: set[str] = set()
+            for i, divider in enumerate(section_dividers):
+                if not isinstance(divider, dict):
+                    errors.append(f"section_divider[{i}] must be a mapping")
+                    continue
+
+                uid = divider.get("uid")
+                if not isinstance(uid, str) or not uid.strip():
+                    errors.append(f"section_divider[{i}] missing uid")
+                elif uid in seen_divider_uids:
+                    errors.append(f"duplicate section_divider uid: {uid}")
+                else:
+                    seen_divider_uids.add(uid)
+
+                before_uid = divider.get("before_source_uid")
+                before_order = divider.get("before_source_order")
+                if before_uid is None and before_order is None:
+                    errors.append(f"section_divider[{i}] must set before_source_uid or before_source_order")
+                if before_uid is not None and str(before_uid) not in sources_by_uid:
+                    errors.append(f"section_divider[{i}] before_source_uid not found: {before_uid}")
+                if before_order is not None:
+                    if not isinstance(before_order, int) or before_order < 1:
+                        errors.append(f"section_divider[{i}] before_source_order must be a positive integer")
+                    elif before_order not in sources_by_order:
+                        errors.append(f"section_divider[{i}] before_source_order not found: {before_order}")
+
+                source_cfg = divider.get("source")
+                if source_cfg is not None:
+                    if not isinstance(source_cfg, dict):
+                        errors.append(f"section_divider[{i}] source must be a mapping")
+                    else:
+                        source_path = source_cfg.get("path")
+                        if not source_path:
+                            errors.append(f"section_divider[{i}] source missing path")
+                        elif not Path(source_path).exists():
+                            errors.append(f"section_divider[{i}] source path not found: {source_path}")
+                        include_frontmatter = source_cfg.get("include_frontmatter", "none")
+                        if include_frontmatter not in {"full", "summary", "none"}:
+                            errors.append(f"section_divider[{i}] source include_frontmatter must be full, summary, or none")
+                elif not divider.get("title"):
+                    errors.append(f"section_divider[{i}] missing title for generic divider")
+
+                for key in ("title", "subtitle", "body"):
+                    value = divider.get(key)
+                    if value is not None and not isinstance(value, str):
+                        errors.append(f"section_divider[{i}] {key} must be a string")
+
         return errors
+
+
+class CAMStackCompiler(CompositeBundleCompiler):
+    """Compile a cam_stack / bundle_manifest_v1 manifest using bundle semantics."""
+
+    kind = "cam_stack"
+
+
+class CodexBundleCompiler(CompositeBundleCompiler):
+    """Compile a codex_bundle / bundle_manifest_v1 manifest using bundle semantics."""
+
+    kind = "codex_bundle"
 
 
 class LabelRunCompiler(ManifestCompiler):

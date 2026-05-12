@@ -3,11 +3,144 @@ import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from engine.manifest_compiler import CompositeBundleCompiler, LabelRunCompiler, StickerSheetCompiler, ForgePacketReviewCompiler
+from engine.manifest_compiler import CompositeBundleCompiler, CAMStackCompiler, CodexBundleCompiler, LabelRunCompiler, StickerSheetCompiler, ForgePacketReviewCompiler, MarkdownDocumentCompiler
 from engine.projection_plan import ProjectionPlan
 
 GF = Path(__file__).resolve().parents[1]
 SRC = GF / "fixtures" / "sources"
+
+
+def test_markdown_document_validate_valid():
+    compiler = MarkdownDocumentCompiler()
+    manifest = {
+        "kind": "markdown_document", "schema_version": "document_manifest_v1",
+        "document_id": "test-doc-manifest", "profile": "generic-report",
+        "source": {"path": str(SRC / "source-001.md")},
+        "render": {"include_toc": False, "numbersections": False, "emit_visible_provenance": False},
+    }
+    errors = compiler.validate(manifest)
+    assert errors == [], errors
+
+
+def test_markdown_document_compile_preserves_source_body_without_bundle_wrapping():
+    compiler = MarkdownDocumentCompiler()
+    manifest = {
+        "kind": "markdown_document", "schema_version": "document_manifest_v1",
+        "document_id": "test-doc-manifest", "profile": "generic-report",
+        "source": {"path": str(SRC / "source-001.md")},
+        "render": {
+            "preserve_source_metadata": True,
+            "metadata_merge_policy": "source_then_manifest_override",
+            "include_toc": False,
+            "numbersections": False,
+            "emit_visible_provenance": False,
+            "heading_transform": "preserve",
+        },
+        "metadata": {"title": "Manifest Override Title"},
+        "variables": {"sample": True, "division": "Oasis"},
+    }
+    plan = compiler.compile(manifest)
+    assembled = plan.render_source.read_text()
+
+    assert isinstance(plan, ProjectionPlan)
+    assert plan.profile_id == "generic-report"
+    assert plan.render_id == "test-doc-manifest"
+    assert plan.toc is False
+    assert plan.numbersections is False
+    assert plan.title == "Manifest Override Title"
+    assert plan.source_inventory[0]["uid"] == "test-doc-manifest"
+    assert plan.source_inventory[0]["manifest_lane"] == "markdown_document"
+    assert plan.boundary_assertions["document_manifest_lane"] is True
+    assert plan.boundary_assertions["emit_visible_provenance"] is False
+    assert plan.boundary_assertions["heading_transform"] == "preserve"
+    assert "# Source" not in assembled
+    assert "Provenance & Evidence" not in assembled
+    assert "### Primary Synthetic Source" not in assembled
+    assert "# Primary Synthetic Source" in assembled
+    assert "sample: true" in assembled
+    assert "division: Oasis" in assembled
+
+
+def test_markdown_document_rejects_unsafe_variable_keys_and_paths():
+    compiler = MarkdownDocumentCompiler()
+    manifest = {
+        "kind": "markdown_document", "schema_version": "document_manifest_v1",
+        "document_id": "bad-vars", "profile": "generic-report",
+        "source": {"path": str(SRC / "source-001.md")},
+        "variables": {
+            "sample": True,
+            "evil": "\\input{/etc/passwd}",
+            "logo_path": "/etc/passwd",
+        },
+    }
+    plan = compiler.compile(manifest)
+    accepted = plan.boundary_assertions["accepted_manifest_variables"]
+    rejected = plan.boundary_assertions["rejected_manifest_variables"]
+    assert "sample" in accepted
+    assert "evil" in rejected
+    assert "logo_path" in rejected
+
+
+def test_markdown_document_accepts_chart_theme_variables_for_mermaid():
+    compiler = MarkdownDocumentCompiler()
+    manifest = {
+        "kind": "markdown_document", "schema_version": "document_manifest_v1",
+        "document_id": "chart-vars", "profile": "cam",
+        "source": {"path": str(SRC / "source-001.md")},
+        "variables": {
+            "chart_primary": "#123456",
+            "chart_accent": "D5972B",
+            "chart_background": "#F7F4ED",
+        },
+    }
+    plan = compiler.compile(manifest)
+    assembled = plan.render_source.read_text()
+    accepted = plan.boundary_assertions["accepted_manifest_variables"]
+
+    assert "chart_primary" in accepted
+    assert "chart_accent" in accepted
+    assert "chart_primary: '#123456'" in assembled or "chart_primary: \"#123456\"" in assembled
+    assert "chart_accent: D5972B" in assembled
+
+
+def test_markdown_document_accepts_titlepage_background_variables():
+    compiler = MarkdownDocumentCompiler()
+    manifest = {
+        "kind": "markdown_document", "schema_version": "document_manifest_v1",
+        "document_id": "title-bg-doc", "profile": "cam",
+        "source": {"path": str(SRC / "source-001.md")},
+        "variables": {
+            "titlepage": True,
+            "titlepage_background_image": "assets/logo_oasis_cam.png",
+        },
+    }
+    plan = compiler.compile(manifest)
+    assembled = plan.render_source.read_text()
+    accepted = plan.boundary_assertions["accepted_manifest_variables"]
+
+    assert "titlepage" in accepted
+    assert "titlepage_background_image" in accepted
+    assert "titlepage: true" in assembled
+    assert "titlepage_background_image: assets/logo_oasis_cam.png" in assembled
+    assert "titlepage_background_image" not in plan.boundary_assertions["rejected_manifest_variables"]
+
+
+def test_markdown_document_rejects_unsafe_titlepage_background_path():
+    compiler = MarkdownDocumentCompiler()
+    manifest = {
+        "kind": "markdown_document", "schema_version": "document_manifest_v1",
+        "document_id": "bad-title-bg-doc", "profile": "cam",
+        "source": {"path": str(SRC / "source-001.md")},
+        "variables": {
+            "titlepage": True,
+            "titlepage_background_image": "/etc/passwd",
+        },
+    }
+    plan = compiler.compile(manifest)
+
+    assert "titlepage" in plan.boundary_assertions["accepted_manifest_variables"]
+    assert "titlepage_background_image" in plan.boundary_assertions["rejected_manifest_variables"]
+    assert "titlepage_background_image: /etc/passwd" not in plan.render_source.read_text()
 
 
 def test_composite_bundle_validate_valid():
@@ -79,6 +212,228 @@ def test_composite_bundle_compile_produces_plan():
     assert len(plan.assembly.source_order) == 3
     assert plan.source_inventory[0]["uid"] == "fixture-src-001"
     assert plan.render_source.exists()
+
+
+def test_composite_bundle_faithful_stack_preserves_sources_without_reader_provenance():
+    compiler = CompositeBundleCompiler()
+    manifest = {
+        "kind": "composite_bundle", "schema_version": "bundle_manifest_v1",
+        "bundle_id": "faithful-stack", "profile": "cam",
+        "sources": [
+            {
+                "uid": "fixture-src-001",
+                "path": str(SRC / "source-001.md"),
+                "role": "primary_anchor",
+                "order": 1,
+                "title": "Wrapper Should Not Render",
+                "include_frontmatter": "none",
+                "suppress_frontmatter": True,
+            },
+        ],
+        "render": {"assembly_strategy": "faithful_stack"},
+    }
+    plan = compiler.compile(manifest)
+    assembled = plan.render_source.read_text()
+
+    assert "# Wrapper Should Not Render" not in assembled
+    assert "# Primary Synthetic Source" in assembled
+    assert "## Primary Synthetic Source" not in assembled
+    assert "Provenance & Evidence" not in assembled
+    assert plan.boundary_assertions["emit_visible_provenance"] is False
+    assert plan.boundary_assertions["suppress_source_wrapper_headings"] is True
+    assert plan.boundary_assertions["preserve_source_heading_levels"] is True
+
+
+def test_composite_bundle_title_page_background_presentation_surface():
+    compiler = CompositeBundleCompiler()
+    manifest = {
+        "kind": "composite_bundle", "schema_version": "bundle_manifest_v1",
+        "bundle_id": "bundle-title-bg", "profile": "cam",
+        "presentation": {
+            "title": "Background Bundle",
+            "title_page": {
+                "enabled": True,
+                "background_image": "assets/logo_oasis_cam.png",
+            },
+        },
+        "sources": [
+            {"uid": "fixture-src-001", "path": str(SRC / "source-001.md"), "role": "primary_anchor", "order": 1},
+        ],
+    }
+    plan = compiler.compile(manifest)
+    assembled = plan.render_source.read_text()
+
+    assert assembled.startswith("---\n")
+    assert "titlepage: true" in assembled
+    assert "titlepage_background_image: assets/logo_oasis_cam.png" in assembled
+    assert plan.boundary_assertions["title_page_background_enabled"] is True
+    assert plan.boundary_assertions["titlepage_background_image"] == "assets/logo_oasis_cam.png"
+
+
+def test_composite_bundle_title_page_blank_after_presentation_surface():
+    compiler = CompositeBundleCompiler()
+    manifest = {
+        "kind": "composite_bundle", "schema_version": "bundle_manifest_v1",
+        "bundle_id": "bundle-title-blank", "profile": "cam",
+        "presentation": {
+            "title": "Blank After Bundle",
+            "title_page": {
+                "enabled": True,
+                "blank_after": True,
+            },
+        },
+        "sources": [
+            {"uid": "fixture-src-001", "path": str(SRC / "source-001.md"), "role": "primary_anchor", "order": 1},
+        ],
+    }
+    plan = compiler.compile(manifest)
+    assembled = plan.render_source.read_text()
+
+    assert assembled.startswith("---\n")
+    assert "titlepage: true" in assembled
+    assert "titlepage_blank_after: true" in assembled
+    assert "titlepage_blank_after" in plan.boundary_assertions["accepted_title_page_variables"]
+
+
+def test_composite_bundle_rejects_unsafe_title_page_background_presentation_path():
+    compiler = CompositeBundleCompiler()
+    manifest = {
+        "kind": "composite_bundle", "schema_version": "bundle_manifest_v1",
+        "bundle_id": "bad-bundle-title-bg", "profile": "cam",
+        "presentation": {
+            "title_page": {
+                "enabled": True,
+                "background_image": "../secrets/cover.png",
+            },
+        },
+        "sources": [
+            {"uid": "fixture-src-001", "path": str(SRC / "source-001.md"), "role": "primary_anchor", "order": 1},
+        ],
+    }
+    errors = compiler.validate(manifest)
+
+    assert any("presentation.title_page.background_image" in e for e in errors)
+
+
+def test_composite_bundle_inserts_generic_section_divider_before_source():
+    compiler = CompositeBundleCompiler()
+    manifest = {
+        "kind": "composite_bundle", "schema_version": "bundle_manifest_v1",
+        "bundle_id": "section-divider-generic", "profile": "generic-report",
+        "sources": [
+            {"uid": "fixture-src-001", "path": str(SRC / "source-001.md"), "role": "primary_anchor", "order": 1},
+            {"uid": "fixture-src-002", "path": str(SRC / "source-002.md"), "role": "supporting_anchor", "order": 2},
+        ],
+        "section_dividers": [
+            {
+                "uid": "evidence-title-page",
+                "before_source_uid": "fixture-src-002",
+                "title": "Evidence & Field",
+                "subtitle": "Why this section matters",
+                "body": "A compact orientation page before the evidence source.",
+            },
+        ],
+    }
+
+    plan = compiler.compile(manifest)
+    assembled = plan.render_source.read_text()
+
+    assert "Evidence \\& Field" in assembled
+    assert "Why this section matters" in assembled
+    assert "A compact orientation page" in assembled
+    assert assembled.index("Evidence \\& Field") < assembled.index("# Supporting Synthetic Source")
+    assert plan.boundary_assertions["section_dividers_enabled"] is True
+    assert plan.boundary_assertions["section_divider_count"] == 1
+    assert plan.assembly.generated_sections == ["section_divider:evidence-title-page"]
+
+
+def test_composite_bundle_inserts_source_backed_section_divider_before_source_order():
+    compiler = CompositeBundleCompiler()
+    manifest = {
+        "kind": "composite_bundle", "schema_version": "bundle_manifest_v1",
+        "bundle_id": "section-divider-source", "profile": "generic-report",
+        "sources": [
+            {"uid": "fixture-src-001", "path": str(SRC / "source-001.md"), "role": "primary_anchor", "order": 1},
+            {"uid": "fixture-src-002", "path": str(SRC / "source-002.md"), "role": "supporting_anchor", "order": 2},
+        ],
+        "section_dividers": [
+            {
+                "uid": "appendix-title-page",
+                "before_source_order": 2,
+                "source": {"path": str(SRC / "source-003.md"), "include_frontmatter": "none"},
+            },
+        ],
+    }
+
+    plan = compiler.compile(manifest)
+    assembled = plan.render_source.read_text()
+
+    assert "# Data Appendix" in assembled
+    assert "This appendix contains synthetic reference data." in assembled
+    assert assembled.index("# Data Appendix") < assembled.index("# Supporting Synthetic Source")
+    divider_inventory = plan.boundary_assertions["section_dividers"]
+    assert divider_inventory == [
+        {
+            "uid": "appendix-title-page",
+            "before_source_uid": "fixture-src-002",
+            "before_source_order": 2,
+            "kind": "source",
+            "source_path": str(SRC / "source-003.md"),
+        }
+    ]
+
+
+def test_composite_bundle_validates_section_divider_targets_and_source_paths():
+    compiler = CompositeBundleCompiler()
+    manifest = {
+        "kind": "composite_bundle", "schema_version": "bundle_manifest_v1",
+        "bundle_id": "bad-section-divider", "profile": "generic-report",
+        "sources": [
+            {"uid": "fixture-src-001", "path": str(SRC / "source-001.md"), "role": "primary_anchor", "order": 1},
+        ],
+        "section_dividers": [
+            {"uid": "missing-target", "before_source_uid": "does-not-exist", "title": "Missing"},
+            {"uid": "missing-source", "before_source_order": 1, "source": {"path": "/nonexistent/divider.md"}},
+        ],
+    }
+
+    errors = compiler.validate(manifest)
+
+    assert any("section_divider[0] before_source_uid not found" in e for e in errors)
+    assert any("section_divider[1] source path not found" in e for e in errors)
+
+
+def test_cam_stack_compile_uses_bundle_semantics_with_cam_kind():
+    compiler = CAMStackCompiler()
+    manifest = {
+        "kind": "cam_stack", "schema_version": "bundle_manifest_v1",
+        "bundle_id": "cam-stack-smoke", "profile": "cam",
+        "sources": [
+            {"uid": "fixture-src-001", "path": str(SRC / "source-001.md"), "role": "primary_anchor", "order": 1},
+            {"uid": "fixture-src-002", "path": str(SRC / "source-002.md"), "role": "supporting_anchor", "order": 2},
+        ],
+    }
+    plan = compiler.compile(manifest)
+    assert plan.profile_id == "cam"
+    assert plan.assembly.assembly_kind == "cam_stack"
+    assert plan.assembly.manifest_subtype == "cam_stack"
+    assert plan.boundary_assertions["manifest_subtype"] == "cam_stack"
+
+
+def test_codex_bundle_compile_uses_bundle_semantics_with_codex_kind():
+    compiler = CodexBundleCompiler()
+    manifest = {
+        "kind": "codex_bundle", "schema_version": "bundle_manifest_v1",
+        "bundle_id": "codex-bundle-smoke", "profile": "mythic",
+        "sources": [
+            {"uid": "fixture-src-001", "path": str(SRC / "source-001.md"), "role": "primary_anchor", "order": 1},
+        ],
+    }
+    plan = compiler.compile(manifest)
+    assert plan.profile_id == "mythic"
+    assert plan.assembly.assembly_kind == "codex_bundle"
+    assert plan.assembly.manifest_subtype == "codex_bundle"
+    assert plan.boundary_assertions["manifest_subtype"] == "codex_bundle"
 
 
 def test_composite_bundle_compile_bad_manifest_raises():
@@ -182,7 +537,7 @@ def test_bundle_toc_not_duplicated():
         "kind": "composite_bundle", "schema_version": "bundle_manifest_v1",
         "bundle_id": "test-toc", "profile": "generic-report",
         "presentation": {"title": "TOC Test", "abstract": "Should have one TOC."},
-        "render": {"include_toc": True, "toc_depth": 2},
+        "render": {"include_toc": True, "toc_depth": 2, "numbersections": False},
         "sources": [
             {"uid": "src1", "path": str(SRC / "source-001.md"), "role": "primary_anchor", "order": 1},
             {"uid": "src2", "path": str(SRC / "source-002.md"), "role": "supporting_anchor", "order": 2},
@@ -197,6 +552,7 @@ def test_bundle_toc_not_duplicated():
     # Plan should signal toc=True so PandocRenderer adds --toc
     assert plan.toc is True
     assert plan.toc_depth == 2
+    assert plan.numbersections is False
 
 
 def test_bundle_suppress_frontmatter_true():

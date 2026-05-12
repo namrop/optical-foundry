@@ -29,6 +29,7 @@ PROFILE_TEMPLATE_MAP: dict[str, str] = {
     "risk": "risk.tex",
     "tech": "tech.tex",
     "creative": "creative.tex",
+    "yugen-civic": "base.tex",
     "cam": "cam.tex",
     "mythic": "mythic.tex",
     "mythic-letter": "personal_letter.tex",
@@ -38,6 +39,7 @@ PROFILE_TEMPLATE_MAP: dict[str, str] = {
     "prometheus-packet": "generic_report.tex",
     "convergence": "convergence.tex",
     "keeper": "keeper.tex",
+    "life": "base.tex",
     "yugen-brand": "yugen_brand.tex",
     "yugen-brand-elevated": "yugen_brand_elevated.tex",
     "elian-packet": "elian_packet.tex",
@@ -53,6 +55,7 @@ PROFILE_IDS = [
     "risk",
     "tech",
     "creative",
+    "yugen-civic",
     "cam",
     "mythic",
     "mythic-letter",
@@ -62,6 +65,7 @@ PROFILE_IDS = [
     "prometheus-packet",
     "convergence",
     "keeper",
+    "life",
     "yugen-brand",
     "yugen-brand-elevated",
     "elian-packet",
@@ -88,23 +92,24 @@ TEMPLATE_CORRECTIONS: dict[str, str] = {
     "risk": "base.tex",           # risk.yaml defaults point to base.tex
     "tech": "base.tex",           # technology.yaml defaults point to base.tex
     "creative": "base.tex",       # creative.yaml defaults point to base.tex
+    "yugen-civic": "base.tex",
     "yugen-brand": "generic_report.tex",        # yugenbase.yaml → generic_report.tex
     "yugen-brand-elevated": "generic_report.tex",
 }
 
 # Profiles with TOC guard ($if(toc)$) in their effective template.
 TOC_GUARD_PROFILES = {
-    "generic-report", "risk", "tech", "creative", "cam",
+    "generic-report", "risk", "tech", "creative", "yugen-civic", "cam",
     "mythic", "letter", "mythic-letter", "mythic-letter-johannah",
-    "convergence", "keeper",
+    "convergence", "keeper", "life",
     "yugen-brand", "yugen-brand-elevated", "prometheus-packet",
 }
 
 # Profiles whose effective template defines \tightlist.
 TIGHTLIST_PROFILES = {
-    "generic-report", "risk", "tech", "creative", "cam",
+    "generic-report", "risk", "tech", "creative", "yugen-civic", "cam",
     "mythic", "letter", "mythic-letter", "mythic-letter-johannah",
-    "convergence", "keeper",
+    "convergence", "keeper", "life",
     "yugen-brand", "yugen-brand-elevated", "prometheus-packet",
     "elian-packet", "resume", "labels-avery-5164", "labels-avery-15264",
     "sticker-sheet",
@@ -112,9 +117,9 @@ TIGHTLIST_PROFILES = {
 
 # Profiles whose effective template defines \longtable.
 LONGTABLE_PROFILES = {
-    "generic-report", "risk", "tech", "creative", "cam",
+    "generic-report", "risk", "tech", "creative", "yugen-civic", "cam",
     "mythic", "letter", "mythic-letter", "mythic-letter-johannah",
-    "convergence", "keeper",
+    "convergence", "keeper", "life",
     "yugen-brand", "yugen-brand-elevated", "prometheus-packet",
     "elian-packet",
 }
@@ -123,9 +128,9 @@ LONGTABLE_PROFILES = {
 
 # Profiles fully compatible with composite_bundle rendering.
 BUNDLE_OK = {
-    "generic-report", "risk", "tech", "creative", "cam",
+    "generic-report", "risk", "tech", "creative", "yugen-civic", "cam",
     "mythic", "letter", "mythic-letter", "mythic-letter-johannah",
-    "convergence", "keeper",
+    "convergence", "keeper", "life",
     "yugen-brand", "yugen-brand-elevated",
 }
 
@@ -336,6 +341,7 @@ def _find_defaults_local_remote(profile_id: str, local_import: Path) -> tuple[Pa
     """Find defaults YAML for a profile, returning (local_path, remote_path)."""
     special: dict[str, str] = {
         "tech": "technology.yaml",
+        "yugen-civic": "civic.yaml",
         "resume": "resume_resume.yaml",
         "prometheus-packet": "prometheus_packet.yaml",
         "yugen-brand": "yugenbase.yaml",
@@ -377,6 +383,7 @@ def _find_defaults(profile_id: str) -> Path | None:
     # Special-case known mappings that don't follow naming convention.
     special: dict[str, str] = {
         "tech": "technology.yaml",
+        "yugen-civic": "civic.yaml",
         "resume": "resume_resume.yaml",
         "prometheus-packet": "prometheus_packet.yaml",
         "yugen-brand": "yugenbase.yaml",

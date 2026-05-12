@@ -22,6 +22,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from engine.manifest_registry import ManifestRegistry
 from engine.manifest_compiler import (
     CompositeBundleCompiler,
+    CAMStackCompiler,
+    CodexBundleCompiler,
+    MarkdownDocumentCompiler,
     LabelRunCompiler,
     StickerSheetCompiler,
     ForgePacketReviewCompiler,
@@ -33,7 +36,7 @@ from engine.profile_checker import check_all_profiles, check_all_profiles_json, 
 
 def _default_registry() -> ManifestRegistry:
     reg = ManifestRegistry()
-    for cls in [CompositeBundleCompiler, LabelRunCompiler, StickerSheetCompiler, ForgePacketReviewCompiler]:
+    for cls in [CompositeBundleCompiler, CAMStackCompiler, CodexBundleCompiler, MarkdownDocumentCompiler, LabelRunCompiler, StickerSheetCompiler, ForgePacketReviewCompiler]:
         reg.register(cls.kind, cls.schema_version, cls)
     return reg
 

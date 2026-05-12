@@ -46,6 +46,7 @@
 
 \usepackage{pdflscape}
 \usepackage{graphicx}
+\usepackage{eso-pic}
 
 
 %boxes
@@ -335,7 +336,13 @@ $endif$
 
 % --- Title rendering ---
 $if(titlepage)$
-  % (your existing full-page cover stays here unchanged)
+  $if(titlepage_background_image)$
+  \AddToShipoutPictureBG*{%
+    \AtPageLowerLeft{%
+      \includegraphics[width=\paperwidth,height=\paperheight]{$titlepage_background_image$}%
+    }%
+  }
+  $endif$
   \thispagestyle{empty}
   \begin{center}
     \vspace{1em}

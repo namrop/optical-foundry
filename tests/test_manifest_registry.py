@@ -47,5 +47,5 @@ def test_supported_kinds_includes_registered_and_declared():
     reg.register("composite_bundle", "bundle_manifest_v1", FakeCompiler)
     kinds = reg.supported_kinds()
     assert "composite_bundle" in kinds
-    for kind in ("label_run", "sticker_sheet", "forge_packet_review", "cam_stack", "codex_bundle"):
+    for kind in ("label_run", "sticker_sheet", "forge_packet_review", "cam_stack", "codex_bundle", "markdown_document"):
         assert kind in kinds, f"declared kind {kind} missing from supported_kinds"

@@ -35,6 +35,17 @@ def test_risk_resolves_yugenbase_and_risk_defaults():
     assert resolved.template_path.name == "base.tex"
 
 
+def test_civic_alias_resolves_to_yugen_civic_profile():
+    resolved = resolve_profile("civic")
+    assert resolved.profile_id == "civic"
+    assert resolved.canonical_profile_id == "yugen_civic"
+    assert resolved.profile_family == "document_spine"
+    assert [p.name for p in resolved.defaults_stack] == ["document_spine.yaml", "yugenbase.yaml", "civic.yaml"]
+    assert resolved.template_path.name == "base.tex"
+    assert resolved.boundary["defaults_source"] == "local"
+    assert resolved.boundary["template_source"] == "local"
+
+
 def test_mythic_letter_is_stationery_art_not_document_spine():
     resolved = resolve_profile("mythic-letter")
     assert resolved.profile_family == "stationery_art"

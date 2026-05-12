@@ -46,6 +46,18 @@ sources:
     include_frontmatter: full | summary | none
     order: 1
 
+section_dividers:
+  - uid: evidence-divider
+    before_source_uid: evidence-source
+    title: "Evidence Field"
+    subtitle: "Local strain, legitimacy, and civic coordination"
+    body: "Optional one-paragraph orientation for this section."
+  - uid: designed-divider
+    before_source_order: 4
+    source:
+      path: path/to/designed_section_title_page.md
+      include_frontmatter: none
+
 generated:
   reader_guide:
     enabled: true
@@ -102,6 +114,9 @@ validation:
    ├── \newpage + \tableofcontents (if render.include_toc)
    │
    ├── For each source (ordered by sources[].order):
+   │   ├── Section divider pages targeting this source (if any)
+   │   │   ├── Generic divider page from manifest title/subtitle/body; or
+   │   │   └── Source-backed divider page from section_dividers[].source.path
    │   ├── \newpage
    │   ├── Source section header (## Source Title)
    │   ├── Frontmatter block (if include_frontmatter != none)

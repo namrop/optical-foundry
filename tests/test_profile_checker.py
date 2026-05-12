@@ -65,6 +65,21 @@ def test_cam_is_bundle_ok():
     assert cap.template_found is not None
 
 
+def test_yugen_civic_is_bundle_ok():
+    cap = check_profile("yugen-civic")
+    assert cap.bundle_compatibility == "ok"
+    assert cap.supports_toc is True
+    assert cap.has_tightlist is True
+    assert cap.has_longtable is True
+    assert cap.defaults_found is not None
+    assert cap.defaults_found.endswith("/civic.yaml")
+    assert cap.template_found is not None
+    assert cap.template_found.endswith("/base.tex")
+    assert cap.defaults_source == "local"
+    assert cap.template_source == "local"
+    assert cap.warnings == []
+
+
 def test_mythic_letter_johannah_is_bundle_ok():
     cap = check_profile("mythic-letter-johannah")
     assert cap.bundle_compatibility == "ok"

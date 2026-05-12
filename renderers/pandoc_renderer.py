@@ -14,9 +14,14 @@ import re
 import shutil
 import subprocess
 import time
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
+from engine.d2 import D2RenderError, preprocess_d2_blocks
+from engine.graphviz import GraphvizRenderError, preprocess_graphviz_blocks
+from engine.mermaid import MermaidRenderError, preprocess_mermaid_blocks
+from engine.vega import VegaRenderError, preprocess_vega_blocks
 from engine.profile_resolver import LOCAL_IMPORT, LATEX40, ResolvedProfile, resolve_profile
 from engine.projection_plan import ProjectionPlan
 from renderers.base import Renderer
@@ -43,6 +48,17 @@ class PandocRenderer(Renderer):
         text_file = out_dir / f"{plan.render_id}.txt"
 
         # --- build pandoc command ---
+        try:
+            plan = self._prepare_mermaid_source(plan, out_dir)
+            plan = self._prepare_vega_source(plan, out_dir)
+            plan = self._prepare_d2_source(plan, out_dir)
+            plan = self._prepare_graphviz_source(plan, out_dir)
+        except (MermaidRenderError, VegaRenderError, D2RenderError, GraphvizRenderError) as exc:
+            elapsed = time.monotonic() - start
+            return self._evidence_error(
+                plan, out_dir / f"{plan.render_id}{plan.output_extension}", evidence_file, elapsed, str(exc), ["generated-figure-preprocessor"]
+            )
+
         render_source = plan.render_source.resolve()
 
         # profile defaults/template/resource environment: single-object profile
@@ -52,12 +68,13 @@ class PandocRenderer(Renderer):
         cmd_source = self._stationery_normalized_source(
             render_source, out_dir, plan.render_id, resolved_profile.profile_family
         )
+        cmd_source = self._titlepage_background_normalized_source(cmd_source, out_dir, plan.render_id)
         cmd = ["pandoc", str(cmd_source), "-o", str(output_pdf)]
         defaults_meta: dict[str, Any] = {}
         for defaults_file in resolved_profile.defaults_stack:
             cmd += ["--defaults", str(defaults_file)]
             defaults_meta = self._merge_defaults_metadata(defaults_meta, self._read_defaults_metadata(defaults_file))
-        frontmatter_variables_defaults = self._frontmatter_variables_defaults(render_source, out_dir, plan.render_id)
+        frontmatter_variables_defaults = self._frontmatter_variables_defaults(cmd_source, out_dir, plan.render_id)
         if frontmatter_variables_defaults is not None:
             cmd += ["--defaults", str(frontmatter_variables_defaults)]
 
@@ -209,6 +226,195 @@ class PandocRenderer(Renderer):
 
         evidence_file.write_text(json.dumps(evidence, indent=2) + "\n")
         return evidence
+
+    def _prepare_mermaid_source(
+        self,
+        plan: ProjectionPlan,
+        out_dir: Path,
+        mermaid_renderer=None,
+        mermaid_output_format: str = "pdf",
+    ) -> ProjectionPlan:
+        """Pre-render Mermaid fences and return an updated ProjectionPlan.
+
+        This method is intentionally pre-Pandoc so document renders and manifest
+        assembly renders share the same behavior: whatever Markdown source the
+        plan points at is scanned, Mermaid fences become generated figures, and
+        the final Pandoc pass only sees ordinary image references.
+        """
+
+        if not plan.render_source.exists():
+            # Preserve the renderer's existing missing-source error semantics;
+            # Mermaid preprocessing is only a transform for readable Markdown.
+            return plan
+
+        result = preprocess_mermaid_blocks(
+            plan.render_source,
+            profile_id=plan.profile_id,
+            output_dir=out_dir,
+            render_id=plan.render_id,
+            renderer=mermaid_renderer,
+            output_format=mermaid_output_format,
+        )
+        if not result.changed:
+            return plan
+
+        boundary = dict(plan.boundary_assertions)
+        figure_count_by_kind = dict(boundary.get("figure_count_by_kind", {}))
+        figure_count_by_kind["mermaid"] = figure_count_by_kind.get("mermaid", 0) + len(result.figure_inventory)
+        boundary.update(
+            {
+                "generated_figures_enabled": True,
+                "figure_count_by_kind": figure_count_by_kind,
+                "mermaid_enabled": True,
+                "mermaid_diagram_count": len(result.figure_inventory),
+                "mermaid_theme": result.theme,
+                "mermaid_render_mode": "pre_pandoc_generated_asset",
+            }
+        )
+        return replace(
+            plan,
+            render_source=result.rewritten_source,
+            figure_inventory=[*plan.figure_inventory, *result.figure_inventory],
+            boundary_assertions=boundary,
+        )
+
+    def _prepare_vega_source(
+        self,
+        plan: ProjectionPlan,
+        out_dir: Path,
+        vega_renderer=None,
+        vega_output_format: str = "pdf",
+    ) -> ProjectionPlan:
+        """Pre-render full Vega fences and return an updated ProjectionPlan."""
+
+        if not plan.render_source.exists():
+            return plan
+
+        result = preprocess_vega_blocks(
+            plan.render_source,
+            profile_id=plan.profile_id,
+            output_dir=out_dir,
+            render_id=plan.render_id,
+            renderer=vega_renderer,
+            output_format=vega_output_format,
+        )
+        if not result.changed:
+            return plan
+
+        boundary = dict(plan.boundary_assertions)
+        figure_count_by_kind = dict(boundary.get("figure_count_by_kind", {}))
+        figure_count_by_kind["vega"] = figure_count_by_kind.get("vega", 0) + len(result.figure_inventory)
+        boundary.update(
+            {
+                "generated_figures_enabled": True,
+                "figure_count_by_kind": figure_count_by_kind,
+                "vega_enabled": True,
+                "vega_chart_count": len(result.figure_inventory),
+                "vega_theme": result.theme,
+                "vega_render_mode": "pre_pandoc_generated_asset",
+            }
+        )
+        warnings = [warning for fig in result.figure_inventory for warning in fig.get("warnings", [])]
+        if warnings:
+            boundary["warnings"] = [*list(boundary.get("warnings", [])), *warnings]
+        return replace(
+            plan,
+            render_source=result.rewritten_source,
+            figure_inventory=[*plan.figure_inventory, *result.figure_inventory],
+            boundary_assertions=boundary,
+        )
+
+    def _prepare_d2_source(
+        self,
+        plan: ProjectionPlan,
+        out_dir: Path,
+        d2_renderer=None,
+        d2_output_format: str = "svg",
+    ) -> ProjectionPlan:
+        """Pre-render D2 architecture/system diagram fences and return an updated ProjectionPlan."""
+
+        if not plan.render_source.exists():
+            return plan
+
+        result = preprocess_d2_blocks(
+            plan.render_source,
+            profile_id=plan.profile_id,
+            output_dir=out_dir,
+            render_id=plan.render_id,
+            renderer=d2_renderer,
+            output_format=d2_output_format,
+        )
+        if not result.changed:
+            return plan
+
+        boundary = dict(plan.boundary_assertions)
+        figure_count_by_kind = dict(boundary.get("figure_count_by_kind", {}))
+        figure_count_by_kind["d2"] = figure_count_by_kind.get("d2", 0) + len(result.figure_inventory)
+        boundary.update(
+            {
+                "generated_figures_enabled": True,
+                "figure_count_by_kind": figure_count_by_kind,
+                "d2_enabled": True,
+                "d2_diagram_count": len(result.figure_inventory),
+                "d2_theme": result.theme,
+                "d2_render_mode": "pre_pandoc_generated_asset",
+            }
+        )
+        warnings = [warning for fig in result.figure_inventory for warning in fig.get("warnings", [])]
+        if warnings:
+            boundary["warnings"] = [*list(boundary.get("warnings", [])), *warnings]
+        return replace(
+            plan,
+            render_source=result.rewritten_source,
+            figure_inventory=[*plan.figure_inventory, *result.figure_inventory],
+            boundary_assertions=boundary,
+        )
+
+    def _prepare_graphviz_source(
+        self,
+        plan: ProjectionPlan,
+        out_dir: Path,
+        graphviz_renderer=None,
+        graphviz_output_format: str = "svg",
+    ) -> ProjectionPlan:
+        """Pre-render Graphviz/DOT topology diagram fences and return an updated ProjectionPlan."""
+
+        if not plan.render_source.exists():
+            return plan
+
+        result = preprocess_graphviz_blocks(
+            plan.render_source,
+            profile_id=plan.profile_id,
+            output_dir=out_dir,
+            render_id=plan.render_id,
+            renderer=graphviz_renderer,
+            output_format=graphviz_output_format,
+        )
+        if not result.changed:
+            return plan
+
+        boundary = dict(plan.boundary_assertions)
+        figure_count_by_kind = dict(boundary.get("figure_count_by_kind", {}))
+        figure_count_by_kind["graphviz_dot"] = figure_count_by_kind.get("graphviz_dot", 0) + len(result.figure_inventory)
+        boundary.update(
+            {
+                "generated_figures_enabled": True,
+                "figure_count_by_kind": figure_count_by_kind,
+                "graphviz_dot_enabled": True,
+                "graphviz_dot_diagram_count": len(result.figure_inventory),
+                "graphviz_dot_theme": result.theme,
+                "graphviz_dot_render_mode": "pre_pandoc_generated_asset",
+            }
+        )
+        warnings = [warning for fig in result.figure_inventory for warning in fig.get("warnings", [])]
+        if warnings:
+            boundary["warnings"] = [*list(boundary.get("warnings", [])), *warnings]
+        return replace(
+            plan,
+            render_source=result.rewritten_source,
+            figure_inventory=[*plan.figure_inventory, *result.figure_inventory],
+            boundary_assertions=boundary,
+        )
 
     # ── helpers ──────────────────────────────
 
@@ -387,6 +593,58 @@ class PandocRenderer(Renderer):
         return engine
 
     @staticmethod
+    def _titlepage_background_normalized_source(render_source: Path, out_dir: Path, render_id: str) -> Path:
+        """Return a render-only copy with unsafe title-page background paths removed.
+
+        Direct Markdown sources can expose Pandoc template variables through
+        top-level YAML metadata or through nested `variables:`. Because
+        `titlepage_background_image` is interpolated into a LaTeX
+        `\\includegraphics` path, keep only relative PNG/JPG/PDF resource paths
+        and strip unsafe values from the render copy without mutating the source.
+        """
+        if not render_source.exists():
+            return render_source
+        text = render_source.read_text(encoding="utf-8", errors="ignore")
+        if not text.startswith("---\n"):
+            return render_source
+        end = text.find("\n---", 4)
+        if end == -1:
+            return render_source
+        frontmatter_raw = text[4:end]
+        body = text[end + 4:]
+        try:
+            import yaml
+            frontmatter = yaml.safe_load(frontmatter_raw) or {}
+        except Exception:
+            return render_source
+        if not isinstance(frontmatter, dict):
+            return render_source
+
+        changed = False
+        if "titlepage_background_image" in frontmatter and not PandocRenderer._safe_frontmatter_resource_path(
+            frontmatter.get("titlepage_background_image")
+        ):
+            frontmatter.pop("titlepage_background_image", None)
+            changed = True
+
+        variables = frontmatter.get("variables")
+        if isinstance(variables, dict) and "titlepage_background_image" in variables:
+            if not PandocRenderer._safe_frontmatter_resource_path(variables.get("titlepage_background_image")):
+                variables = dict(variables)
+                variables.pop("titlepage_background_image", None)
+                frontmatter["variables"] = variables
+                changed = True
+
+        if not changed:
+            return render_source
+
+        path = out_dir / f"{render_id}.titlepage_guarded.md"
+        import yaml
+        fm_yaml = yaml.safe_dump(frontmatter, sort_keys=False, allow_unicode=True).rstrip()
+        path.write_text(f"---\n{fm_yaml}\n---{body}", encoding="utf-8")
+        return path
+
+    @staticmethod
     def _frontmatter_variables_defaults(render_source: Path, out_dir: Path, render_id: str) -> Path | None:
         """Materialize nested frontmatter `variables:` as a final defaults file.
 
@@ -427,6 +685,8 @@ class PandocRenderer(Renderer):
         for key, value in variables.items():
             if not isinstance(key, str) or not isinstance(value, (str, int, float, bool)):
                 continue
+            if key == "titlepage_background_image" and not PandocRenderer._safe_frontmatter_resource_path(value):
+                continue
             # If the body already carries a manual signoff, render that signoff
             # through the stationery template instead of appending the default
             # `signature_name` after a second body-level signature.
@@ -444,6 +704,17 @@ class PandocRenderer(Renderer):
         import yaml
         path.write_text(yaml.safe_dump({"variables": safe_variables}, sort_keys=False), encoding="utf-8")
         return path
+
+    @staticmethod
+    def _safe_frontmatter_resource_path(value: Any) -> bool:
+        if not isinstance(value, str) or not value.strip() or "\x00" in value or "://" in value:
+            return False
+        if any(ch in value for ch in ("{", "}", "$", "`")):
+            return False
+        path = Path(value)
+        if path.is_absolute() or ".." in path.parts:
+            return False
+        return path.suffix.lower() in {".png", ".jpg", ".jpeg", ".pdf"}
 
     @staticmethod
     def _sha256_file(path: Path) -> str:

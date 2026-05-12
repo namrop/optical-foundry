@@ -16,6 +16,7 @@ MANIFEST_SUBTYPES: dict[tuple[str, str], str] = {
     ("composite_bundle", "bundle_manifest_v1"): "bundle",
     ("cam_stack", "bundle_manifest_v1"): "bundle",
     ("codex_bundle", "bundle_manifest_v1"): "bundle",
+    ("markdown_document", "document_manifest_v1"): "document",
     ("label_run", "label_run_v1"): "label",
     ("sticker_sheet", "sticker_sheet_v1"): "sticker",
     ("forge_packet_review", "packet_review_manifest_v1"): "packet_review",

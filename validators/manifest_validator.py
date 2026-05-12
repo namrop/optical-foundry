@@ -18,12 +18,14 @@ KNOWN_KINDS = {
     "composite_bundle",
     "cam_stack",
     "codex_bundle",
+    "markdown_document",
     "label_run",
     "sticker_sheet",
     "forge_packet_review",
 }
 KNOWN_SCHEMA_VERSIONS = {
     "bundle_manifest_v1",
+    "document_manifest_v1",
     "label_run_v1",
     "sticker_sheet_v1",
     "packet_review_manifest_v1",

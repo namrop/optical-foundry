@@ -7,6 +7,11 @@ def test_valid_bundle_envelope():
     assert errors == []
 
 
+def test_valid_markdown_document_envelope():
+    errors = validate_manifest_envelope({"kind": "markdown_document", "schema_version": "document_manifest_v1", "profile": "generic-report"})
+    assert errors == []
+
+
 def test_missing_keys():
     errors = validate_manifest_envelope({"kind": "composite_bundle"})
     assert len(errors) >= 1

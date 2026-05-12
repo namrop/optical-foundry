@@ -5,7 +5,7 @@ note_role: architecture-design
 validation_profile: standard
 status: active
 created: 2026-05-03T20:17:00-04:00
-updated: 2026-05-04T23:15:00-04:00
+updated: 2026-05-12T12:01:51-04:00
 beam_home: 42_optical_foundry
 title: "Optical Foundry — Greenfield Architecture Design"
 summary: >
@@ -22,6 +22,22 @@ tags:
 ---
 
 # Optical Foundry — Greenfield Architecture Design
+
+## Runtime status — 2026-05-12
+
+This design has a working local implementation surface. The current operational entrypoint is:
+
+```bash
+cd ~/Digital_Workspace/42_optical_foundry
+python3.14 -m cli doc path/to/source.md --profile cam --output generated/<run-name>
+python3.14 -m cli manifest manifests/<manifest>.yaml --output generated/manifests/<run-name>
+```
+
+Implemented surfaces include single-document rendering, typed manifest rendering, local `40_latex` profile imports, bundle-family assembly (`composite_bundle`, `cam_stack`, `codex_bundle`), title-page background controls, generated Mermaid/Vega/D2/Graphviz figure preprocessing, section dividers, and evidence sidecars. See `docs/IMPLEMENTATION_STATUS_2026-05-12.md` for the current code-change status.
+
+The architectural boundary still holds: Foundry may read `40_latex` as a known-good reference/fallback, but normal Foundry renders must not mutate it.
+
+---
 
 ## 0. Design Philosophy
 

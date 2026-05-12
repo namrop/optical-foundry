@@ -1,0 +1,113 @@
+# Document Manifest Schema — v1
+# Reference schema for faithful single Markdown document manifests.
+
+schema: document_manifest_v1
+description: >
+  Schema for document-family render manifests. A document manifest renders one
+  canonical Markdown source through direct document semantics while allowing
+  manifest-visible metadata overrides, render controls, and guarded profile or
+  template variables. It must not assemble bundles, insert wrapper headings,
+  demote headings, or require human-visible provenance pages.
+
+required:
+  - kind
+  - schema_version
+  - document_id
+  - profile
+  - source
+
+properties:
+  kind:
+    type: string
+    const: markdown_document
+
+  schema_version:
+    type: string
+    const: document_manifest_v1
+
+  document_id:
+    type: string
+    description: Stable render/evidence identifier for the document projection.
+    pattern: "^[a-z][a-z0-9_-]+$"
+
+  profile:
+    type: string
+    description: Profile ID from the profile registry.
+
+  source:
+    type: object
+    required: [path]
+    properties:
+      path:
+        type: string
+        description: Path to the canonical Markdown source.
+      role:
+        type: string
+        default: document_source
+      heading_transform:
+        type: string
+        enum: [preserve]
+        default: preserve
+
+  metadata:
+    type: object
+    description: >
+      Manifest-owned metadata overrides. With source_then_manifest_override,
+      these fields override same-named source frontmatter fields.
+    additionalProperties: true
+
+  variables:
+    type: object
+    description: >
+      Guarded profile/template variable passthrough. Implementations should
+      allowlist scalar keys per profile contract and reject unsafe keys or paths.
+      Supported title-page controls include `titlepage: true` and
+      `titlepage_background_image: assets/path.png` for a full-page title-page
+      image background. Image paths must be relative to render resource roots;
+      absolute paths, parent traversal, URLs, and LaTeX control tokens are
+      rejected.
+    additionalProperties: true
+
+  render:
+    type: object
+    properties:
+      preserve_source_metadata:
+        type: boolean
+        default: true
+      metadata_merge_policy:
+        type: string
+        enum: [source_then_manifest_override]
+        default: source_then_manifest_override
+      include_toc:
+        type: boolean
+        default: false
+      toc_depth:
+        type: integer
+        default: 3
+      numbersections:
+        type: boolean
+        default: false
+      heading_transform:
+        type: string
+        enum: [preserve]
+        default: preserve
+      emit_visible_provenance:
+        type: boolean
+        default: false
+      preserve_source_provenance:
+        type: boolean
+        default: true
+      text_integrity_check:
+        type: boolean
+        default: true
+
+  validation:
+    type: object
+    properties:
+      require_source_path:
+        type: boolean
+        default: true
+      required_text_markers:
+        type: array
+        items:
+          type: string

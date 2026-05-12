@@ -24,6 +24,7 @@
 \usepackage{microtype}
 \usepackage{amsmath,mathtools,amssymb}
 \usepackage{pdflscape}
+\usepackage{eso-pic}
 \usepackage{fancyvrb,framed,fvextra}
 \providecommand{\pandocbounded}[1]{#1}
 \providecommand{\tightlist}{\setlength{\itemsep}{0pt}\setlength{\parskip}{0pt}}
@@ -100,8 +101,27 @@ $if(pagestyle)$
   \pagestyle{$pagestyle$}
 $endif$
 
-$if(title)$
-\maketitle
+$if(titlepage)$
+  $if(titlepage_background_image)$
+  \AddToShipoutPictureBG*{%
+    \AtPageLowerLeft{%
+      \includegraphics[width=\paperwidth,height=\paperheight]{$titlepage_background_image$}%
+    }%
+  }
+  $endif$
+  \thispagestyle{empty}
+  \begin{center}
+    \vspace*{0.2\paperheight}
+    $if(title)${\LARGE\bfseries $title$ \par}\vspace{0.75em}$endif$
+    $if(subtitle)$\textit{$subtitle$}\par\vspace{0.5em}$endif$
+    $if(author)$\vspace{0.3em}$for(author)${\small $author$}$sep$ \\ $endfor$\par$endif$
+    $if(date)$\vspace{0.3em}{\small $date$}\par$endif$
+  \end{center}
+  \clearpage
+$else$
+  $if(title)$
+  \maketitle
+  $endif$
 $endif$
 
 $if(abstract)$
