@@ -20,6 +20,7 @@ from typing import Any
 
 from engine.d2 import D2RenderError, preprocess_d2_blocks
 from engine.graphviz import GraphvizRenderError, preprocess_graphviz_blocks
+from engine.layout_images import LayoutImageRenderError, preprocess_layout_image_blocks
 from engine.mermaid import MermaidRenderError, preprocess_mermaid_blocks
 from engine.vega import VegaRenderError, preprocess_vega_blocks
 from engine.profile_resolver import LOCAL_IMPORT, LATEX40, ResolvedProfile, resolve_profile
@@ -49,14 +50,15 @@ class PandocRenderer(Renderer):
 
         # --- build pandoc command ---
         try:
+            plan = self._prepare_layout_image_source(plan, out_dir)
             plan = self._prepare_mermaid_source(plan, out_dir)
             plan = self._prepare_vega_source(plan, out_dir)
             plan = self._prepare_d2_source(plan, out_dir)
             plan = self._prepare_graphviz_source(plan, out_dir)
-        except (MermaidRenderError, VegaRenderError, D2RenderError, GraphvizRenderError) as exc:
+        except (LayoutImageRenderError, MermaidRenderError, VegaRenderError, D2RenderError, GraphvizRenderError) as exc:
             elapsed = time.monotonic() - start
             return self._evidence_error(
-                plan, out_dir / f"{plan.render_id}{plan.output_extension}", evidence_file, elapsed, str(exc), ["generated-figure-preprocessor"]
+                plan, out_dir / f"{plan.render_id}{plan.output_extension}", evidence_file, elapsed, str(exc), ["source-preprocessor"]
             )
 
         render_source = plan.render_source.resolve()
@@ -226,6 +228,63 @@ class PandocRenderer(Renderer):
 
         evidence_file.write_text(json.dumps(evidence, indent=2) + "\n")
         return evidence
+
+    def _prepare_layout_image_source(
+        self,
+        plan: ProjectionPlan,
+        out_dir: Path,
+    ) -> ProjectionPlan:
+        """Rewrite optional source-placed layout image blocks before Pandoc.
+
+        This is intentionally opt-in. Ordinary Markdown images keep their normal
+        behavior; only fenced `of-image` blocks become wrapfig/TikZ/shipout raw
+        LaTeX for PDF profiles.
+        """
+
+        if not plan.render_source.exists():
+            return plan
+
+        resolved_profile = resolve_profile(plan.profile_id)
+        if not self._layout_images_supported(plan, resolved_profile):
+            return plan
+
+        result = preprocess_layout_image_blocks(plan.render_source, out_dir, plan.render_id)
+        if not result.changed:
+            return plan
+
+        boundary = dict(plan.boundary_assertions)
+        figure_count_by_kind = dict(boundary.get("figure_count_by_kind", {}))
+        figure_count_by_kind["layout_image"] = figure_count_by_kind.get("layout_image", 0) + len(result.figure_inventory)
+        warnings = [*boundary.get("warnings", []), *result.warnings]
+        boundary.update(
+            {
+                "layout_images_enabled": True,
+                "layout_image_count": len(result.figure_inventory),
+                "layout_image_supported_profiles": "pdf_latex_profiles",
+                "layout_image_profile_family": resolved_profile.profile_family,
+                "layout_image_canonical_profile": resolved_profile.canonical_profile_id,
+                "layout_image_render_mode": "pre_pandoc_raw_latex",
+                "figure_count_by_kind": figure_count_by_kind,
+            }
+        )
+        if warnings:
+            boundary["warnings"] = warnings
+        return replace(
+            plan,
+            render_source=result.rewritten_source,
+            figure_inventory=[*plan.figure_inventory, *result.figure_inventory],
+            boundary_assertions=boundary,
+        )
+
+    @staticmethod
+    def _layout_images_supported(plan: ProjectionPlan, resolved_profile: ResolvedProfile) -> bool:
+        """Return true when `of-image` blocks can safely lower to raw LaTeX."""
+
+        return (
+            str(plan.output_format).lower() == "pdf"
+            and plan.output_extension == ".pdf"
+            and resolved_profile.template_path.suffix.lower() == ".tex"
+        )
 
     def _prepare_mermaid_source(
         self,
