@@ -282,6 +282,75 @@ def _frontmatter_to_markdown(frontmatter: dict[str, Any], body: str) -> str:
     return f"---\n{fm_yaml}\n---{separator}{body}"
 
 
+DOCUMENT_MATTER_ROLE_ALIASES = {
+    "document_source": "document_source",
+    "document": "document_source",
+    "body": "document_source",
+    "mainmatter": "document_source",
+    "main_matter": "document_source",
+    "frontmatter": "frontmatter",
+    "front_matter": "frontmatter",
+}
+DOCUMENT_MATTER_SOURCE_KEYS = ("role", "document_role", "matter")
+DOCUMENT_MATTER_FRONTMATTER_KEYS = ("document_role", "render_role", "matter", "role")
+
+
+def _normalize_document_matter_role(value: Any) -> str | None:
+    if not isinstance(value, str) or not value.strip():
+        return None
+    key = value.strip().lower().replace("-", "_")
+    return DOCUMENT_MATTER_ROLE_ALIASES.get(key)
+
+
+def _resolve_document_matter_role(
+    values: dict[str, Any],
+    keys: tuple[str, ...],
+    scope: str,
+    ignore_unknown_keys: tuple[str, ...] = (),
+) -> str | None:
+    normalized: list[tuple[str, str]] = []
+    for key in keys:
+        value = values.get(key)
+        if value is None or value == "":
+            continue
+        role = _normalize_document_matter_role(value)
+        if role is None:
+            if key in ignore_unknown_keys:
+                continue
+            raise ValueError(f"{scope}.{key} must be document_source/mainmatter or frontmatter")
+        normalized.append((key, role))
+    roles = {role for _key, role in normalized}
+    if len(roles) > 1:
+        details = ", ".join(f"{key}={role}" for key, role in normalized)
+        raise ValueError(f"conflicting {scope} matter roles: {details}")
+    return normalized[0][1] if normalized else None
+
+
+def _document_matter_role(source_cfg: dict[str, Any], source_fm: dict[str, Any]) -> str:
+    """Return the document/memoir matter role for a single-document render.
+
+    Manifest source config is authoritative; source frontmatter is a weaker hint
+    used by the direct document path and by document manifests that do not set a
+    source role. Bundle-family renders use their ordered source roles instead.
+    """
+    source_role = _resolve_document_matter_role(source_cfg, DOCUMENT_MATTER_SOURCE_KEYS, "source")
+    if source_role:
+        return source_role
+    frontmatter_role = _resolve_document_matter_role(
+        source_fm,
+        DOCUMENT_MATTER_FRONTMATTER_KEYS,
+        "source_frontmatter",
+        ignore_unknown_keys=("role",),
+    )
+    return frontmatter_role or "document_source"
+
+
+def _inject_document_matter_command(body: str, matter_role: str) -> str:
+    if matter_role == "frontmatter":
+        return "\\frontmatter\n\n" + body.lstrip("\n")
+    return body
+
+
 def _latex_escape_text(value: Any) -> str:
     """Escape scalar text for raw LaTeX divider blocks."""
     text = "" if value is None else str(value)
@@ -549,9 +618,11 @@ class MarkdownDocumentCompiler(ManifestCompiler):
         toc = bool(render_cfg["include_toc"]) if "include_toc" in render_cfg else bool(merged_fm.get("toc", True))
         toc_depth = int(render_cfg.get("toc_depth", merged_fm.get("toc-depth", 3)))
         numbersections = bool(render_cfg["numbersections"]) if "numbersections" in render_cfg else bool(merged_fm.get("numbersections", True))
+        matter_role = _document_matter_role(source_cfg, source_fm)
 
         render_id = manifest.get("document_id") or manifest.get("render_id") or merged_fm.get("uid") or source_path.stem
-        compiled_text = _frontmatter_to_markdown(merged_fm, body)
+        compiled_body = _inject_document_matter_command(body, matter_role)
+        compiled_text = _frontmatter_to_markdown(merged_fm, compiled_body)
         render_source = _write_temp_markdown(f"document_{render_id}", compiled_text)
 
         source_digest = _sha256_hex(source_path)
@@ -567,6 +638,8 @@ class MarkdownDocumentCompiler(ManifestCompiler):
             "heading_transform": render_cfg.get("heading_transform", source_cfg.get("heading_transform", "preserve")),
             "emit_visible_provenance": render_cfg.get("emit_visible_provenance", False),
             "preserve_source_provenance": render_cfg.get("preserve_source_provenance", True),
+            "document_matter_role": matter_role,
+            "frontmatter_mode_enabled": matter_role == "frontmatter",
             "accepted_manifest_variables": sorted(accepted_variables.keys()),
             "rejected_manifest_variables": rejected_variables,
         }
@@ -591,7 +664,7 @@ class MarkdownDocumentCompiler(ManifestCompiler):
                 {
                     "uid": str(render_id),
                     "path": str(source_path),
-                    "role": source_cfg.get("role", "document_source"),
+                    "role": matter_role,
                     "digest_sha256": source_digest,
                     "manifest_lane": self.kind,
                 }
@@ -618,6 +691,22 @@ class MarkdownDocumentCompiler(ManifestCompiler):
                 errors.append("source.path is required")
             elif not Path(path).exists():
                 errors.append(f"source.path not found: {path}")
+            else:
+                source_fm, _source_body = _split_frontmatter_and_body(Path(path).read_text(errors="ignore"))
+                if source_fm:
+                    try:
+                        _resolve_document_matter_role(
+                            source_fm,
+                            DOCUMENT_MATTER_FRONTMATTER_KEYS,
+                            "source_frontmatter",
+                            ignore_unknown_keys=("role",),
+                        )
+                    except ValueError as exc:
+                        errors.append(str(exc))
+            try:
+                _resolve_document_matter_role(source, DOCUMENT_MATTER_SOURCE_KEYS, "source")
+            except ValueError as exc:
+                errors.append(str(exc))
         render_cfg = manifest.get("render", {})
         if render_cfg is not None and not isinstance(render_cfg, dict):
             errors.append("render must be a mapping")

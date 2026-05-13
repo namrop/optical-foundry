@@ -3,6 +3,8 @@ import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+import pytest
+
 from engine.projection_plan import ProjectionPlan
 from renderers.pandoc_renderer import PandocRenderer
 from renderers.document_renderer import DocumentRenderer
@@ -33,6 +35,67 @@ def test_document_renderer_parses_frontmatter():
     )
     assert plan.profile_id == "generic-report"
     assert plan.render_source == src
+
+
+def test_document_renderer_frontmatter_role_emits_memoir_frontmatter(tmp_path):
+    src = tmp_path / "preface.md"
+    src.write_text(
+        "---\n"
+        "uid: preface-direct\n"
+        "title: Preface Direct\n"
+        "role: frontmatter\n"
+        "---\n\n"
+        "# Preface\n\n"
+        "Direct document path body.\n"
+    )
+
+    plan = DocumentRenderer().build_plan(src, profile_id="cam")
+    assembled = plan.render_source.read_text()
+
+    assert plan.render_id == "preface-direct"
+    assert plan.source_inventory[0]["role"] == "frontmatter"
+    assert assembled.startswith("---\n")
+    assert "\n\\frontmatter\n" in assembled
+    assert assembled.index("\\frontmatter") < assembled.index("# Preface")
+    assert plan.boundary_assertions["document_matter_role"] == "frontmatter"
+    assert plan.boundary_assertions["frontmatter_mode_enabled"] is True
+
+
+def test_document_renderer_rejects_conflicting_frontmatter_role_aliases(tmp_path):
+    src = tmp_path / "conflicting-preface.md"
+    src.write_text(
+        "---\n"
+        "uid: conflicting-preface\n"
+        "title: Conflicting Preface\n"
+        "role: frontmatter\n"
+        "matter: document_source\n"
+        "---\n\n"
+        "# Preface\n\n"
+        "Direct document path body.\n"
+    )
+
+    with pytest.raises(ValueError, match="conflicting source_frontmatter matter roles"):
+        DocumentRenderer().build_plan(src, profile_id="cam")
+
+
+def test_document_renderer_ignores_unrelated_frontmatter_role(tmp_path):
+    src = tmp_path / "contract.md"
+    src.write_text(
+        "---\n"
+        "uid: contract-direct\n"
+        "title: Contract Direct\n"
+        "role: contract\n"
+        "---\n\n"
+        "# Contract\n\n"
+        "Direct document path body.\n"
+    )
+
+    plan = DocumentRenderer().build_plan(src, profile_id="cam")
+
+    assert plan.render_id == "contract-direct"
+    assert plan.render_source == src
+    assert plan.source_inventory[0]["role"] == "document_source"
+    assert plan.boundary_assertions["document_matter_role"] == "document_source"
 
 
 def test_pandoc_renderer_template_inference_uses_shared_profile_resolver():

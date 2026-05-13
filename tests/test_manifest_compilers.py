@@ -22,6 +22,78 @@ def test_markdown_document_validate_valid():
     assert errors == [], errors
 
 
+def test_markdown_document_validate_rejects_unknown_source_matter_role():
+    compiler = MarkdownDocumentCompiler()
+    manifest = {
+        "kind": "markdown_document", "schema_version": "document_manifest_v1",
+        "document_id": "bad-role", "profile": "generic-report",
+        "source": {"path": str(SRC / "source-001.md"), "role": "appendix"},
+    }
+
+    errors = compiler.validate(manifest)
+
+    assert "source.role must be document_source/mainmatter or frontmatter" in errors
+
+
+def test_markdown_document_validate_rejects_conflicting_source_matter_aliases():
+    compiler = MarkdownDocumentCompiler()
+    manifest = {
+        "kind": "markdown_document", "schema_version": "document_manifest_v1",
+        "document_id": "conflicting-role", "profile": "generic-report",
+        "source": {
+            "path": str(SRC / "source-001.md"),
+            "role": "frontmatter",
+            "matter": "document_source",
+        },
+    }
+
+    errors = compiler.validate(manifest)
+
+    assert any(error.startswith("conflicting source matter roles") for error in errors)
+
+
+def test_markdown_document_ignores_unrelated_source_frontmatter_role(tmp_path):
+    source = tmp_path / "contract.md"
+    source.write_text(
+        "---\n"
+        "uid: contract-source\n"
+        "title: Contract Source\n"
+        "role: contract\n"
+        "---\n\n"
+        "# Contract\n\n"
+        "Body.\n"
+    )
+    compiler = MarkdownDocumentCompiler()
+    manifest = {
+        "kind": "markdown_document", "schema_version": "document_manifest_v1",
+        "document_id": "contract-doc", "profile": "cam",
+        "source": {"path": str(source)},
+        "render": {"include_toc": False, "numbersections": False},
+    }
+
+    assert compiler.validate(manifest) == []
+    plan = compiler.compile(manifest)
+
+    assert plan.source_inventory[0]["role"] == "document_source"
+    assert plan.boundary_assertions["document_matter_role"] == "document_source"
+
+
+def test_markdown_document_manifest_source_matter_aliases_normalize_to_document_source():
+    compiler = MarkdownDocumentCompiler()
+    manifest = {
+        "kind": "markdown_document", "schema_version": "document_manifest_v1",
+        "document_id": "mainmatter-doc", "profile": "cam",
+        "source": {"path": str(SRC / "source-001.md"), "matter": "main-matter"},
+        "render": {"include_toc": False, "numbersections": False},
+    }
+
+    plan = compiler.compile(manifest)
+
+    assert plan.source_inventory[0]["role"] == "document_source"
+    assert plan.boundary_assertions["document_matter_role"] == "document_source"
+    assert plan.boundary_assertions["frontmatter_mode_enabled"] is False
+
+
 def test_markdown_document_compile_preserves_source_body_without_bundle_wrapping():
     compiler = MarkdownDocumentCompiler()
     manifest = {
@@ -59,6 +131,26 @@ def test_markdown_document_compile_preserves_source_body_without_bundle_wrapping
     assert "# Primary Synthetic Source" in assembled
     assert "sample: true" in assembled
     assert "division: Oasis" in assembled
+
+
+def test_markdown_document_manifest_source_role_frontmatter_emits_memoir_frontmatter():
+    compiler = MarkdownDocumentCompiler()
+    manifest = {
+        "kind": "markdown_document", "schema_version": "document_manifest_v1",
+        "document_id": "frontmatter-doc", "profile": "cam",
+        "source": {"path": str(SRC / "source-001.md"), "role": "frontmatter"},
+        "render": {"include_toc": False, "numbersections": False},
+    }
+
+    plan = compiler.compile(manifest)
+    assembled = plan.render_source.read_text()
+
+    assert assembled.startswith("---\n")
+    assert "\n\\frontmatter\n" in assembled
+    assert assembled.index("\\frontmatter") < assembled.index("# Primary Synthetic Source")
+    assert plan.source_inventory[0]["role"] == "frontmatter"
+    assert plan.boundary_assertions["document_matter_role"] == "frontmatter"
+    assert plan.boundary_assertions["frontmatter_mode_enabled"] is True
 
 
 def test_markdown_document_rejects_unsafe_variable_keys_and_paths():

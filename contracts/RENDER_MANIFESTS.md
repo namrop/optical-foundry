@@ -59,6 +59,18 @@ breaks:
   frontmatter/mainmatter/appendix transitions, and lets the memoir/Pandoc TOC
   reflect that section structure.
 
+For single-document matter designation:
+
+- `markdown_document.source.role: frontmatter` emits a memoir `\\frontmatter`
+  command before the source body while preserving faithful single-document
+  semantics.
+- The direct Markdown document path also honors source YAML frontmatter fields
+  `role: frontmatter`, `document_role: frontmatter`, `render_role: frontmatter`,
+  or `matter: frontmatter`.
+- This exists for parity and emergency use. If a document has meaningful front
+  matter/main matter structure, the durable lane is usually a manifest, because
+  the manifest can make ordering, transitions, validation, and evidence explicit.
+
 For title pages:
 
 - `markdown_document.variables.titlepage: true` enables the full title-page path
