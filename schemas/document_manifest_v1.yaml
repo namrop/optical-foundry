@@ -43,7 +43,20 @@ properties:
         description: Path to the canonical Markdown source.
       role:
         type: string
+        enum: [document_source, document, body, mainmatter, main_matter, main-matter, frontmatter, front_matter, front-matter]
         default: document_source
+        description: >
+          Single-document matter role. `frontmatter` emits a memoir `\\frontmatter`
+          transition before the source body. Use this sparingly on the direct
+          document path; recurring front matter usually warrants a manifest.
+      document_role:
+        type: string
+        enum: [document_source, document, body, mainmatter, main_matter, main-matter, frontmatter, front_matter, front-matter]
+        description: Alias for role when source authors want an explicit document-role key.
+      matter:
+        type: string
+        enum: [document_source, document, body, mainmatter, main_matter, main-matter, frontmatter, front_matter, front-matter]
+        description: Alias for role focused on memoir/Pandoc matter designation.
       heading_transform:
         type: string
         enum: [preserve]
