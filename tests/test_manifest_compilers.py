@@ -35,6 +35,86 @@ def test_markdown_document_validate_rejects_unknown_source_matter_role():
     assert "source.role must be document_source/mainmatter or frontmatter" in errors
 
 
+def test_markdown_document_render_page_size_normalizes_supported_values():
+    compiler = MarkdownDocumentCompiler()
+    manifest = {
+        "kind": "markdown_document", "schema_version": "document_manifest_v1",
+        "document_id": "a5-doc", "profile": "generic-report",
+        "source": {"path": str(SRC / "source-001.md")},
+        "render": {"include_toc": False, "numbersections": False, "page_size": "A5"},
+    }
+
+    assert compiler.validate(manifest) == []
+    plan = compiler.compile(manifest)
+
+    assert plan.page_size == "a5"
+    assert plan.boundary_assertions["page_size"] == "a5"
+    assert plan.boundary_assertions["page_size_source"] == "manifest.render"
+
+
+def test_markdown_document_render_page_margin_normalizes_supported_value():
+    compiler = MarkdownDocumentCompiler()
+    manifest = {
+        "kind": "markdown_document", "schema_version": "document_manifest_v1",
+        "document_id": "a5-margin-doc", "profile": "generic-report",
+        "source": {"path": str(SRC / "source-001.md")},
+        "render": {"include_toc": False, "numbersections": False, "page_size": "A5", "margin": "0.72in"},
+    }
+
+    assert compiler.validate(manifest) == []
+    plan = compiler.compile(manifest)
+
+    assert plan.page_size == "a5"
+    assert plan.page_margins == ["margin=0.72in"]
+    assert plan.boundary_assertions["page_margins"] == ["margin=0.72in"]
+    assert plan.boundary_assertions["page_margins_source"] == "manifest.render"
+
+
+def test_markdown_document_validate_rejects_unsafe_page_margin():
+    compiler = MarkdownDocumentCompiler()
+    manifest = {
+        "kind": "markdown_document", "schema_version": "document_manifest_v1",
+        "document_id": "bad-margin", "profile": "generic-report",
+        "source": {"path": str(SRC / "source-001.md")},
+        "render": {"page_size": "a5", "margin": "0.7in, \\input{evil}"},
+    }
+
+    errors = compiler.validate(manifest)
+
+    assert "render.margin must be a plain TeX dimension" in errors
+
+
+def test_markdown_document_uses_profile_default_page_size_when_render_omits_it():
+    compiler = MarkdownDocumentCompiler()
+    manifest = {
+        "kind": "markdown_document", "schema_version": "document_manifest_v1",
+        "document_id": "codex0-profile-default-doc", "profile": "codex0",
+        "source": {"path": str(SRC / "source-001.md")},
+        "render": {"include_toc": False, "numbersections": False},
+    }
+
+    assert compiler.validate(manifest) == []
+    plan = compiler.compile(manifest)
+
+    assert plan.page_size == "a5"
+    assert plan.boundary_assertions["page_size"] == "a5"
+    assert plan.boundary_assertions["page_size_source"] == "profile_defaults"
+
+
+def test_markdown_document_validate_rejects_unsupported_page_size():
+    compiler = MarkdownDocumentCompiler()
+    manifest = {
+        "kind": "markdown_document", "schema_version": "document_manifest_v1",
+        "document_id": "bad-page-size", "profile": "generic-report",
+        "source": {"path": str(SRC / "source-001.md")},
+        "render": {"page_size": "legal"},
+    }
+
+    errors = compiler.validate(manifest)
+
+    assert "render.page_size must be one of: a4, a5, half_letter, letter" in errors
+
+
 def test_markdown_document_validate_rejects_conflicting_source_matter_aliases():
     compiler = MarkdownDocumentCompiler()
     manifest = {
@@ -304,6 +384,63 @@ def test_composite_bundle_compile_produces_plan():
     assert len(plan.assembly.source_order) == 3
     assert plan.source_inventory[0]["uid"] == "fixture-src-001"
     assert plan.render_source.exists()
+
+
+def test_composite_bundle_render_page_size_accepts_half_letter_alias():
+    compiler = CompositeBundleCompiler()
+    manifest = {
+        "kind": "composite_bundle", "schema_version": "bundle_manifest_v1",
+        "bundle_id": "half-letter-bundle", "profile": "cam",
+        "sources": [
+            {"uid": "fixture-src-001", "path": str(SRC / "source-001.md"), "role": "primary_anchor", "order": 1},
+        ],
+        "render": {"page_size": "half letter", "include_toc": False},
+    }
+
+    assert compiler.validate(manifest) == []
+    plan = compiler.compile(manifest)
+
+    assert plan.page_size == "half_letter"
+    assert plan.boundary_assertions["page_size"] == "half_letter"
+    assert plan.boundary_assertions["page_size_source"] == "manifest.render"
+
+
+def test_composite_bundle_render_page_margin_accepts_safe_dimension():
+    compiler = CompositeBundleCompiler()
+    manifest = {
+        "kind": "composite_bundle", "schema_version": "bundle_manifest_v1",
+        "bundle_id": "half-letter-margin-bundle", "profile": "cam",
+        "sources": [
+            {"uid": "fixture-src-001", "path": str(SRC / "source-001.md"), "role": "primary_anchor", "order": 1},
+        ],
+        "render": {"page_size": "half letter", "margin": "0.7in", "include_toc": False},
+    }
+
+    assert compiler.validate(manifest) == []
+    plan = compiler.compile(manifest)
+
+    assert plan.page_margins == ["margin=0.7in"]
+    assert plan.boundary_assertions["page_margins"] == ["margin=0.7in"]
+    assert plan.boundary_assertions["page_margins_source"] == "manifest.render"
+
+
+def test_cam_stack_uses_codex0_profile_default_a5_page_size():
+    compiler = CAMStackCompiler()
+    manifest = {
+        "kind": "cam_stack", "schema_version": "bundle_manifest_v1",
+        "bundle_id": "codex0-profile-default-cam-stack", "profile": "codex0",
+        "sources": [
+            {"uid": "fixture-src-001", "path": str(SRC / "source-001.md"), "role": "primary_anchor", "order": 1},
+        ],
+        "render": {"include_toc": False, "numbersections": False},
+    }
+
+    assert compiler.validate(manifest) == []
+    plan = compiler.compile(manifest)
+
+    assert plan.page_size == "a5"
+    assert plan.boundary_assertions["page_size"] == "a5"
+    assert plan.boundary_assertions["page_size_source"] == "profile_defaults"
 
 
 def test_composite_bundle_faithful_stack_preserves_sources_without_reader_provenance():

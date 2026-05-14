@@ -27,6 +27,13 @@ from typing import Any
 from engine.render_planner import RenderPlan, plan_manifest_render
 from engine.projection_plan import AssemblyView, ProjectionPlan
 from engine.profile_resolver import resolve_profile
+from engine.page_size import (
+    PageMarginError,
+    PageSizeError,
+    page_margins_from_mapping,
+    page_size_from_mapping,
+    profile_default_page_size,
+)
 
 
 class ManifestCompiler(ABC):
@@ -80,6 +87,15 @@ def _sha256_hex(path: Path) -> str:
         for chunk in iter(lambda: f.read(65536), b""):
             h.update(chunk)
     return h.hexdigest()
+
+
+def _profile_default_page_size_for(profile_id: str) -> tuple[str, str]:
+    """Return a profile-authored page size, falling back to letter/default."""
+
+    try:
+        return profile_default_page_size(resolve_profile(profile_id).defaults_stack)
+    except Exception:
+        return "letter", "default"
 
 
 def _split_frontmatter_and_body(text: str) -> tuple[dict[str, Any] | None, str]:
@@ -618,6 +634,14 @@ class MarkdownDocumentCompiler(ManifestCompiler):
         toc = bool(render_cfg["include_toc"]) if "include_toc" in render_cfg else bool(merged_fm.get("toc", True))
         toc_depth = int(render_cfg.get("toc_depth", merged_fm.get("toc-depth", 3)))
         numbersections = bool(render_cfg["numbersections"]) if "numbersections" in render_cfg else bool(merged_fm.get("numbersections", True))
+        page_size, page_size_source = page_size_from_mapping(render_cfg, scope="manifest.render")
+        if page_size_source == "default" and preserve_source_metadata:
+            page_size, page_size_source = page_size_from_mapping(source_fm, scope="source_frontmatter")
+        if page_size_source == "default":
+            page_size, page_size_source = _profile_default_page_size_for(profile)
+        page_margins, page_margins_source = page_margins_from_mapping(render_cfg, scope="manifest.render")
+        if page_margins_source == "default" and preserve_source_metadata:
+            page_margins, page_margins_source = page_margins_from_mapping(source_fm, scope="source_frontmatter")
         matter_role = _document_matter_role(source_cfg, source_fm)
 
         render_id = manifest.get("document_id") or manifest.get("render_id") or merged_fm.get("uid") or source_path.stem
@@ -640,6 +664,10 @@ class MarkdownDocumentCompiler(ManifestCompiler):
             "preserve_source_provenance": render_cfg.get("preserve_source_provenance", True),
             "document_matter_role": matter_role,
             "frontmatter_mode_enabled": matter_role == "frontmatter",
+            "page_size": page_size,
+            "page_size_source": page_size_source,
+            "page_margins": page_margins,
+            "page_margins_source": page_margins_source,
             "accepted_manifest_variables": sorted(accepted_variables.keys()),
             "rejected_manifest_variables": rejected_variables,
         }
@@ -660,6 +688,8 @@ class MarkdownDocumentCompiler(ManifestCompiler):
             toc=toc,
             toc_depth=toc_depth,
             numbersections=numbersections,
+            page_size=page_size,
+            page_margins=page_margins,
             source_inventory=[
                 {
                     "uid": str(render_id),
@@ -710,6 +740,15 @@ class MarkdownDocumentCompiler(ManifestCompiler):
         render_cfg = manifest.get("render", {})
         if render_cfg is not None and not isinstance(render_cfg, dict):
             errors.append("render must be a mapping")
+        elif isinstance(render_cfg, dict):
+            try:
+                page_size_from_mapping(render_cfg, scope="render")
+            except PageSizeError as exc:
+                errors.append(str(exc))
+            try:
+                page_margins_from_mapping(render_cfg, scope="render")
+            except PageMarginError as exc:
+                errors.append(str(exc))
         variables = manifest.get("variables", {})
         if variables is not None and not isinstance(variables, dict):
             errors.append("variables must be a mapping")
@@ -741,6 +780,12 @@ class CompositeBundleCompiler(ManifestCompiler):
         date = pres.get("date", "")
 
         render_cfg = manifest.get("render", {})
+        page_size, page_size_source = page_size_from_mapping(render_cfg if isinstance(render_cfg, dict) else {}, scope="manifest.render")
+        if page_size_source == "default":
+            page_size, page_size_source = _profile_default_page_size_for(profile)
+        page_margins, page_margins_source = page_margins_from_mapping(
+            render_cfg if isinstance(render_cfg, dict) else {}, scope="manifest.render"
+        )
         gen_cfg = manifest.get("generated", {})
         title_page_variables = _title_page_variables_from_presentation(pres)
         accepted_title_page_variables, rejected_title_page_variables = _guard_manifest_variables(title_page_variables)
@@ -948,6 +993,8 @@ class CompositeBundleCompiler(ManifestCompiler):
             toc=render_cfg.get("include_toc", True),
             toc_depth=render_cfg.get("toc_depth", 3),
             numbersections=render_cfg.get("numbersections", True),
+            page_size=page_size,
+            page_margins=page_margins,
             assembly=assembly,
             source_inventory=[
                 {
@@ -971,6 +1018,10 @@ class CompositeBundleCompiler(ManifestCompiler):
                 "title_page_background_enabled": "titlepage_background_image" in accepted_title_page_variables,
                 "titlepage_background_image": accepted_title_page_variables.get("titlepage_background_image", ""),
                 "titlepage_blank_after": "titlepage_blank_after" in accepted_title_page_variables,
+                "page_size": page_size,
+                "page_size_source": page_size_source,
+                "page_margins": page_margins,
+                "page_margins_source": page_margins_source,
                 "accepted_title_page_variables": sorted(accepted_title_page_variables.keys()),
                 "rejected_title_page_variables": rejected_title_page_variables,
                 "section_divider_numbering": section_divider_numbering,
@@ -1000,6 +1051,19 @@ class CompositeBundleCompiler(ManifestCompiler):
 
         if not manifest.get("profile"):
             errors.append("missing profile")
+
+        render_cfg = manifest.get("render", {})
+        if render_cfg is not None and not isinstance(render_cfg, dict):
+            errors.append("render must be a mapping")
+        elif isinstance(render_cfg, dict):
+            try:
+                page_size_from_mapping(render_cfg, scope="render")
+            except PageSizeError as exc:
+                errors.append(str(exc))
+            try:
+                page_margins_from_mapping(render_cfg, scope="render")
+            except PageMarginError as exc:
+                errors.append(str(exc))
 
         pres = manifest.get("presentation", {})
         if pres is not None and not isinstance(pres, dict):

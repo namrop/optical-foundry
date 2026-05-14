@@ -23,6 +23,13 @@ from engine.graphviz import GraphvizRenderError, preprocess_graphviz_blocks
 from engine.layout_images import LayoutImageRenderError, preprocess_layout_image_blocks
 from engine.mermaid import MermaidRenderError, preprocess_mermaid_blocks
 from engine.vega import VegaRenderError, preprocess_vega_blocks
+from engine.page_size import (
+    collect_profile_classoption,
+    collect_profile_geometry,
+    merge_page_size_classoption,
+    merge_page_size_geometry,
+    normalize_page_size,
+)
 from engine.profile_resolver import LOCAL_IMPORT, LATEX40, ResolvedProfile, resolve_profile
 from engine.projection_plan import ProjectionPlan
 from renderers.base import Renderer
@@ -79,6 +86,10 @@ class PandocRenderer(Renderer):
         frontmatter_variables_defaults = self._frontmatter_variables_defaults(cmd_source, out_dir, plan.render_id)
         if frontmatter_variables_defaults is not None:
             cmd += ["--defaults", str(frontmatter_variables_defaults)]
+        page_geometry_defaults = self._page_geometry_defaults(plan, resolved_profile, out_dir)
+        page_geometry_options = self._page_geometry_options(plan, resolved_profile)
+        if page_geometry_defaults is not None:
+            cmd += ["--defaults", str(page_geometry_defaults)]
 
         # template — prefer explicit plan override, otherwise resolved profile
         if plan.template:
@@ -125,9 +136,9 @@ class PandocRenderer(Renderer):
             if resource_path.exists():
                 cmd += ["--resource-path", str(resource_path)]
 
-        # page geometry
-        if plan.page_size and plan.page_size != "letter":
-            cmd += ["--metadata", f"papersize:{plan.page_size}"]
+        # Page geometry is lowered through a final defaults overlay so imported
+        # templates that rely on `$geometry$` receive both the requested paper
+        # size and their existing margin/profile geometry options.
 
         # --- execute ---
         try:
@@ -194,6 +205,9 @@ class PandocRenderer(Renderer):
                 "command": " ".join(cmd),
                 "pandoc_version": self._pandoc_version(),
                 "tex_engine": xe,
+                "page_geometry_defaults": str(page_geometry_defaults) if page_geometry_defaults else "",
+                "page_geometry_options": page_geometry_options,
+                "page_margin_options": plan.page_margins if page_geometry_options else [],
                 "render_duration_ms": int(elapsed * 1000),
                 "rendered_at": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
                 "success": success,
@@ -650,6 +664,54 @@ class PandocRenderer(Renderer):
             if isinstance(data, dict) and data.get("pdf-engine"):
                 engine = str(data["pdf-engine"])
         return engine
+
+    @staticmethod
+    def _page_geometry_options(plan: ProjectionPlan, resolved_profile: ResolvedProfile) -> list[str]:
+        """Return final geometry options for the requested page size.
+
+        The imported 40_latex templates use `$geometry$` rather than Pandoc's
+        default `$papersize$` documentclass plumbing. To make page-size overrides
+        reliable across those templates, lower the semantic page size into
+        geometry-package options while preserving non-paper geometry such as
+        margins from the resolved profile defaults stack.
+        """
+
+        page_size = normalize_page_size(plan.page_size)
+        if resolved_profile.profile_family != "document_spine":
+            return []
+        if page_size == "letter" and not plan.page_margins:
+            return []
+        existing_geometry = collect_profile_geometry(resolved_profile.defaults_stack)
+        return merge_page_size_geometry(page_size, existing_geometry, plan.page_margins)
+
+    @staticmethod
+    def _page_geometry_defaults(plan: ProjectionPlan, resolved_profile: ResolvedProfile, out_dir: Path) -> Path | None:
+        """Materialize page-size geometry as the final Pandoc defaults overlay.
+
+        Geometry options alone update TeX layout dimensions in the imported
+        memoir templates, but XeTeX can still emit a letter MediaBox unless the
+        paper special is emitted after geometry establishes ``\\paperwidth`` and
+        ``\\paperheight``. Lower the physical page assertion through
+        ``header-includes`` so this remains a render-only overlay instead of a
+        local profile/template mutation.
+        """
+
+        geometry = PandocRenderer._page_geometry_options(plan, resolved_profile)
+        if not geometry:
+            return None
+        path = out_dir / f"{plan.render_id}.page_geometry.yaml"
+        import yaml
+        variables: dict[str, Any] = {
+            "geometry": geometry,
+            "header-includes": [r"\special{papersize=\the\paperwidth,\the\paperheight}"],
+        }
+        existing_classoption = collect_profile_classoption(resolved_profile.defaults_stack)
+        classoption = merge_page_size_classoption(plan.page_size, existing_classoption)
+        if classoption:
+            variables["classoption"] = classoption
+        payload = {"variables": variables}
+        path.write_text(yaml.safe_dump(payload, sort_keys=False), encoding="utf-8")
+        return path
 
     @staticmethod
     def _titlepage_background_normalized_source(render_source: Path, out_dir: Path, render_id: str) -> Path:
