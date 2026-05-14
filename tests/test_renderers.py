@@ -6,6 +6,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import pytest
 
 from engine.projection_plan import ProjectionPlan
+from engine.profile_resolver import resolve_profile
 from renderers.pandoc_renderer import PandocRenderer
 from renderers.document_renderer import DocumentRenderer
 
@@ -61,6 +62,46 @@ def test_document_renderer_frontmatter_role_emits_memoir_frontmatter(tmp_path):
     assert plan.boundary_assertions["frontmatter_mode_enabled"] is True
 
 
+def test_document_renderer_frontmatter_page_size_sets_projection_plan(tmp_path):
+    src = tmp_path / "a4-direct.md"
+    src.write_text(
+        "---\n"
+        "uid: a4-direct\n"
+        "title: A4 Direct\n"
+        "page_size: A4\n"
+        "---\n\n"
+        "# A4 Direct\n\n"
+        "Direct document path body.\n"
+    )
+
+    plan = DocumentRenderer().build_plan(src, profile_id="cam")
+
+    assert plan.page_size == "a4"
+    assert plan.boundary_assertions["page_size"] == "a4"
+    assert plan.boundary_assertions["page_size_source"] == "source_frontmatter"
+
+
+def test_document_renderer_frontmatter_page_margin_sets_projection_plan(tmp_path):
+    src = tmp_path / "margin-direct.md"
+    src.write_text(
+        "---\n"
+        "uid: margin-direct\n"
+        "title: Margin Direct\n"
+        "page_size: half_letter\n"
+        "page_margin: 0.7in\n"
+        "---\n\n"
+        "# Margin Direct\n\n"
+        "Direct document path body.\n"
+    )
+
+    plan = DocumentRenderer().build_plan(src, profile_id="cam")
+
+    assert plan.page_size == "half_letter"
+    assert plan.page_margins == ["margin=0.7in"]
+    assert plan.boundary_assertions["page_margins"] == ["margin=0.7in"]
+    assert plan.boundary_assertions["page_margins_source"] == "source_frontmatter"
+
+
 def test_document_renderer_rejects_conflicting_frontmatter_role_aliases(tmp_path):
     src = tmp_path / "conflicting-preface.md"
     src.write_text(
@@ -111,11 +152,161 @@ def test_pandoc_renderer_template_inference_uses_shared_profile_resolver():
     assert r._infer_template("sticker-sheet") == "label_sheet.tex"
 
 
+def test_pandoc_renderer_page_size_defaults_merge_profile_geometry(tmp_path):
+    plan = ProjectionPlan(
+        profile_id="cam",
+        render_id="half-letter-doc",
+        render_source=GF / "fixtures" / "sources" / "source-001.md",
+        page_size="half_letter",
+    )
+    resolved = resolve_profile("cam")
+
+    defaults = PandocRenderer()._page_geometry_defaults(plan, resolved, tmp_path)
+
+    assert defaults is not None
+    import yaml
+    data = yaml.safe_load(defaults.read_text())
+    variables = data["variables"]
+    geometry = variables["geometry"]
+    assert geometry[:2] == ["paperwidth=5.5in", "paperheight=8.5in"]
+    assert "margin=1in" in geometry
+    assert variables["header-includes"] == [r"\special{papersize=\the\paperwidth,\the\paperheight}"]
+    assert variables["classoption"] == ["11pt", "oneside", "statementpaper"]
+
+
+def test_pandoc_renderer_page_margin_override_replaces_profile_margin(tmp_path):
+    plan = ProjectionPlan(
+        profile_id="cam",
+        render_id="half-letter-custom-margin-doc",
+        render_source=GF / "fixtures" / "sources" / "source-001.md",
+        page_size="half_letter",
+        page_margins=["margin=0.7in"],
+    )
+    resolved = resolve_profile("cam")
+
+    defaults = PandocRenderer()._page_geometry_defaults(plan, resolved, tmp_path)
+
+    assert defaults is not None
+    import yaml
+    variables = yaml.safe_load(defaults.read_text())["variables"]
+    assert variables["geometry"] == ["paperwidth=5.5in", "paperheight=8.5in", "margin=0.7in"]
+    assert variables["classoption"] == ["11pt", "oneside", "statementpaper"]
+
+
+def test_pandoc_renderer_page_size_overlay_is_document_spine_only(tmp_path):
+    plan = ProjectionPlan(
+        profile_id="letter",
+        render_id="letter-a4-ignored",
+        render_source=GF / "fixtures" / "sources" / "source-001.md",
+        page_size="a4",
+        page_margins=["margin=0.7in"],
+    )
+    resolved = resolve_profile("letter")
+
+    defaults = PandocRenderer()._page_geometry_defaults(plan, resolved, tmp_path)
+
+    assert defaults is None
+
+
+def test_non_document_spine_evidence_reports_no_applied_page_margin(tmp_path):
+    import re
+    import shutil
+    import subprocess
+
+    if not shutil.which("pandoc") or not shutil.which("pdfinfo"):
+        pytest.skip("pandoc/pdfinfo not available")
+    if not Path("/Library/TeX/texbin/xelatex").exists() and not shutil.which("xelatex"):
+        pytest.skip("xelatex not available")
+
+    src = tmp_path / "letter-a5-request-ignored.md"
+    src.write_text(
+        "---\n"
+        "uid: letter-a5-request-ignored\n"
+        "title: Letter A5 Request Ignored\n"
+        "author: Optical Foundry\n"
+        "page_size: a5\n"
+        "page_margin: 0.7in\n"
+        "toc: false\n"
+        "numbersections: false\n"
+        "---\n\n"
+        "Dear Keeper,\n\n"
+        "Stationery profiles keep their fixed paper assumptions.\n"
+    )
+
+    evidence = DocumentRenderer().render(src, profile_id="mythic-letter", output_dir=str(tmp_path / "out"))
+
+    assert evidence["render_metadata"]["profile_family"] == "stationery_art"
+    assert evidence["render_metadata"]["page_geometry_options"] == []
+    assert evidence["render_metadata"]["page_margin_options"] == []
+    pdf_path = Path(evidence["output"]["pdf_path"])
+    info = subprocess.check_output(["pdfinfo", "-box", str(pdf_path)], text=True)
+    media = re.search(r"^MediaBox:\s+0\.00\s+0\.00\s+([0-9.]+)\s+([0-9.]+)", info, re.MULTILINE)
+    assert media, info
+    width, height = (float(media.group(1)), float(media.group(2)))
+    assert width == pytest.approx(612.0, abs=1.0)
+    assert height == pytest.approx(792.0, abs=1.0)
+
+
+def test_pandoc_renderer_page_size_defaults_for_codex0_preserve_mythic_density(tmp_path):
+    plan = ProjectionPlan(
+        profile_id="codex0",
+        render_id="codex0-default-a5-doc",
+        render_source=GF / "fixtures" / "sources" / "source-001.md",
+        page_size="a5",
+    )
+    resolved = resolve_profile("codex0")
+
+    defaults = PandocRenderer()._page_geometry_defaults(plan, resolved, tmp_path)
+
+    assert defaults is not None
+    import yaml
+    data = yaml.safe_load(defaults.read_text())
+    variables = data["variables"]
+    assert variables["geometry"][:1] == ["a5paper"]
+    assert "margin=1in" in variables["geometry"]
+    assert variables["classoption"] == ["11pt", "oneside", "a5paper"]
+
+
 def test_read_defaults_metadata_detects_placeholder_assets():
     r = PandocRenderer()
     meta = r._read_defaults_metadata(GF / "profiles" / "40_latex_import" / "defaults" / "elian_packet.yaml")
     assert meta["boundary"]["placeholder_assets"] is True
     assert any("placeholder" in w.lower() for w in meta["warnings"])
+
+
+def test_pandoc_renderer_a4_page_size_sets_pdf_mediabox(tmp_path):
+    import re
+    import shutil
+    import subprocess
+
+    if not shutil.which("pandoc") or not shutil.which("pdfinfo"):
+        pytest.skip("pandoc/pdfinfo not available")
+    if not Path("/Library/TeX/texbin/xelatex").exists() and not shutil.which("xelatex"):
+        pytest.skip("xelatex not available")
+
+    src = tmp_path / "a4-mediabox.md"
+    src.write_text(
+        "---\n"
+        "uid: a4-mediabox\n"
+        "title: A4 MediaBox\n"
+        "page_size: a4\n"
+        "toc: false\n"
+        "numbersections: false\n"
+        "---\n\n"
+        "# A4 MediaBox\n\n"
+        "The physical PDF page box must be A4, not just the TeX geometry.\n"
+    )
+
+    evidence = DocumentRenderer().render(src, profile_id="cam", output_dir=str(tmp_path / "out"))
+    assert evidence["render_metadata"]["page_geometry_options"][:1] == ["a4paper"]
+
+    pdf_path = Path(evidence["output"]["pdf_path"])
+    info = subprocess.check_output(["pdfinfo", "-box", str(pdf_path)], text=True)
+    media = re.search(r"^MediaBox:\s+0\.00\s+0\.00\s+([0-9.]+)\s+([0-9.]+)", info, re.MULTILINE)
+    assert media, info
+    width, height = (float(media.group(1)), float(media.group(2)))
+    assert width == pytest.approx(595.28, abs=1.0)
+    assert height == pytest.approx(841.89, abs=1.0)
 
 
 def test_pandoc_renderer_prepares_mermaid_source_before_pandoc(tmp_path):

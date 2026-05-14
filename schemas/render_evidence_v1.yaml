@@ -64,6 +64,12 @@ properties:
       command: { type: string }
       pandoc_version: { type: string }
       tex_engine: { type: string }
+      page_geometry_options:
+        type: array
+        items: { type: string }
+      page_margin_options:
+        type: array
+        items: { type: string }
       render_duration_ms: { type: integer }
       rendered_at: { type: string }
 

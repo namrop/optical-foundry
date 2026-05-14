@@ -84,6 +84,11 @@ figures:
 render:
   include_toc: true
   toc_depth: 3
+  page_size: letter | a4 | a5 | half_letter
+  margin: 0.7in              # optional document-spine uniform override
+  margins:                   # optional side-specific document-spine override
+    top: 0.7in
+    bottom: 0.8in
   numbering_strategy: continuous | section_dividers | faithful_section_dividers
   preserve_source_provenance: true
   text_integrity_check: true

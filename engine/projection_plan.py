@@ -79,6 +79,7 @@ class ProjectionPlan:
     output_format: str = "pdf"
     output_extension: str = ".pdf"
     page_size: str = "letter"
+    page_margins: list[str] = field(default_factory=list)
     orientation: str = "portrait"
 
     # Source inventory for evidence sidecars.

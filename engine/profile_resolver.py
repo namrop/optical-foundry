@@ -64,6 +64,10 @@ ALIASES: dict[str, str] = {
     "generic_report": "generic-report",
     "mythic_letter": "mythic-letter",
     "mythic_letter_johannah": "mythic-letter-johannah",
+    "codex0_a5": "codex0",
+    "codex0-a5": "codex0",
+    "codex_0": "codex0",
+    "codex-0": "codex0",
     "prometheus_packet": "prometheus-packet",
 }
 
@@ -101,6 +105,7 @@ PROFILE_SPECS: dict[str, dict[str, Any]] = {
     },
     "cam": {"family": "document_spine", "defaults": ["document_spine.yaml", "yugenbase.yaml", "cam.yaml"], "template": "cam.tex"},
     "mythic": {"family": "document_spine", "defaults": ["document_spine.yaml", "yugenbase.yaml", "mythic.yaml"], "template": "mythic.tex"},
+    "codex0": {"family": "document_spine", "defaults": ["document_spine.yaml", "yugenbase.yaml", "codex0.yaml"], "template": "codex0.tex"},
     "convergence": {"family": "document_spine", "defaults": ["document_spine.yaml", "yugenbase.yaml", "convergence.yaml"], "template": "convergence.tex"},
     "keeper": {"family": "document_spine", "defaults": ["document_spine.yaml", "yugenbase.yaml", "keeper.yaml"], "template": "keeper.tex"},
     "prometheus-packet": {"family": "document_spine", "defaults": ["prometheus_packet.yaml"], "template": "generic_report.tex"},

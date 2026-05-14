@@ -11,6 +11,7 @@ import uuid
 from pathlib import Path
 
 from engine.profile_resolver import resolve_profile
+from engine.page_size import page_margins_from_mapping, page_size_from_mapping, profile_default_page_size
 from engine.projection_plan import ProjectionPlan
 from engine.manifest_compiler import (
     _document_matter_role,
@@ -61,6 +62,15 @@ def _profile_default_toc(profile_id: str) -> bool:
     return False if resolved.profile_family == "stationery_art" else True
 
 
+def _profile_default_page_size(profile_id: str) -> tuple[str, str]:
+    """Return profile-authored page size default for direct document renders."""
+
+    try:
+        return profile_default_page_size(resolve_profile(profile_id).defaults_stack)
+    except Exception:
+        return "letter", "default"
+
+
 class DocumentRenderer:
     """Render a single Markdown file through Pandoc."""
 
@@ -74,6 +84,10 @@ class DocumentRenderer:
 
         render_id = fm.get("uid") or source.stem or uuid.uuid4().hex[:12]
         matter_role = _document_matter_role({}, fm)
+        page_size, page_size_source = page_size_from_mapping(fm, scope="source_frontmatter")
+        if page_size_source == "default":
+            page_size, page_size_source = _profile_default_page_size(profile_id)
+        page_margins, page_margins_source = page_margins_from_mapping(fm, scope="source_frontmatter")
         render_source = source
         if matter_role == "frontmatter":
             compiled_body = _inject_document_matter_command(body, matter_role)
@@ -93,6 +107,8 @@ class DocumentRenderer:
             toc=fm.get("toc", _profile_default_toc(profile_id)),
             toc_depth=fm.get("toc-depth", 3),
             numbersections=fm.get("numbersections", True),
+            page_size=page_size,
+            page_margins=page_margins,
             source_inventory=[
                 {
                     "uid": render_id,
@@ -108,6 +124,10 @@ class DocumentRenderer:
                 "assembly_strategy": "direct_markdown",
                 "document_matter_role": matter_role,
                 "frontmatter_mode_enabled": matter_role == "frontmatter",
+                "page_size": page_size,
+                "page_size_source": page_size_source,
+                "page_margins": page_margins,
+                "page_margins_source": page_margins_source,
             },
         )
 

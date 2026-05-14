@@ -71,6 +71,26 @@ For single-document matter designation:
   matter/main matter structure, the durable lane is usually a manifest, because
   the manifest can make ordering, transitions, validation, and evidence explicit.
 
+For page size and margins:
+
+- `markdown_document.render.page_size` supports `letter` (default), `a4`, `a5`,
+  and `half_letter`/`half-letter`/`half letter`/`statement`.
+- The direct Markdown document path also honors source YAML frontmatter
+  `page_size` / `page-size` / `papersize` for the same supported values.
+- Bundle-family manifests (`composite_bundle`, `cam_stack`, `codex_bundle`) use
+  `render.page_size` with the same supported values.
+- Page-size overrides are scoped to document-spine PDF/LaTeX profiles. Letter,
+  stationery, labels, stickers, resume, and campaign-art templates retain their
+  paper assumptions unless they move onto a document-spine profile path.
+- Optional margin overrides are `render.margin` / source-frontmatter
+  `page_margin` for a uniform margin, or `render.margins` for side-specific
+  `top`, `bottom`, `left`, `right`, `inner`, `outer`, `hmargin`, `vmargin` values.
+  Values must be plain TeX dimensions such as `0.7in` or `18mm`; omission
+  preserves the active profile's default margin.
+- Page-size and margin overrides are PDF/LaTeX geometry overrides. They are
+  reliable for document-spine profiles/templates that consume Pandoc `geometry`
+  variables. Non-PDF outputs and physical sheet specs remain separate lanes.
+
 For title pages:
 
 - `markdown_document.variables.titlepage: true` enables the full title-page path
