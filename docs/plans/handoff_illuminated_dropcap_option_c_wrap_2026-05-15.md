@@ -90,6 +90,7 @@ Observed defects to fix:
 
 - Text begins too far to the right of the image initial.
 - The first wrapped lines feel loose/disconnected from the illuminated image.
+- Alignment should be deliberately tunable: top-aligning the paragraph text with the image is acceptable, but Luis expects bottom-alignment with the image may be easier and visually better for Option C.
 - The wrap geometry is manually tuned rather than profile-owned.
 - The current image initial works as proof-of-concept, but the asset should eventually be promoted/vendored if used beyond generated mockups.
 
@@ -107,6 +108,7 @@ The target behavior:
    - number of wrapped lines;
    - gap between image and text;
    - vertical nudge / baseline correction;
+   - text/image alignment mode, with bottom-aligned text treated as a first-class candidate and top-aligned text retained as an acceptable fallback;
    - optional alt/live initial fallback policy.
 4. Work in both:
    - `mythic` profile / letter-sized story renders;
@@ -131,7 +133,8 @@ Sketch:
 % 3 wrapped line count, e.g. 4
 % 4 gap, e.g. .08in
 % 5 vertical raise, e.g. -.72in
-\newcommand{\OFImageInitialSetup}[5]{%
+% 6 alignment mode, e.g. bottom | top
+\newcommand{\OFImageInitialSetup}[6]{%
   \par\noindent
   \setlength{\OFInitialWidth}{#2}%
   \setlength{\OFInitialGap}{#4}%
@@ -141,6 +144,8 @@ Sketch:
   \hspace{\dimexpr\OFInitialWidth+\OFInitialGap\relax}%
 }
 ```
+
+For the first implementation pass, test both top and bottom alignment visually, but treat **bottom-aligned text** as the preferred candidate if it produces the tighter/easier Option C composition Luis expects. In practice this likely means choosing the vertical raise/baseline correction so the paragraph text anchors near the lower part of the image block rather than starting at the image top.
 
 Usage shape:
 
@@ -241,6 +246,7 @@ A finished worker pass should produce:
 3. Text wrap with no large gap beside the illuminated initial.
    - Target visual gap: roughly `.06in` to `.12in` between image block and text.
    - First 3–4 lines should visibly wrap beside the image.
+   - Include an alignment comparison or clearly record the chosen alignment. Bottom-aligned paragraph text is the preferred candidate if it looks tighter/easier than top alignment.
 4. No baked body text inside images.
 5. Evidence JSON reports:
    - `success: true`;
