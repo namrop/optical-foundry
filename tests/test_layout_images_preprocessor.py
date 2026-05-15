@@ -143,6 +143,7 @@ def test_image_initial_block_rewrites_to_bottom_aligned_macro_with_live_text(tmp
         "width: .84in\n"
         "lines: 4\n"
         "gap: .08in\n"
+        "raise: 0in\n"
         "align: bottom\n"
         "```\n"
         "hey awoke on a beach at the edge of the desert.\n"

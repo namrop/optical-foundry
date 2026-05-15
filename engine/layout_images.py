@@ -40,7 +40,7 @@ class LayoutImagePreprocessResult:
 _BLOCK_RE = re.compile(r"^```of-image\s*\n(?P<body>.*?)^```\s*$", re.MULTILINE | re.DOTALL)
 _INITIAL_BLOCK_RE = re.compile(r"^```of-initial\s*\n(?P<body>.*?)^```\s*\n?", re.MULTILINE | re.DOTALL)
 _SAFE_DIMENSION_RE = re.compile(
-    r"^-?(?:\\(?:linewidth|textwidth|textheight|paperwidth|paperheight)|(?:0?\.\d+|[1-9]\d*(?:\.\d+)?)(?:\\(?:linewidth|textwidth|textheight|paperwidth|paperheight)|in|cm|mm|pt|em|ex))$"
+    r"^-?(?:\\(?:linewidth|textwidth|textheight|paperwidth|paperheight)|(?:0(?:\.0+)?|0?\.\d+|[1-9]\d*(?:\.\d+)?)(?:\\(?:linewidth|textwidth|textheight|paperwidth|paperheight)|in|cm|mm|pt|em|ex))$"
 )
 _SAFE_OPACITY_RE = re.compile(r"^(?:0(?:\.\d+)?|1(?:\.0+)?)$")
 _ALLOWED_PLACEMENTS = {"wrap", "absolute", "inline", "block"}
