@@ -1,4 +1,7 @@
 """Tests for optional layout-image source blocks."""
+import os
+import shutil
+import subprocess
 import sys
 from pathlib import Path
 
@@ -7,6 +10,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from engine.layout_images import LayoutImageRenderError, preprocess_layout_image_blocks
+from engine.profile_resolver import resolve_profile
 from engine.projection_plan import ProjectionPlan
 from renderers.pandoc_renderer import PandocRenderer
 
@@ -41,6 +45,28 @@ def test_layout_image_wrap_block_rewrites_to_wrapfig_with_header_includes(tmp_pa
     assert "\\OFDecorativeImage{width=\\linewidth}{assets/portrait.png}{vignette}" in rewritten
     assert "\\caption{Moonlit portrait}" in rewritten
     assert "```of-image" not in rewritten
+
+
+def test_layout_image_wrapfig_package_is_vendored_and_resolves_through_profile_env():
+    kpsewhich = shutil.which("kpsewhich") or "/Library/TeX/texbin/kpsewhich"
+    if not Path(kpsewhich).exists():
+        pytest.skip("kpsewhich not available")
+
+    resolved = resolve_profile("mythic")
+    env = os.environ.copy()
+    env.update(resolved.render_environment.env_overrides())
+    result = subprocess.run(
+        [kpsewhich, "wrapfig.sty"],
+        capture_output=True,
+        text=True,
+        timeout=10,
+        env=env,
+    )
+
+    assert result.returncode == 0
+    path = Path(result.stdout.strip())
+    assert path.name == "wrapfig.sty"
+    assert "42_optical_foundry/profiles/40_latex_import/styles/texmf" in str(path)
 
 
 def test_layout_image_absolute_block_rewrites_to_shipout_overlay(tmp_path):

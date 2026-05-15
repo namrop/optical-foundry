@@ -3,7 +3,7 @@ uid: optical-foundry-code-change-status-2026-05-12
 kind: implementation_status
 status: active
 created: 2026-05-12
-updated: 2026-05-12
+updated: 2026-05-15
 title: "Optical Foundry — Code Change Status"
 summary: "Code-level status for the May 2026 Optical Foundry manifest/rendering changes. This document intentionally excludes packet-specific document content notes."
 tags:
@@ -109,6 +109,22 @@ Updated implementation surfaces include:
 - render-manifest contract documentation for generic vs source-backed divider semantics, title/divider background support, and intentional blank-page text;
 - compiler tests for generic divider insertion, source-backed divider insertion, recto/title blank defaults, divider profile/background/blank-after controls, faithful numbering, template blank text, and validation failures;
 - smoke evidence for title-page blank defaults, divider backgrounds, section-divider manifest behavior, and divider-faithful TOC/numbering.
+
+### 4. Vendored `wrapfig` support for source-placed layout images
+
+The local imported TeX tree now vendors CTAN `wrapfig.sty` under:
+
+```text
+profiles/40_latex_import/styles/texmf/tex/latex/generic/wrapfig.sty
+```
+
+This makes `of-image` blocks using `placement: wrap` resolve through the
+profile-owned `TEXINPUTS` path instead of silently depending on the host TeX
+installation. The `wrapfig` package remains covered by the LaTeX Project Public
+License as noted in the upstream package header.
+
+Regression coverage verifies that `kpsewhich wrapfig.sty` resolves to the local
+Optical Foundry import tree when run with the resolved profile environment.
 
 ## Full-page image placement boundary
 
