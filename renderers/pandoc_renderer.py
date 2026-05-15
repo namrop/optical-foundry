@@ -262,26 +262,47 @@ class PandocRenderer(Renderer):
         if not self._layout_images_supported(plan, resolved_profile):
             return plan
 
-        result = preprocess_layout_image_blocks(plan.render_source, out_dir, plan.render_id)
+        result = preprocess_layout_image_blocks(
+            plan.render_source,
+            out_dir,
+            plan.render_id,
+            [LOCAL_IMPORT, *resolved_profile.asset_roots],
+        )
         if not result.changed:
             return plan
 
         boundary = dict(plan.boundary_assertions)
         figure_count_by_kind = dict(boundary.get("figure_count_by_kind", {}))
-        figure_count_by_kind["layout_image"] = figure_count_by_kind.get("layout_image", 0) + len(result.figure_inventory)
+        for entry in result.figure_inventory:
+            kind = str(entry.get("kind", "layout_image"))
+            figure_count_by_kind[kind] = figure_count_by_kind.get(kind, 0) + 1
+        layout_image_count = sum(1 for entry in result.figure_inventory if entry.get("kind") == "layout_image")
+        image_initials = [entry for entry in result.figure_inventory if entry.get("kind") == "image_initial"]
         warnings = [*boundary.get("warnings", []), *result.warnings]
-        boundary.update(
-            {
-                "layout_images_enabled": True,
-                "layout_image_count": len(result.figure_inventory),
-                "layout_image_supported_profiles": "pdf_latex_profiles",
-                "layout_image_profile_family": resolved_profile.profile_family,
-                "layout_image_canonical_profile": resolved_profile.canonical_profile_id,
-                "layout_image_render_mode": "pre_pandoc_raw_latex",
-                "layout_image_graphicspath_roots": result.graphicspath_roots,
-                "figure_count_by_kind": figure_count_by_kind,
-            }
-        )
+        updates = {
+            "layout_image_supported_profiles": "pdf_latex_profiles",
+            "layout_image_profile_family": resolved_profile.profile_family,
+            "layout_image_canonical_profile": resolved_profile.canonical_profile_id,
+            "layout_image_render_mode": "pre_pandoc_raw_latex",
+            "layout_image_graphicspath_roots": result.graphicspath_roots,
+            "figure_count_by_kind": figure_count_by_kind,
+        }
+        if layout_image_count:
+            updates.update(
+                {
+                    "layout_images_enabled": True,
+                    "layout_image_count": layout_image_count,
+                }
+            )
+        if image_initials:
+            updates.update(
+                {
+                    "image_initials_enabled": True,
+                    "image_initial_count": len(image_initials),
+                    "image_initial_default_alignment": image_initials[0].get("alignment", "bottom"),
+                }
+            )
+        boundary.update(updates)
         if warnings:
             boundary["warnings"] = warnings
         return replace(
@@ -702,9 +723,13 @@ class PandocRenderer(Renderer):
             return None
         path = out_dir / f"{plan.render_id}.page_geometry.yaml"
         import yaml
+        header_includes = [
+            *PandocRenderer._source_header_includes(plan.render_source),
+            r"\special{papersize=\the\paperwidth,\the\paperheight}",
+        ]
         variables: dict[str, Any] = {
             "geometry": geometry,
-            "header-includes": [r"\special{papersize=\the\paperwidth,\the\paperheight}"],
+            "header-includes": list(dict.fromkeys(header_includes)),
         }
         existing_classoption = collect_profile_classoption(resolved_profile.defaults_stack)
         classoption = merge_page_size_classoption(plan.page_size, existing_classoption)
@@ -713,6 +738,30 @@ class PandocRenderer(Renderer):
         payload = {"variables": variables}
         path.write_text(yaml.safe_dump(payload, sort_keys=False), encoding="utf-8")
         return path
+
+    @staticmethod
+    def _source_header_includes(render_source: Path) -> list[str]:
+        if not render_source.exists():
+            return []
+        text = render_source.read_text(encoding="utf-8", errors="ignore")
+        if not text.startswith("---\n"):
+            return []
+        end = text.find("\n---", 4)
+        if end == -1:
+            return []
+        try:
+            import yaml
+            frontmatter = yaml.safe_load(text[4:end]) or {}
+        except Exception:
+            return []
+        if not isinstance(frontmatter, dict):
+            return []
+        includes = frontmatter.get("header-includes") or frontmatter.get("header_includes")
+        if includes is None:
+            return []
+        if isinstance(includes, list):
+            return [str(item) for item in includes if item]
+        return [str(includes)] if includes else []
 
     @staticmethod
     def _titlepage_background_normalized_source(render_source: Path, out_dir: Path, render_id: str) -> Path:

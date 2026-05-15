@@ -1,0 +1,33 @@
+\NeedsTeXFormat{LaTeX2e}
+\ProvidesPackage{yugenillumination}[2026/05/15 Optical Foundry illuminated initial helpers]
+
+\RequirePackage{graphicx}
+
+\newlength{\OFInitialWidth}
+\newlength{\OFInitialGap}
+\newsavebox{\OFInitialBox}
+\newcommand{\OFInitialAlignTop}{top}
+\newcommand{\OFInitialAlignBottom}{bottom}
+
+% Args:
+% 1 image path
+% 2 image width, e.g. .84in
+% 3 wrapped line count, e.g. 4
+% 4 gap between image block and text, e.g. .08in
+% 5 vertical nudge/baseline correction, e.g. 0in or -.08in
+% 6 alignment mode: bottom | top
+\newcommand{\OFImageInitialSetup}[6]{%
+  \par\noindent%
+  \setlength{\OFInitialWidth}{#2}%
+  \setlength{\OFInitialGap}{#4}%
+  \sbox{\OFInitialBox}{\includegraphics[width=\OFInitialWidth]{#1}}%
+  \hangindent=\dimexpr\OFInitialWidth+\OFInitialGap\relax%
+  \hangafter=-#3%
+  \def\OFInitialRequestedAlign{#6}%
+  \ifx\OFInitialRequestedAlign\OFInitialAlignTop%
+    \makebox[0pt][l]{\raisebox{\dimexpr\baselineskip-\ht\OFInitialBox+#5\relax}{\usebox{\OFInitialBox}}}%
+  \else%
+    \makebox[0pt][l]{\raisebox{\dimexpr#3\baselineskip-\ht\OFInitialBox+#5\relax}{\usebox{\OFInitialBox}}}%
+  \fi%
+  \hspace{\dimexpr\OFInitialWidth+\OFInitialGap\relax}%
+}

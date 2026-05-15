@@ -69,7 +69,28 @@ def test_layout_image_wrapfig_package_is_vendored_and_resolves_through_profile_e
     assert result.returncode == 0
     path = Path(result.stdout.strip())
     assert path.name == "wrapfig.sty"
-    assert "42_optical_foundry/profiles/40_latex_import/styles/texmf" in str(path)
+    assert path == Path("profiles/40_latex_import/styles/texmf/tex/latex/generic/wrapfig.sty").resolve()
+
+
+def test_illumination_package_resolves_through_profile_env():
+    kpsewhich = shutil.which("kpsewhich") or "/Library/TeX/texbin/kpsewhich"
+    if not Path(kpsewhich).exists():
+        pytest.skip("kpsewhich not available")
+
+    resolved = resolve_profile("mythic")
+    env = os.environ.copy()
+    env.update(resolved.render_environment.env_overrides())
+    result = subprocess.run(
+        [kpsewhich, "yugenillumination.sty"],
+        capture_output=True,
+        text=True,
+        timeout=10,
+        env=env,
+    )
+
+    assert result.returncode == 0
+    path = Path(result.stdout.strip())
+    assert path == Path("profiles/40_latex_import/styles/texmf/tex/latex/yugen/yugenillumination.sty").resolve()
 
 
 def test_layout_image_adds_source_and_output_graphicspath_roots(tmp_path):
@@ -111,6 +132,85 @@ def test_layout_image_rejects_tex_unsafe_source_directory_with_actionable_error(
     assert "TeX-unsafe characters" in message
     assert "Move the source/render output to a path without" in message
     assert "%" in message
+
+
+def test_image_initial_block_rewrites_to_bottom_aligned_macro_with_live_text(tmp_path):
+    src = tmp_path / "initial-image.md"
+    src.write_text(
+        "# Initial Image\n\n"
+        "```of-initial\n"
+        "path: assets/dropcaps/oasis/T.png\n"
+        "width: .84in\n"
+        "lines: 4\n"
+        "gap: .08in\n"
+        "align: bottom\n"
+        "```\n"
+        "hey awoke on a beach at the edge of the desert.\n"
+    )
+
+    result = preprocess_layout_image_blocks(src, tmp_path, "initial-image")
+    rewritten = result.rewritten_source.read_text()
+
+    assert result.changed is True
+    assert result.figure_inventory[0]["kind"] == "image_initial"
+    assert result.figure_inventory[0]["alignment"] == "bottom"
+    assert result.figure_inventory[0]["wrapped_lines"] == 4
+    assert "\\usepackage{yugenillumination}" in rewritten
+    assert "\\OFImageInitialSetup{assets/dropcaps/oasis/T.png}{.84in}{4}{.08in}{0in}{bottom}" in rewritten
+    assert "hey awoke on a beach" in rewritten
+    assert "```of-initial" not in rewritten
+
+
+def test_image_initial_top_alignment_and_raise_are_explicit(tmp_path):
+    src = tmp_path / "initial-image-top.md"
+    src.write_text(
+        "```of-initial\n"
+        "path: assets/dropcaps/codex0/I.png\n"
+        "width: .72in\n"
+        "lines: 3\n"
+        "gap: .06in\n"
+        "align: top\n"
+        "raise: -.1in\n"
+        "```\n"
+        "n the beginning, the threshold stood open.\n"
+    )
+
+    result = preprocess_layout_image_blocks(src, tmp_path, "initial-image-top")
+    rewritten = result.rewritten_source.read_text()
+
+    assert "\\OFImageInitialSetup{assets/dropcaps/codex0/I.png}{.72in}{3}{.06in}{-.1in}{top}" in rewritten
+    assert result.figure_inventory[0]["alignment"] == "top"
+
+
+def test_pandoc_renderer_records_image_initial_evidence(tmp_path):
+    src = tmp_path / "initial-evidence.md"
+    src.write_text(
+        "```of-initial\n"
+        "path: assets/dropcaps/oasis/T.png\n"
+        "width: .84in\n"
+        "lines: 4\n"
+        "gap: .08in\n"
+        "align: bottom\n"
+        "```\n"
+        "hey awoke on a beach.\n"
+    )
+    plan = ProjectionPlan(
+        profile_id="mythic",
+        render_id="initial-evidence",
+        render_source=src,
+        output_format="pdf",
+        output_extension=".pdf",
+        figure_inventory=[],
+        boundary_assertions={},
+    )
+
+    prepared = PandocRenderer()._prepare_layout_image_source(plan, tmp_path / "render-out")
+
+    assert prepared.figure_inventory[0]["kind"] == "image_initial"
+    assert prepared.boundary_assertions["image_initials_enabled"] is True
+    assert prepared.boundary_assertions["image_initial_count"] == 1
+    assert prepared.boundary_assertions["image_initial_default_alignment"] == "bottom"
+    assert prepared.boundary_assertions["figure_count_by_kind"] == {"image_initial": 1}
 
 
 def test_layout_image_absolute_block_rewrites_to_shipout_overlay(tmp_path):
@@ -209,10 +309,12 @@ def test_pandoc_renderer_prepares_layout_image_source_before_pandoc(tmp_path):
     assert prepared.boundary_assertions["layout_image_count"] == 1
     assert prepared.boundary_assertions["layout_image_supported_profiles"] == "pdf_latex_profiles"
     assert prepared.boundary_assertions["layout_image_profile_family"] == "stationery_art"
-    assert prepared.boundary_assertions["layout_image_graphicspath_roots"] == [
+    roots = prepared.boundary_assertions["layout_image_graphicspath_roots"]
+    assert roots[:2] == [
         f"{tmp_path.as_posix()}/",
         f"{(tmp_path / 'render-out').as_posix()}/",
     ]
+    assert str(Path("profiles/40_latex_import").resolve()).rstrip("/") + "/" in roots
     assert prepared.boundary_assertions["figure_count_by_kind"] == {"layout_image": 1}
 
 

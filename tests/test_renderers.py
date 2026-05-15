@@ -267,6 +267,36 @@ def test_pandoc_renderer_page_size_defaults_for_codex0_preserve_mythic_density(t
     assert variables["classoption"] == ["11pt", "oneside", "a5paper"]
 
 
+def test_pandoc_renderer_page_size_defaults_preserve_source_header_includes(tmp_path):
+    src = tmp_path / "header-include-source.md"
+    src.write_text(
+        "---\n"
+        "title: Header Include Source\n"
+        "header-includes:\n"
+        "- \\usepackage{yugenillumination}\n"
+        "page_size: a5\n"
+        "---\n\n"
+        "# Header Include Source\n"
+    )
+    plan = ProjectionPlan(
+        profile_id="codex0",
+        render_id="codex0-header-include-preserved",
+        render_source=src,
+        page_size="a5",
+    )
+    resolved = resolve_profile("codex0")
+
+    defaults = PandocRenderer()._page_geometry_defaults(plan, resolved, tmp_path)
+
+    assert defaults is not None
+    import yaml
+    variables = yaml.safe_load(defaults.read_text())["variables"]
+    assert variables["header-includes"] == [
+        r"\usepackage{yugenillumination}",
+        r"\special{papersize=\the\paperwidth,\the\paperheight}",
+    ]
+
+
 def test_read_defaults_metadata_detects_placeholder_assets():
     r = PandocRenderer()
     meta = r._read_defaults_metadata(GF / "profiles" / "40_latex_import" / "defaults" / "elian_packet.yaml")

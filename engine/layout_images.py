@@ -38,6 +38,7 @@ class LayoutImagePreprocessResult:
 
 
 _BLOCK_RE = re.compile(r"^```of-image\s*\n(?P<body>.*?)^```\s*$", re.MULTILINE | re.DOTALL)
+_INITIAL_BLOCK_RE = re.compile(r"^```of-initial\s*\n(?P<body>.*?)^```\s*\n?", re.MULTILINE | re.DOTALL)
 _SAFE_DIMENSION_RE = re.compile(
     r"^-?(?:\\(?:linewidth|textwidth|textheight|paperwidth|paperheight)|(?:0?\.\d+|[1-9]\d*(?:\.\d+)?)(?:\\(?:linewidth|textwidth|textheight|paperwidth|paperheight)|in|cm|mm|pt|em|ex))$"
 )
@@ -46,6 +47,7 @@ _ALLOWED_PLACEMENTS = {"wrap", "absolute", "inline", "block"}
 _ALLOWED_ALIGN = {"left": "l", "right": "r"}
 _ALLOWED_ANCHORS = {"north east", "north west", "south east", "south west", "center"}
 _ALLOWED_EDGES = {"", "none", "fade", "vignette", "soft", "soft-edge", "soft_edge"}
+_ALLOWED_INITIAL_ALIGNMENTS = {"bottom", "top"}
 _IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".pdf"}
 _LATEX_TEXT_REPLACEMENTS = {
     "\\": r"\textbackslash{}",
@@ -69,9 +71,14 @@ _LAYOUT_IMAGE_HEADER_INCLUDES = [
     r"\usepackage{eso-pic}",
     r"\providecommand{\OFDecorativeImage}[3]{\begingroup\def\OFEdgeMode{#3}\begin{tikzpicture}\node[inner sep=0pt,outer sep=0pt] (ofimg) {\includegraphics[#1]{#2}};\ifx\OFEdgeMode\empty\else\begin{scope}\clip (ofimg.south west) rectangle (ofimg.north east);\draw[white,line width=10pt,opacity=0.55] (ofimg.south west) rectangle (ofimg.north east);\draw[white,line width=22pt,opacity=0.22] (ofimg.south west) rectangle (ofimg.north east);\end{scope}\fi\end{tikzpicture}\endgroup}",
 ]
+_IMAGE_INITIAL_HEADER_INCLUDES = [
+    r"\usepackage{yugenillumination}",
+]
 
 
-def preprocess_layout_image_blocks(source: Path, output_dir: Path, render_id: str) -> LayoutImagePreprocessResult:
+def preprocess_layout_image_blocks(
+    source: Path, output_dir: Path, render_id: str, graphicspath_extra_roots: list[Path] | None = None
+) -> LayoutImagePreprocessResult:
     """Rewrite fenced `of-image` blocks into render-only raw LaTeX.
 
     The original source is never mutated. The returned source path is either the
@@ -83,26 +90,44 @@ def preprocess_layout_image_blocks(source: Path, output_dir: Path, render_id: st
         return LayoutImagePreprocessResult(changed=False, rewritten_source=source)
 
     text = source.read_text(encoding="utf-8", errors="ignore")
-    matches = list(_BLOCK_RE.finditer(text))
-    if not matches:
+    image_matches = list(_BLOCK_RE.finditer(text))
+    initial_matches = list(_INITIAL_BLOCK_RE.finditer(text))
+    if not image_matches and not initial_matches:
         return LayoutImagePreprocessResult(changed=False, rewritten_source=source)
 
     output_dir.mkdir(parents=True, exist_ok=True)
     inventory: list[dict[str, Any]] = []
+    used_layout_images = False
+    used_image_initials = False
 
     def replace_block(match: re.Match[str]) -> str:
+        nonlocal used_layout_images
+        used_layout_images = True
         idx = len(inventory) + 1
         cfg = _parse_block_yaml(match.group("body"), idx)
         latex = _render_layout_image_latex(cfg)
         inventory.append(_inventory_entry(cfg, idx))
         return latex
 
+    def replace_initial_block(match: re.Match[str]) -> str:
+        nonlocal used_image_initials
+        used_image_initials = True
+        idx = len(inventory) + 1
+        cfg = _parse_initial_yaml(match.group("body"), idx)
+        latex = _render_image_initial_latex(cfg)
+        inventory.append(_initial_inventory_entry(cfg, idx))
+        return latex
+
     rewritten_body = _BLOCK_RE.sub(replace_block, text)
-    graphicspath_roots = _graphicspath_roots(source, output_dir)
-    rewritten = _ensure_header_includes(
-        rewritten_body,
-        [*_LAYOUT_IMAGE_HEADER_INCLUDES, _graphicspath_include(graphicspath_roots)],
-    )
+    rewritten_body = _INITIAL_BLOCK_RE.sub(replace_initial_block, rewritten_body)
+    graphicspath_roots = _graphicspath_roots(source, output_dir, graphicspath_extra_roots or [])
+    include_lines: list[str] = []
+    if used_layout_images:
+        include_lines.extend(_LAYOUT_IMAGE_HEADER_INCLUDES)
+    if used_image_initials:
+        include_lines.extend(_IMAGE_INITIAL_HEADER_INCLUDES)
+    include_lines.append(_graphicspath_include(graphicspath_roots))
+    rewritten = _ensure_header_includes(rewritten_body, include_lines)
     out_path = output_dir / f"{render_id}.layout_images.md"
     out_path.write_text(rewritten, encoding="utf-8")
     return LayoutImagePreprocessResult(
@@ -173,6 +198,46 @@ def _parse_block_yaml(raw: str, idx: int) -> dict[str, Any]:
     }
 
 
+def _parse_initial_yaml(raw: str, idx: int) -> dict[str, Any]:
+    try:
+        import yaml
+        data = yaml.safe_load(raw) or {}
+    except Exception as exc:
+        raise LayoutImageRenderError(f"of-initial[{idx}] YAML parse failed: {exc}") from exc
+    if not isinstance(data, dict):
+        raise LayoutImageRenderError(f"of-initial[{idx}] must contain a YAML mapping")
+
+    path = data.get("path") or data.get("src") or data.get("image")
+    if not _safe_resource_path(path):
+        raise LayoutImageRenderError(f"of-initial[{idx}] path must be a relative image/PDF path inside render resource roots")
+
+    width = _safe_dimension(data.get("width"), default="0.84in")
+    gap = _safe_dimension(data.get("gap"), default="0.08in")
+    raise_amount = _safe_dimension(data.get("raise", data.get("vertical_raise")), default="0in")
+    if width.startswith("-") or gap.startswith("-"):
+        raise LayoutImageRenderError(f"of-initial[{idx}] width and gap must be positive dimensions")
+
+    try:
+        wrapped_lines = int(data.get("lines", data.get("wrapped_lines", 4)))
+    except (TypeError, ValueError) as exc:
+        raise LayoutImageRenderError(f"of-initial[{idx}] lines must be an integer") from exc
+    if wrapped_lines < 1 or wrapped_lines > 12:
+        raise LayoutImageRenderError(f"of-initial[{idx}] lines must be between 1 and 12")
+
+    alignment = str(data.get("align", data.get("alignment", "bottom"))).strip().lower().replace("_", "-")
+    if alignment not in _ALLOWED_INITIAL_ALIGNMENTS:
+        raise LayoutImageRenderError(f"of-initial[{idx}] align must be bottom or top")
+
+    return {
+        "path": str(path),
+        "width": width,
+        "gap": gap,
+        "raise": raise_amount,
+        "wrapped_lines": wrapped_lines,
+        "alignment": alignment,
+    }
+
+
 def _safe_resource_path(value: Any) -> bool:
     if not isinstance(value, str) or not value.strip() or "://" in value:
         return False
@@ -199,7 +264,7 @@ def _latex_escape_text(value: str) -> str:
     return "".join(_LATEX_TEXT_REPLACEMENTS.get(ch, ch) for ch in value)
 
 
-def _graphicspath_roots(source: Path, output_dir: Path) -> list[str]:
+def _graphicspath_roots(source: Path, output_dir: Path, extra_roots: list[Path] | None = None) -> list[str]:
     """Return absolute image search roots for raw LaTeX layout images.
 
     Pandoc's `--resource-path` does not help raw `\\includegraphics` emitted by
@@ -210,7 +275,7 @@ def _graphicspath_roots(source: Path, output_dir: Path) -> list[str]:
     """
 
     roots: list[str] = []
-    for path in (source.parent, output_dir):
+    for path in (source.parent, output_dir, *(extra_roots or [])):
         resolved = path.resolve()
         text = resolved.as_posix().rstrip("/") + "/"
         if not _safe_graphicspath_root(text):
@@ -278,6 +343,13 @@ def _render_layout_image_latex(cfg: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
+def _render_image_initial_latex(cfg: dict[str, Any]) -> str:
+    return (
+        f"\\OFImageInitialSetup{{{cfg['path']}}}{{{cfg['width']}}}"
+        f"{{{cfg['wrapped_lines']}}}{{{cfg['gap']}}}{{{cfg['raise']}}}{{{cfg['alignment']}}} "
+    )
+
+
 def _inventory_entry(cfg: dict[str, Any], idx: int) -> dict[str, Any]:
     return {
         "kind": "layout_image",
@@ -287,6 +359,19 @@ def _inventory_entry(cfg: dict[str, Any], idx: int) -> dict[str, Any]:
         "align": cfg["align"],
         "width": cfg["width"],
         "edge": cfg["edge"] or "none",
+    }
+
+
+def _initial_inventory_entry(cfg: dict[str, Any], idx: int) -> dict[str, Any]:
+    return {
+        "kind": "image_initial",
+        "index": idx,
+        "path": cfg["path"],
+        "width": cfg["width"],
+        "gap": cfg["gap"],
+        "wrapped_lines": cfg["wrapped_lines"],
+        "alignment": cfg["alignment"],
+        "raise": cfg["raise"],
     }
 
 
