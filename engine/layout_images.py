@@ -34,6 +34,7 @@ class LayoutImagePreprocessResult:
     rewritten_source: Path
     figure_inventory: list[dict[str, Any]] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
+    graphicspath_roots: list[str] = field(default_factory=list)
 
 
 _BLOCK_RE = re.compile(r"^```of-image\s*\n(?P<body>.*?)^```\s*$", re.MULTILINE | re.DOTALL)
@@ -97,10 +98,19 @@ def preprocess_layout_image_blocks(source: Path, output_dir: Path, render_id: st
         return latex
 
     rewritten_body = _BLOCK_RE.sub(replace_block, text)
-    rewritten = _ensure_header_includes(rewritten_body, _LAYOUT_IMAGE_HEADER_INCLUDES)
+    graphicspath_roots = _graphicspath_roots(source, output_dir)
+    rewritten = _ensure_header_includes(
+        rewritten_body,
+        [*_LAYOUT_IMAGE_HEADER_INCLUDES, _graphicspath_include(graphicspath_roots)],
+    )
     out_path = output_dir / f"{render_id}.layout_images.md"
     out_path.write_text(rewritten, encoding="utf-8")
-    return LayoutImagePreprocessResult(changed=True, rewritten_source=out_path, figure_inventory=inventory)
+    return LayoutImagePreprocessResult(
+        changed=True,
+        rewritten_source=out_path,
+        figure_inventory=inventory,
+        graphicspath_roots=graphicspath_roots,
+    )
 
 
 def _parse_block_yaml(raw: str, idx: int) -> dict[str, Any]:
@@ -187,6 +197,40 @@ def _safe_dimension(value: Any, default: str) -> str:
 
 def _latex_escape_text(value: str) -> str:
     return "".join(_LATEX_TEXT_REPLACEMENTS.get(ch, ch) for ch in value)
+
+
+def _graphicspath_roots(source: Path, output_dir: Path) -> list[str]:
+    """Return absolute image search roots for raw LaTeX layout images.
+
+    Pandoc's `--resource-path` does not help raw `\\includegraphics` emitted by
+    the layout-image preprocessor. Add the canonical/staged source directory so
+    `path: assets/foo.png` resolves relative to the authored source, and add the
+    render output directory for generated render-local assets. Dedupe while
+    preserving order.
+    """
+
+    roots: list[str] = []
+    for path in (source.parent, output_dir):
+        resolved = path.resolve()
+        text = resolved.as_posix().rstrip("/") + "/"
+        if not _safe_graphicspath_root(text):
+            raise LayoutImageRenderError(f"unsafe graphicspath root for of-image: {text}")
+        if text not in roots:
+            roots.append(text)
+    return roots
+
+
+def _safe_graphicspath_root(value: str) -> bool:
+    if not value.startswith("/") or "://" in value:
+        return False
+    if any(ord(ch) < 32 for ch in value):
+        return False
+    return not any(ch in value for ch in ("\\", "{", "}", "$", "`", "%", "#"))
+
+
+def _graphicspath_include(roots: list[str]) -> str:
+    joined = "".join(f"{{{root}}}" for root in roots)
+    return f"\\graphicspath{{{joined}}}"
 
 
 def _render_layout_image_latex(cfg: dict[str, Any]) -> str:

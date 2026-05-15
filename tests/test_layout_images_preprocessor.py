@@ -44,6 +44,9 @@ def test_layout_image_wrap_block_rewrites_to_wrapfig_with_header_includes(tmp_pa
     assert "\\begin{wrapfigure}{r}{0.34\\textwidth}" in rewritten
     assert "\\OFDecorativeImage{width=\\linewidth}{assets/portrait.png}{vignette}" in rewritten
     assert "\\caption{Moonlit portrait}" in rewritten
+    assert "\\graphicspath{{" in rewritten
+    assert f"{{{tmp_path.as_posix()}/}}" in rewritten
+    assert result.graphicspath_roots == [f"{tmp_path.as_posix()}/"]
     assert "```of-image" not in rewritten
 
 
@@ -67,6 +70,26 @@ def test_layout_image_wrapfig_package_is_vendored_and_resolves_through_profile_e
     path = Path(result.stdout.strip())
     assert path.name == "wrapfig.sty"
     assert "42_optical_foundry/profiles/40_latex_import/styles/texmf" in str(path)
+
+
+def test_layout_image_adds_source_and_output_graphicspath_roots(tmp_path):
+    source_dir = tmp_path / "source"
+    output_dir = tmp_path / "render"
+    source_dir.mkdir()
+    src = source_dir / "image-root-test.md"
+    src.write_text(
+        "```of-image\n"
+        "path: assets/local.png\n"
+        "placement: inline\n"
+        "```\n"
+    )
+
+    result = preprocess_layout_image_blocks(src, output_dir, "image-root-test")
+    rewritten = result.rewritten_source.read_text()
+
+    expected_roots = [f"{source_dir.as_posix()}/", f"{output_dir.as_posix()}/"]
+    assert result.graphicspath_roots == expected_roots
+    assert f"\\graphicspath{{{{{expected_roots[0]}}}{{{expected_roots[1]}}}}}" in rewritten
 
 
 def test_layout_image_absolute_block_rewrites_to_shipout_overlay(tmp_path):
@@ -165,6 +188,10 @@ def test_pandoc_renderer_prepares_layout_image_source_before_pandoc(tmp_path):
     assert prepared.boundary_assertions["layout_image_count"] == 1
     assert prepared.boundary_assertions["layout_image_supported_profiles"] == "pdf_latex_profiles"
     assert prepared.boundary_assertions["layout_image_profile_family"] == "stationery_art"
+    assert prepared.boundary_assertions["layout_image_graphicspath_roots"] == [
+        f"{tmp_path.as_posix()}/",
+        f"{(tmp_path / 'render-out').as_posix()}/",
+    ]
     assert prepared.boundary_assertions["figure_count_by_kind"] == {"layout_image": 1}
 
 

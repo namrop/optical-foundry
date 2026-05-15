@@ -278,6 +278,7 @@ class PandocRenderer(Renderer):
                 "layout_image_profile_family": resolved_profile.profile_family,
                 "layout_image_canonical_profile": resolved_profile.canonical_profile_id,
                 "layout_image_render_mode": "pre_pandoc_raw_latex",
+                "layout_image_graphicspath_roots": result.graphicspath_roots,
                 "figure_count_by_kind": figure_count_by_kind,
             }
         )

@@ -126,6 +126,11 @@ License as noted in the upstream package header.
 Regression coverage verifies that `kpsewhich wrapfig.sty` resolves to the local
 Optical Foundry import tree when run with the resolved profile environment.
 
+Layout-image preprocessing also now injects render-only `\graphicspath` roots
+for the source directory and render output directory. This lets relative
+`of-image` paths such as `assets/foo.png` resolve from staged source packets
+without requiring authors to hand-insert LaTeX path plumbing.
+
 ## Full-page image placement boundary
 
 Use the manifest for full-page images only when the image is part of a **compiler-owned presentation surface**:
