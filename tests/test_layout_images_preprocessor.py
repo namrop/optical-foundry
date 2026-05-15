@@ -92,6 +92,27 @@ def test_layout_image_adds_source_and_output_graphicspath_roots(tmp_path):
     assert f"\\graphicspath{{{{{expected_roots[0]}}}{{{expected_roots[1]}}}}}" in rewritten
 
 
+def test_layout_image_rejects_tex_unsafe_source_directory_with_actionable_error(tmp_path):
+    bad_source_dir = tmp_path / "source%bad"
+    bad_source_dir.mkdir()
+    src = bad_source_dir / "unsafe-root.md"
+    src.write_text(
+        "```of-image\n"
+        "path: assets/portrait.png\n"
+        "placement: inline\n"
+        "```\n"
+    )
+
+    with pytest.raises(LayoutImageRenderError) as excinfo:
+        preprocess_layout_image_blocks(src, tmp_path / "render-out", "unsafe-root")
+
+    message = str(excinfo.value)
+    assert "source/output directory" in message
+    assert "TeX-unsafe characters" in message
+    assert "Move the source/render output to a path without" in message
+    assert "%" in message
+
+
 def test_layout_image_absolute_block_rewrites_to_shipout_overlay(tmp_path):
     src = tmp_path / "absolute-image.md"
     src.write_text(

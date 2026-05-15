@@ -214,7 +214,12 @@ def _graphicspath_roots(source: Path, output_dir: Path) -> list[str]:
         resolved = path.resolve()
         text = resolved.as_posix().rstrip("/") + "/"
         if not _safe_graphicspath_root(text):
-            raise LayoutImageRenderError(f"unsafe graphicspath root for of-image: {text}")
+            raise LayoutImageRenderError(
+                "of-image cannot add this source/output directory to LaTeX \\graphicspath because "
+                f"the filesystem path contains TeX-unsafe characters: {text}. "
+                "Move the source/render output to a path without %, #, $, braces, backticks, "
+                "backslashes, URL syntax, or control characters, then render again."
+            )
         if text not in roots:
             roots.append(text)
     return roots
