@@ -22,6 +22,40 @@ def test_pandoc_renderer_creates_evidence_on_error():
     )
     evidence = r.render(plan, output_dir="/tmp/of_greenfield_test_error")
     assert evidence["status"] == "error"
+    assert evidence["validation"]["status"] == "failed"
+    assert evidence["validation"]["checks"]["pdf_written"] is False
+    assert evidence["validation"]["errors"] == [evidence["error"]]
+
+
+def test_pandoc_renderer_success_evidence_has_explicit_validation_surface(tmp_path):
+    import shutil
+
+    if not shutil.which("pandoc") or not shutil.which("pdftotext"):
+        pytest.skip("pandoc/pdftotext not available")
+    if not Path("/Library/TeX/texbin/xelatex").exists() and not shutil.which("xelatex"):
+        pytest.skip("xelatex not available")
+
+    src = tmp_path / "evidence-surface.md"
+    src.write_text(
+        "---\n"
+        "uid: evidence-surface\n"
+        "title: Evidence Surface\n"
+        "toc: false\n"
+        "numbersections: false\n"
+        "---\n\n"
+        "# Evidence Surface\n\n"
+        "Optical Foundry validation marker remains live text.\n",
+        encoding="utf-8",
+    )
+
+    evidence = DocumentRenderer().render(src, profile_id="generic-report", output_dir=str(tmp_path / "out"))
+
+    assert evidence["status"] == "ok"
+    assert evidence["validation"]["status"] == "passed"
+    assert evidence["validation"]["checks"]["pdf_written"] is True
+    assert evidence["validation"]["checks"]["text_extract_exists"] is True
+    assert evidence["validation"]["checks"]["raw_latex_leakage"] is False
+    assert evidence["validation"]["warning_count"] == len(evidence["warnings"])
 
 
 def test_document_renderer_parses_frontmatter():

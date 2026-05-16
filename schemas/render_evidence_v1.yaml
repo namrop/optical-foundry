@@ -16,6 +16,11 @@ properties:
     type: string
     description: Unique render event identifier (UUID or timestamp-based)
 
+  status:
+    type: string
+    enum: [ok, error]
+    description: Top-level render outcome. Successful renders use `ok`; failed renders use `error`.
+
   profile:
     type: object
     properties:
@@ -107,6 +112,26 @@ properties:
       properties:
         page: { type: integer }
         path: { type: string }
+
+  validation:
+    type: object
+    description: Explicit validation surface separated from raw render metadata and boundary assertions.
+    properties:
+      status:
+        type: string
+        enum: [passed, failed]
+      checks:
+        type: object
+        properties:
+          pdf_written: { type: boolean }
+          text_extract_exists: { type: boolean }
+          all_sources_represented: { type: boolean }
+          figure_inventory_recorded: { type: boolean }
+          raw_latex_leakage: { type: boolean }
+      warning_count: { type: integer }
+      errors:
+        type: array
+        items: { type: string }
 
   warnings:
     type: array
