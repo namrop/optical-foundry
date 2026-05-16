@@ -576,6 +576,116 @@ def test_composite_bundle_inserts_generic_section_divider_before_source():
     assert plan.assembly.generated_sections == ["section_divider:evidence-title-page"]
 
 
+def test_composite_bundle_applies_source_running_header_footer_overrides():
+    compiler = CompositeBundleCompiler()
+    manifest = {
+        "kind": "composite_bundle", "schema_version": "bundle_manifest_v1",
+        "bundle_id": "source-running-text", "profile": "cam",
+        "sources": [
+            {
+                "uid": "fixture-src-001",
+                "path": str(SRC / "source-001.md"),
+                "role": "primary_anchor",
+                "order": 1,
+                "running_text": {
+                    "division": "CAM Field Notes",
+                    "tagline": "Section Alpha",
+                    "footer_email": "internal-only@example.test",
+                },
+            },
+        ],
+    }
+
+    plan = compiler.compile(manifest)
+    assembled = plan.render_source.read_text()
+
+    assert "\\OFSetRunningDivision{CAM Field Notes}" in assembled
+    assert "\\OFSetRunningTagline{Section Alpha}" in assembled
+    assert "\\OFSetRunningFooter{internal-only@example.test}" in assembled
+    assert assembled.index("\\newpage") < assembled.index("\\OFSetRunningDivision{CAM Field Notes}") < assembled.index("# fixture-src-001")
+    inventory = plan.boundary_assertions["source_running_text_overrides"]
+    assert inventory == [
+        {
+            "uid": "fixture-src-001",
+            "running_text": {
+                "division": "CAM Field Notes",
+                "tagline": "Section Alpha",
+                "footeremail": "internal-only@example.test",
+            },
+        }
+    ]
+
+
+def test_composite_bundle_applies_section_divider_running_header_footer_overrides():
+    compiler = CompositeBundleCompiler()
+    manifest = {
+        "kind": "composite_bundle", "schema_version": "bundle_manifest_v1",
+        "bundle_id": "divider-running-text", "profile": "cam",
+        "sources": [
+            {"uid": "fixture-src-001", "path": str(SRC / "source-001.md"), "role": "primary_anchor", "order": 1},
+            {"uid": "fixture-src-002", "path": str(SRC / "source-002.md"), "role": "supporting_anchor", "order": 2},
+        ],
+        "section_dividers": [
+            {
+                "uid": "evidence-title-page",
+                "before_source_uid": "fixture-src-002",
+                "title": "Evidence",
+                "running_text": {
+                    "header_right": "Evidence Dossier",
+                    "tagline": "Packet B",
+                    "footer": "not for redistribution",
+                },
+            },
+        ],
+    }
+
+    plan = compiler.compile(manifest)
+    assembled = plan.render_source.read_text()
+    divider_start = assembled.index("\\OFEnsureRightPage")
+    divider_heading = assembled.index("{\\Huge\\bfseries Evidence\\par}")
+    divider_block = assembled[divider_start:divider_heading]
+
+    assert "\\OFSetRunningDivision{Evidence Dossier}" in divider_block
+    assert "\\OFSetRunningTagline{Packet B}" in divider_block
+    assert "\\OFSetRunningFooter{not for redistribution}" in divider_block
+    inventory = plan.boundary_assertions["section_dividers"][0]
+    assert inventory["running_text"] == {
+        "division": "Evidence Dossier",
+        "tagline": "Packet B",
+        "footeremail": "not for redistribution",
+    }
+
+
+def test_composite_bundle_validates_running_header_footer_overrides():
+    compiler = CompositeBundleCompiler()
+    manifest = {
+        "kind": "composite_bundle", "schema_version": "bundle_manifest_v1",
+        "bundle_id": "bad-running-text", "profile": "cam",
+        "sources": [
+            {
+                "uid": "fixture-src-001",
+                "path": str(SRC / "source-001.md"),
+                "role": "primary_anchor",
+                "order": 1,
+                "running_text": {"division": "\\input{secrets}"},
+            },
+        ],
+        "section_dividers": [
+            {
+                "uid": "bad-divider-running-text",
+                "before_source_uid": "fixture-src-001",
+                "title": "Bad",
+                "running_text": {"footer": ["not", "scalar"]},
+            },
+        ],
+    }
+
+    errors = compiler.validate(manifest)
+
+    assert any("source[0] running_text.division contains unsafe LaTeX control text" in e for e in errors)
+    assert any("section_divider[0] running_text.footer must be a scalar string" in e for e in errors)
+
+
 def test_composite_bundle_inserts_source_backed_section_divider_before_source_order():
     compiler = CompositeBundleCompiler()
     manifest = {

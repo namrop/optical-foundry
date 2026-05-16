@@ -78,6 +78,7 @@ Compiler behavior:
 - `blank_after: true` adds a labeled intentional blank page after a divider; default is false;
 - `background_image` attaches a full-page background to the divider page using the guarded render-resource path rules;
 - `profile_id` / `profile_family` resolve a divider-local profile hook for compatible templates and evidence;
+- source-level and divider-level `running_text` overrides can change section-local header/footer text without changing profile assets or geometry;
 - `render.numbering_strategy: section_dividers` makes divider titles own numbered top-level sections, demotes following source headings one level, emits frontmatter/mainmatter/appendix transitions, and reflects the resulting structure through memoir/Pandoc TOC numbering;
 - `AssemblyView.generated_sections` records `section_divider:<uid>` entries;
 - generic divider text is LaTeX-escaped;
@@ -96,7 +97,8 @@ Evidence boundary fields include:
 
 - `section_dividers_enabled`
 - `section_divider_count`
-- `section_dividers` inventory with UID, kind, resolved target UID/order, pagination flags, background image path, divider-local profile evidence, and source path when applicable.
+- `section_dividers` inventory with UID, kind, resolved target UID/order, pagination flags, background image path, divider-local profile evidence, divider-local `running_text`, and source path when applicable.
+- `source_running_text_overrides` inventory for per-source header/footer text overrides.
 - `titlepage_blank_after`
 - `section_divider_numbering`
 
@@ -104,7 +106,7 @@ Evidence boundary fields include:
 
 Updated implementation surfaces include:
 
-- bundle manifest schema support for `section_dividers`, divider pagination/background/profile options, `frontmatter` source role, and divider-faithful numbering strategy;
+- bundle manifest schema support for `section_dividers`, divider pagination/background/profile options, per-source/per-divider `running_text`, `frontmatter` source role, and divider-faithful numbering strategy;
 - bundle assembly contract documentation for divider insertion order, recto/blank semantics, and frontmatter/mainmatter/appendix transitions;
 - render-manifest contract documentation for generic vs source-backed divider semantics, title/divider background support, and intentional blank-page text;
 - compiler tests for generic divider insertion, source-backed divider insertion, recto/title blank defaults, divider profile/background/blank-after controls, faithful numbering, template blank text, and validation failures;
