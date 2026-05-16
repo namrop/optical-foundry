@@ -1347,14 +1347,9 @@ class LabelRunCompiler(ManifestCompiler):
                 fm, body = _split_frontmatter_and_body(raw_text)
 
                 if fm:
-                    try:
-                        import yaml as _yaml
-                        fm_yaml = _yaml.dump(fm, default_flow_style=False, allow_unicode=True)
-                    except ImportError:
-                        fm_yaml = str(fm)
-                    lines.append("```yaml")
-                    lines.append(fm_yaml.rstrip())
-                    lines.append("```")
+                    lines.append("**Label metadata:**  ")
+                    for key, value in sorted(fm.items()):
+                        lines.append(f"- `{key}`: {value}")
                     lines.append("")
 
                 lines.append(body.rstrip())

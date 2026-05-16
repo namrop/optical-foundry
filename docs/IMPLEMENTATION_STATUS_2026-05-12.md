@@ -3,7 +3,7 @@ uid: optical-foundry-code-change-status-2026-05-12
 kind: implementation_status
 status: active
 created: 2026-05-12
-updated: 2026-05-15
+updated: 2026-05-16
 title: "Optical Foundry — Code Change Status"
 summary: "Code-level status for the May 2026 Optical Foundry manifest/rendering changes. This document intentionally excludes packet-specific document content notes."
 tags:
@@ -23,7 +23,20 @@ This file records **code and contract changes only**. It should not be used as a
 - Branch: `main`
 - Baseline HEAD before current uncommitted implementation slice: `ed22971c76849357cb40d4086e075856b5fe4a3c`
 - Validation command: `python3.14 -m pytest -q`
-- Latest observed result: `149 passed`
+- Latest observed result: `224 passed`
+
+## Archive-readiness validation
+
+See `docs/PROFILE_ARCHIVE_READINESS_2026-05-16.md` for the exhaustive Foundry-owned profile runtime check before archiving the external `40_latex` tree.
+
+Current result:
+
+- 23/23 canonical profiles covered.
+- 17/17 document-compatible profiles pass basic PDF smoke.
+- 17/17 document-compatible profiles pass illuminated-initial PDF smoke.
+- 6/6 fixed-layout/non-prose profiles pass profile-specific PDF builds.
+- 40 current evidence files parsed; no render failures, no retired evidence keys, no absolute legacy path hits, and no bad legacy boundary assertions.
+- Full tests: `224 passed`.
 
 ## Implemented code surfaces
 

@@ -92,6 +92,20 @@ def test_mythic_letter_johannah_is_bundle_ok():
     assert cap.template_source == "local"
 
 
+def test_codex0_is_bundle_ok():
+    cap = check_profile("codex0")
+    assert cap.bundle_compatibility == "ok"
+    assert cap.supports_toc is True
+    assert cap.has_tightlist is True
+    assert cap.has_longtable is True
+    assert cap.defaults_found is not None
+    assert cap.defaults_found.endswith("/codex0.yaml")
+    assert cap.template_found is not None
+    assert cap.template_found.endswith("/codex0.tex")
+    assert cap.defaults_source == "local"
+    assert cap.template_source == "local"
+
+
 def test_letter_is_bundle_ok():
     cap = check_profile("letter")
     assert cap.bundle_compatibility == "ok"
