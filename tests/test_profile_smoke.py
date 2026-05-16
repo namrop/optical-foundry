@@ -69,6 +69,39 @@ def test_profile_smoke_matrix_records_success_failure_and_writes_summary(tmp_pat
     assert renderer.calls[0][2].endswith("mythic")
 
 
+def test_profile_smoke_matrix_can_attach_visual_proofs_for_passed_profiles(tmp_path):
+    renderer = FakeRenderer(failures={"cam"})
+    proof_calls = []
+
+    def fake_proof_builder(pdf_path: Path, *, output_dir: Path, max_pages: int, columns: int, dpi: int) -> dict:
+        proof_calls.append((Path(pdf_path), Path(output_dir), max_pages, columns, dpi))
+        return {
+            "status": "ok",
+            "contact_sheet_svg": str(Path(output_dir) / "contact_sheet.svg"),
+            "metadata_path": str(Path(output_dir) / "visual_proof.json"),
+        }
+
+    summary = run_profile_smoke_matrix(
+        profiles=["mythic", "cam"],
+        fixture="basic",
+        output_dir=tmp_path,
+        renderer=renderer,
+        create_proofs=True,
+        proof_builder=fake_proof_builder,
+        proof_max_pages=3,
+        proof_columns=2,
+        proof_dpi=96,
+    )
+
+    assert len(proof_calls) == 1
+    assert proof_calls[0][1] == tmp_path / "mythic" / "proof"
+    passed = summary["results"][0]
+    failed = summary["results"][1]
+    assert passed["visual_proof"]["status"] == "ok"
+    assert passed["visual_proof"]["contact_sheet_svg"].endswith("contact_sheet.svg")
+    assert "visual_proof" not in failed
+
+
 def test_default_document_smoke_profiles_cover_document_spine_and_stationery_profiles():
     assert "cam" in DEFAULT_DOCUMENT_SMOKE_PROFILES
     assert "codex0" in DEFAULT_DOCUMENT_SMOKE_PROFILES

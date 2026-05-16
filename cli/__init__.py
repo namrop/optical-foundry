@@ -33,6 +33,7 @@ from renderers.pandoc_renderer import PandocRenderer
 from renderers.document_renderer import DocumentRenderer
 from engine.profile_checker import check_all_profiles, check_all_profiles_json, check_profile
 from engine.profile_smoke import DEFAULT_DOCUMENT_SMOKE_PROFILES, run_profile_smoke_matrix
+from engine.visual_proof import build_visual_proof
 
 
 def _default_registry() -> ManifestRegistry:
@@ -199,6 +200,22 @@ def cmd_manifest(args: argparse.Namespace) -> int:
     return 0 if success else 1
 
 
+def cmd_proof(args: argparse.Namespace) -> int:
+    """Generate visual proof artifacts for rendered PDFs."""
+    if args.proof_command != "contact-sheet":
+        print("ERROR: proof subcommand required", file=sys.stderr)
+        return 1
+    proof = build_visual_proof(
+        Path(args.input),
+        output_dir=Path(args.output),
+        max_pages=args.max_pages,
+        columns=args.columns,
+        dpi=args.dpi,
+    )
+    print(json.dumps(proof, indent=2, sort_keys=True))
+    return 0 if proof.get("status") == "ok" else 1
+
+
 def cmd_smoke(args: argparse.Namespace) -> int:
     """Run smoke matrices for render/profile behavior."""
     if args.smoke_command != "profiles":
@@ -209,6 +226,10 @@ def cmd_smoke(args: argparse.Namespace) -> int:
         profiles=profiles,
         fixture=args.fixture,
         output_dir=args.output,
+        create_proofs=args.proof,
+        proof_max_pages=args.proof_max_pages,
+        proof_columns=args.proof_columns,
+        proof_dpi=args.proof_dpi,
     )
     print(json.dumps(summary, indent=2, sort_keys=True))
     return 0 if summary["status"] == "passed" else 1
@@ -313,7 +334,22 @@ def main() -> int:
     smoke_profiles_ap.add_argument("--fixture", choices=["basic", "illuminated-initial"], default="basic")
     smoke_profiles_ap.add_argument("--profile", action="append", help="Profile to test; repeat to test multiple profiles")
     smoke_profiles_ap.add_argument("--output", default="generated/profile_smoke_matrix")
+    smoke_profiles_ap.add_argument("--proof", action="store_true", help="Generate visual proof contact sheets for passed renders")
+    smoke_profiles_ap.add_argument("--proof-max-pages", type=int, default=12)
+    smoke_profiles_ap.add_argument("--proof-columns", type=int, default=3)
+    smoke_profiles_ap.add_argument("--proof-dpi", type=int, default=120)
     smoke_profiles_ap.set_defaults(func=cmd_smoke)
+
+    # proof
+    proof_ap = sub.add_parser("proof", help="Generate visual proof artifacts for rendered PDFs")
+    proof_sub = proof_ap.add_subparsers(dest="proof_command")
+    contact_ap = proof_sub.add_parser("contact-sheet", help="Rasterize a PDF and create a labeled SVG contact sheet")
+    contact_ap.add_argument("input", help="Rendered PDF path")
+    contact_ap.add_argument("--output", default="generated/proofs/contact_sheet")
+    contact_ap.add_argument("--max-pages", type=int, default=12)
+    contact_ap.add_argument("--columns", type=int, default=3)
+    contact_ap.add_argument("--dpi", type=int, default=120)
+    contact_ap.set_defaults(func=cmd_proof)
 
     args = ap.parse_args()
     if args.command is None:

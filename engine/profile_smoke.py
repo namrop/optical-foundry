@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Any, Protocol
 
 from renderers.document_renderer import DocumentRenderer
+from engine.visual_proof import build_visual_proof
 
 
 DEFAULT_DOCUMENT_SMOKE_PROFILES: tuple[str, ...] = (
@@ -89,6 +90,11 @@ def run_profile_smoke_matrix(
     fixture: str = "basic",
     output_dir: str | Path = "generated/profile_smoke_matrix",
     renderer: ProfileSmokeRenderer | None = None,
+    create_proofs: bool = False,
+    proof_builder=build_visual_proof,
+    proof_max_pages: int = 12,
+    proof_columns: int = 3,
+    proof_dpi: int = 120,
 ) -> dict[str, Any]:
     """Render a generated fixture across profiles and write a JSON summary.
 
@@ -123,18 +129,33 @@ def run_profile_smoke_matrix(
         boundary = evidence.get("boundary", {}) if isinstance(evidence.get("boundary"), dict) else {}
         output = evidence.get("output", {}) if isinstance(evidence.get("output"), dict) else {}
         evidence_status = evidence.get("status") or ("ok" if status == "passed" else "error")
-        results.append(
-            {
-                "profile": profile,
-                "status": status,
-                "pdf_path": output.get("pdf_path", "unknown"),
-                "pdf_pages": output.get("pdf_pages", 0),
-                "warnings": evidence.get("warnings", []),
-                "target_40_latex_mutated": boundary.get("target_40_latex_mutated"),
-                "render_id": evidence.get("render_id"),
-                "evidence_status": evidence_status,
-            }
-        )
+        result = {
+            "profile": profile,
+            "status": status,
+            "pdf_path": output.get("pdf_path", "unknown"),
+            "pdf_pages": output.get("pdf_pages", 0),
+            "warnings": evidence.get("warnings", []),
+            "target_40_latex_mutated": boundary.get("target_40_latex_mutated"),
+            "render_id": evidence.get("render_id"),
+            "evidence_status": evidence_status,
+        }
+        if create_proofs and status == "passed":
+            try:
+                result["visual_proof"] = proof_builder(
+                    Path(result["pdf_path"]),
+                    output_dir=profile_out / "proof",
+                    max_pages=proof_max_pages,
+                    columns=proof_columns,
+                    dpi=proof_dpi,
+                )
+            except Exception as exc:  # pragma: no cover - defensive CLI path
+                result["status"] = "failed"
+                result["visual_proof"] = {
+                    "status": "error",
+                    "error": f"proof exception: {type(exc).__name__}: {exc}",
+                }
+                result["warnings"] = list(result.get("warnings", [])) + [result["visual_proof"]["error"]]
+        results.append(result)
 
     passed = sum(1 for result in results if result["status"] == "passed")
     failed = len(results) - passed
@@ -145,6 +166,7 @@ def run_profile_smoke_matrix(
         "profiles_requested": len(results),
         "profiles_passed": passed,
         "profiles_failed": failed,
+        "proofs_enabled": create_proofs,
         "results": results,
     }
     summary_path = out_root / "profile_smoke_summary.json"
