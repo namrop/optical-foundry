@@ -32,6 +32,7 @@ from engine.manifest_compiler import (
 from renderers.pandoc_renderer import PandocRenderer
 from renderers.document_renderer import DocumentRenderer
 from engine.profile_checker import check_all_profiles, check_all_profiles_json, check_profile
+from engine.profile_smoke import DEFAULT_DOCUMENT_SMOKE_PROFILES, run_profile_smoke_matrix
 
 
 def _default_registry() -> ManifestRegistry:
@@ -198,6 +199,21 @@ def cmd_manifest(args: argparse.Namespace) -> int:
     return 0 if success else 1
 
 
+def cmd_smoke(args: argparse.Namespace) -> int:
+    """Run smoke matrices for render/profile behavior."""
+    if args.smoke_command != "profiles":
+        print("ERROR: smoke subcommand required", file=sys.stderr)
+        return 1
+    profiles = args.profile or list(DEFAULT_DOCUMENT_SMOKE_PROFILES)
+    summary = run_profile_smoke_matrix(
+        profiles=profiles,
+        fixture=args.fixture,
+        output_dir=args.output,
+    )
+    print(json.dumps(summary, indent=2, sort_keys=True))
+    return 0 if summary["status"] == "passed" else 1
+
+
 def cmd_profiles(args: argparse.Namespace) -> int:
     """Check and report profile capabilities."""
     if args.json:
@@ -289,6 +305,15 @@ def main() -> int:
     pf_ap.add_argument("--json", action="store_true", help="Output full JSON report")
     pf_ap.add_argument("--profile", help="Check a single profile")
     pf_ap.set_defaults(func=cmd_profiles)
+
+    # smoke
+    smoke_ap = sub.add_parser("smoke", help="Run render smoke matrices")
+    smoke_sub = smoke_ap.add_subparsers(dest="smoke_command")
+    smoke_profiles_ap = smoke_sub.add_parser("profiles", help="Render a generated fixture across selected profiles")
+    smoke_profiles_ap.add_argument("--fixture", choices=["basic", "illuminated-initial"], default="basic")
+    smoke_profiles_ap.add_argument("--profile", action="append", help="Profile to test; repeat to test multiple profiles")
+    smoke_profiles_ap.add_argument("--output", default="generated/profile_smoke_matrix")
+    smoke_profiles_ap.set_defaults(func=cmd_smoke)
 
     args = ap.parse_args()
     if args.command is None:
