@@ -98,4 +98,4 @@ Exact mid-source full-page figure placement is still a source/staged-source conc
 
 ## Validation posture
 
-Before reporting a render or code surface as ready, inspect the evidence JSON for `render_metadata.success`, `warnings`, page count, SHA-256, `target_40_latex_mutated: false`, relevant title-page or section-divider boundary assertions, and required text markers.
+Before reporting a render or code surface as ready, inspect the evidence JSON for `render_metadata.success`, `warnings`, page count, SHA-256, `target_legacy_profile_tree_mutated: false`, relevant title-page or section-divider boundary assertions, and required text markers.

@@ -110,6 +110,31 @@ properties:
         order:
           type: integer
           minimum: 1
+        running_text:
+          type: object
+          description: >
+            Optional per-source running header/footer text override. Applied at
+            the source boundary without changing the profile's geometry, assets,
+            or template. `division`/`header_right` feed the right header,
+            `tagline` feeds yugenRule's header tagline, and
+            `footeremail`/`footer_email`/`footer` feed the right footer.
+          properties:
+            division:
+              type: string
+            header:
+              type: string
+            header_right:
+              type: string
+            tagline:
+              type: string
+            footer:
+              type: string
+            footer_right:
+              type: string
+            footeremail:
+              type: string
+            footer_email:
+              type: string
 
   generated:
     type: object
@@ -193,6 +218,28 @@ properties:
               type: string
               enum: [full, summary, none]
               default: none
+        running_text:
+          type: object
+          description: >
+            Optional running header/footer text override applied at the divider
+            boundary. Uses the same keys as source.running_text.
+          properties:
+            division:
+              type: string
+            header:
+              type: string
+            header_right:
+              type: string
+            tagline:
+              type: string
+            footer:
+              type: string
+            footer_right:
+              type: string
+            footeremail:
+              type: string
+            footer_email:
+              type: string
 
   figures:
     type: array

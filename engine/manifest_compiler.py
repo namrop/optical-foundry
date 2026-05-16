@@ -235,6 +235,18 @@ DOCUMENT_VARIABLE_ALLOWLIST = {
     "chart_muted",
 }
 
+RUNNING_TEXT_KEY_ALIASES = {
+    "division": "division",
+    "header": "division",
+    "header_right": "division",
+    "tagline": "tagline",
+    "footer": "footeremail",
+    "footer_right": "footeremail",
+    "footeremail": "footeremail",
+    "footer_email": "footeremail",
+}
+RUNNING_TEXT_CANONICAL_ORDER = ("division", "tagline", "footeremail")
+
 RESOURCE_PATH_VARIABLES = {"logo_path", "titlepage_background_image"}
 RESOURCE_IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".pdf"}
 
@@ -385,6 +397,60 @@ def _latex_escape_text(value: Any) -> str:
     return "".join(replacements.get(ch, ch) for ch in text)
 
 
+def _normalized_running_text(owner: dict[str, Any]) -> dict[str, str]:
+    raw = owner.get("running_text") or owner.get("header_footer")
+    if not isinstance(raw, dict):
+        return {}
+    normalized: dict[str, str] = {}
+    for key, value in raw.items():
+        canonical = RUNNING_TEXT_KEY_ALIASES.get(str(key))
+        if canonical is None:
+            continue
+        normalized[canonical] = "" if value is None else str(value)
+    return normalized
+
+
+def _running_text_override_lines(owner: dict[str, Any]) -> list[str]:
+    running_text = _normalized_running_text(owner)
+    commands = {
+        "division": "OFSetRunningDivision",
+        "tagline": "OFSetRunningTagline",
+        "footeremail": "OFSetRunningFooter",
+    }
+    return [
+        f"\\{commands[key]}{{{_latex_escape_text(running_text[key])}}}"
+        for key in RUNNING_TEXT_CANONICAL_ORDER
+        if key in running_text
+    ]
+
+
+def _running_text_inventory_entry(uid: Any, owner: dict[str, Any]) -> dict[str, Any] | None:
+    running_text = _normalized_running_text(owner)
+    if not running_text:
+        return None
+    return {"uid": str(uid), "running_text": running_text}
+
+
+def _validate_running_text(owner: dict[str, Any], scope: str) -> list[str]:
+    raw = owner.get("running_text") or owner.get("header_footer")
+    if raw is None:
+        return []
+    if not isinstance(raw, dict):
+        return [f"{scope} running_text must be a mapping"]
+    errors: list[str] = []
+    for key, value in raw.items():
+        key_str = str(key)
+        if key_str not in RUNNING_TEXT_KEY_ALIASES:
+            errors.append(f"{scope} running_text.{key_str} is not a supported key")
+            continue
+        if value is not None and not isinstance(value, (str, int, float, bool)):
+            errors.append(f"{scope} running_text.{key_str} must be a scalar string")
+            continue
+        if isinstance(value, str) and not _safe_template_string(value):
+            errors.append(f"{scope} running_text.{key_str} contains unsafe LaTeX control text")
+    return errors
+
+
 def _source_order_lookup(sources: list[dict[str, Any]]) -> tuple[dict[str, dict[str, Any]], dict[int, dict[str, Any]]]:
     by_uid: dict[str, dict[str, Any]] = {}
     by_order: dict[int, dict[str, Any]] = {}
@@ -450,6 +516,9 @@ def _section_divider_inventory_entry(
         "background_image": str(divider.get("background_image", "") or ""),
     }
     entry.update(_section_divider_profile_fields(divider))
+    running_text_entry = _running_text_inventory_entry(divider.get("uid", ""), divider)
+    if running_text_entry:
+        entry["running_text"] = running_text_entry["running_text"]
     if source_cfg:
         entry["source_path"] = str(source_cfg.get("path", ""))
     return entry
@@ -465,6 +534,7 @@ def _section_divider_start_lines(divider: dict[str, Any]) -> list[str]:
         lines.append(
             f"\\OFApplySectionDividerProfile{{{profile.get('resolved_profile_id', '')}}}{{{profile.get('profile_family', '')}}}"
         )
+    lines.extend(_running_text_override_lines(divider))
     return lines
 
 
@@ -651,7 +721,7 @@ class MarkdownDocumentCompiler(ManifestCompiler):
 
         source_digest = _sha256_hex(source_path)
         boundary_assertions = {
-            "target_40_latex_mutated": False,
+            "target_legacy_profile_tree_mutated": False,
             "profile_manifest_axes_separate": True,
             "document_manifest_lane": True,
             "manifest_family": "document",
@@ -797,6 +867,11 @@ class CompositeBundleCompiler(ManifestCompiler):
         sources_by_uid, sources_by_order = _source_order_lookup(sorted_sources)
         dividers_by_before_uid: dict[str, list[dict[str, Any]]] = {}
         section_divider_inventory: list[dict[str, Any]] = []
+        source_running_text_inventory: list[dict[str, Any]] = []
+        for src in sorted_sources:
+            running_text_entry = _running_text_inventory_entry(src.get("uid", ""), src)
+            if running_text_entry:
+                source_running_text_inventory.append(running_text_entry)
         for divider in section_dividers if isinstance(section_dividers, list) else []:
             before_uid, _before_order = _resolved_section_divider_target(divider, sources_by_uid, sources_by_order)
             if not before_uid:
@@ -894,6 +969,7 @@ class CompositeBundleCompiler(ManifestCompiler):
             fm, body = _split_frontmatter_and_body(raw_text)
 
             lines.append("\\newpage")
+            lines.extend(_running_text_override_lines(src))
             if not suppress_source_wrapper_headings:
                 lines.append(f"# {src_title}")
 
@@ -1028,6 +1104,7 @@ class CompositeBundleCompiler(ManifestCompiler):
                 "section_dividers_enabled": bool(section_divider_inventory),
                 "section_divider_count": len(section_divider_inventory),
                 "section_dividers": section_divider_inventory,
+                "source_running_text_overrides": source_running_text_inventory,
             },
         )
         return plan
@@ -1112,6 +1189,7 @@ class CompositeBundleCompiler(ManifestCompiler):
                 role = src.get("role")
                 if role not in {"frontmatter", "primary_anchor", "supporting_anchor", "appendix", "reference"}:
                     errors.append(f"source[{i}] unknown role: {role}")
+                errors.extend(_validate_running_text(src, f"source[{i}]"))
 
         # figures
         figures = manifest.get("figures", [])
@@ -1185,6 +1263,7 @@ class CompositeBundleCompiler(ManifestCompiler):
                     value = divider.get(key)
                     if value is not None and not isinstance(value, bool):
                         errors.append(f"section_divider[{i}] {key} must be a boolean")
+                errors.extend(_validate_running_text(divider, f"section_divider[{i}]"))
                 requested_profile_id = divider.get("profile_id") or divider.get("profile")
                 requested_profile_family = divider.get("profile_family")
                 if requested_profile_id or requested_profile_family:
@@ -1268,14 +1347,9 @@ class LabelRunCompiler(ManifestCompiler):
                 fm, body = _split_frontmatter_and_body(raw_text)
 
                 if fm:
-                    try:
-                        import yaml as _yaml
-                        fm_yaml = _yaml.dump(fm, default_flow_style=False, allow_unicode=True)
-                    except ImportError:
-                        fm_yaml = str(fm)
-                    lines.append("```yaml")
-                    lines.append(fm_yaml.rstrip())
-                    lines.append("```")
+                    lines.append("**Label metadata:**  ")
+                    for key, value in sorted(fm.items()):
+                        lines.append(f"- `{key}`: {value}")
                     lines.append("")
 
                 lines.append(body.rstrip())

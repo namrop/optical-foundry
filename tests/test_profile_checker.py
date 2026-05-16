@@ -92,6 +92,20 @@ def test_mythic_letter_johannah_is_bundle_ok():
     assert cap.template_source == "local"
 
 
+def test_codex0_is_bundle_ok():
+    cap = check_profile("codex0")
+    assert cap.bundle_compatibility == "ok"
+    assert cap.supports_toc is True
+    assert cap.has_tightlist is True
+    assert cap.has_longtable is True
+    assert cap.defaults_found is not None
+    assert cap.defaults_found.endswith("/codex0.yaml")
+    assert cap.template_found is not None
+    assert cap.template_found.endswith("/codex0.tex")
+    assert cap.defaults_source == "local"
+    assert cap.template_source == "local"
+
+
 def test_letter_is_bundle_ok():
     cap = check_profile("letter")
     assert cap.bundle_compatibility == "ok"
@@ -246,10 +260,10 @@ def test_json_report_includes_source_fields():
     for pid, cap in caps.items():
         assert "defaults_source" in cap, f"Missing defaults_source for {pid}"
         assert "template_source" in cap, f"Missing template_source for {pid}"
-        assert cap["defaults_source"] in ("local", "40_latex", "missing"), (
+        assert cap["defaults_source"] in ("local", "missing"), (
             f"{pid}: invalid defaults_source '{cap['defaults_source']}'"
         )
-        assert cap["template_source"] in ("local", "40_latex", "missing"), (
+        assert cap["template_source"] in ("local", "missing"), (
             f"{pid}: invalid template_source '{cap['template_source']}'"
         )
 
@@ -259,10 +273,10 @@ def test_summary_includes_source_counts():
     report = __import__("json").loads(data)
     s = report["summary"]
     # At least some should be local since we have the import dir
-    assert s["defaults_local"] > 0, "Expected some local defaults"
-    assert s["templates_local"] > 0, "Expected some local templates"
-    assert s["defaults_local"] + s["defaults_40_latex"] == s["with_defaults"]
-    assert s["templates_local"] + s["templates_40_latex"] == s["with_templates"]
+    assert s["defaults_local"] == s["with_defaults"]
+    assert s["templates_local"] == s["with_templates"]
+    assert s.get("defaults_40_latex", 0) == 0
+    assert s.get("templates_40_latex", 0) == 0
 
 
 def test_unknown_profile_source_is_missing():

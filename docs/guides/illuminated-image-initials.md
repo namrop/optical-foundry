@@ -41,6 +41,39 @@ The image supplies the visible initial letter. The following paragraph should be
 
 Important: the fenced block and the paragraph text must lower into the same paragraph. If the image appears detached above the paragraph, the macro/paragraph boundary has been broken.
 
+````markdown
+```of-initial
+recipe: mythic_letter_default
+path: assets/dropcaps/oasis/T.png
+```
+hey awoke on a beach...
+````
+
+Explicit tuning can override any recipe value:
+
+````markdown
+```of-initial
+recipe: codex0_a5_default
+path: assets/dropcaps/codex0/I.png
+gap: .09in
+lines: 4
+```
+n the beginning...
+````
+
+Named recipes currently exposed by the CLI:
+
+- `codex0_a5_default`: `width: .72in`, `lines: 4`, `gap: .06in`, `raise: 0in`, `align: bottom`.
+- `mythic_letter_default`: `width: .84in`, `lines: 4`, `gap: .08in`, `raise: 0in`, `align: bottom`.
+- `cam_letter_default`: `width: .80in`, `lines: 4`, `gap: .08in`, `raise: 0in`, `align: bottom`.
+- `generic_report_default`: `width: .78in`, `lines: 4`, `gap: .08in`, `raise: 0in`, `align: bottom`.
+
+List recipes from the repo root with:
+
+```bash
+python3.14 -m cli initial recipes
+```
+
 ## Asset format
 
 Preferred asset properties:
@@ -137,6 +170,19 @@ Recommended crop policy:
 
 When text looks too far from the image but `gap` is already around `.06in`, inspect the PNG canvas before changing code.
 
+The Foundry CLI can report alpha bounds and a crop box for transparent PNG drop caps:
+
+```bash
+python3.14 -m cli initial inspect profiles/40_latex_import/assets/dropcaps/codex0/I.png
+```
+
+The report includes:
+
+- `alpha_bbox_px`: visible non-transparent bounds;
+- `transparent_margins_px`: invisible canvas on each side;
+- `recommended_crop_box_px`: `left,top,right,bottom` crop box with right/bottom exclusive;
+- `needs_crop_attention`: true when the transparent margin fraction is large enough to explain suspicious spacing.
+
 ## Profile-specific tuning loop
 
 For a new profile:
@@ -152,7 +198,7 @@ For a new profile:
    - normal paragraph flow resumes after the image block;
    - body text remains live/selectable in the PDF;
    - evidence warnings are empty or explained;
-   - `target_40_latex_mutated: false`.
+   - `target_legacy_profile_tree_mutated: false`.
 5. Tune in this order:
    - crop transparent image margin;
    - `gap`;

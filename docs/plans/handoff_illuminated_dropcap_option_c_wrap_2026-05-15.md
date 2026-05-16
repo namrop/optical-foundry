@@ -251,7 +251,8 @@ A finished worker pass should produce:
 5. Evidence JSON reports:
    - `success: true`;
    - no warnings, or explained warnings;
-   - `target_40_latex_mutated: false`.
+   - `target_legacy_profile_tree_mutated: false`;
+   - `reads_legacy_profile_tree: false`.
 6. Screenshot/contact-sheet evidence for visual review.
 7. If code was changed, tests/profile checks should pass for the touched profiles or explain residual gaps.
 

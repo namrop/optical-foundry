@@ -32,6 +32,10 @@ from engine.manifest_compiler import (
 from renderers.pandoc_renderer import PandocRenderer
 from renderers.document_renderer import DocumentRenderer
 from engine.profile_checker import check_all_profiles, check_all_profiles_json, check_profile
+from engine.profile_smoke import DEFAULT_DOCUMENT_SMOKE_PROFILES, run_profile_smoke_matrix
+from engine.visual_proof import build_visual_proof
+from engine.dropcap_assets import analyze_dropcap_alpha_bounds
+from engine.layout_images import image_initial_recipes
 
 
 def _default_registry() -> ManifestRegistry:
@@ -198,6 +202,54 @@ def cmd_manifest(args: argparse.Namespace) -> int:
     return 0 if success else 1
 
 
+def cmd_initial(args: argparse.Namespace) -> int:
+    """Inspect and list illuminated image-initial tuning surfaces."""
+    if args.initial_command == "recipes":
+        print(json.dumps({"recipes": image_initial_recipes()}, indent=2, sort_keys=True))
+        return 0
+    if args.initial_command == "inspect":
+        report = analyze_dropcap_alpha_bounds(Path(args.input), alpha_threshold=args.alpha_threshold)
+        print(json.dumps(report, indent=2, sort_keys=True))
+        return 0 if report.get("status") == "ok" else 1
+    print("ERROR: initial subcommand required", file=sys.stderr)
+    return 1
+
+
+def cmd_proof(args: argparse.Namespace) -> int:
+    """Generate visual proof artifacts for rendered PDFs."""
+    if args.proof_command != "contact-sheet":
+        print("ERROR: proof subcommand required", file=sys.stderr)
+        return 1
+    proof = build_visual_proof(
+        Path(args.input),
+        output_dir=Path(args.output),
+        max_pages=args.max_pages,
+        columns=args.columns,
+        dpi=args.dpi,
+    )
+    print(json.dumps(proof, indent=2, sort_keys=True))
+    return 0 if proof.get("status") == "ok" else 1
+
+
+def cmd_smoke(args: argparse.Namespace) -> int:
+    """Run smoke matrices for render/profile behavior."""
+    if args.smoke_command != "profiles":
+        print("ERROR: smoke subcommand required", file=sys.stderr)
+        return 1
+    profiles = args.profile or list(DEFAULT_DOCUMENT_SMOKE_PROFILES)
+    summary = run_profile_smoke_matrix(
+        profiles=profiles,
+        fixture=args.fixture,
+        output_dir=args.output,
+        create_proofs=args.proof,
+        proof_max_pages=args.proof_max_pages,
+        proof_columns=args.proof_columns,
+        proof_dpi=args.proof_dpi,
+    )
+    print(json.dumps(summary, indent=2, sort_keys=True))
+    return 0 if summary["status"] == "passed" else 1
+
+
 def cmd_profiles(args: argparse.Namespace) -> int:
     """Check and report profile capabilities."""
     if args.json:
@@ -254,7 +306,7 @@ def _print_profile_table_row(cap: "ProfileCapability") -> None:
     print(f"Profile: {cap.profile_id}")
     print(f"  Defaults:    {cap.defaults_found or 'MISSING'}  (source: {cap.defaults_source})")
     print(f"  Template:    {cap.template_found or 'MISSING'}  (source: {cap.template_source}, inferred: {cap.template_inferred})")
-    print(f"  Uses 40_latex ref: {cap.uses_40_latex}")
+    print(f"  Uses external profile ref: {cap.uses_legacy_profile_tree}")
     print(f"  TOC support:   {cap.supports_toc}")
     print(f"  Tightlist:     {cap.has_tightlist}")
     print(f"  Longtable:     {cap.has_longtable}")
@@ -289,6 +341,40 @@ def main() -> int:
     pf_ap.add_argument("--json", action="store_true", help="Output full JSON report")
     pf_ap.add_argument("--profile", help="Check a single profile")
     pf_ap.set_defaults(func=cmd_profiles)
+
+    # smoke
+    smoke_ap = sub.add_parser("smoke", help="Run render smoke matrices")
+    smoke_sub = smoke_ap.add_subparsers(dest="smoke_command")
+    smoke_profiles_ap = smoke_sub.add_parser("profiles", help="Render a generated fixture across selected profiles")
+    smoke_profiles_ap.add_argument("--fixture", choices=["basic", "illuminated-initial"], default="basic")
+    smoke_profiles_ap.add_argument("--profile", action="append", help="Profile to test; repeat to test multiple profiles")
+    smoke_profiles_ap.add_argument("--output", default="generated/profile_smoke_matrix")
+    smoke_profiles_ap.add_argument("--proof", action="store_true", help="Generate visual proof contact sheets for passed renders")
+    smoke_profiles_ap.add_argument("--proof-max-pages", type=int, default=12)
+    smoke_profiles_ap.add_argument("--proof-columns", type=int, default=3)
+    smoke_profiles_ap.add_argument("--proof-dpi", type=int, default=120)
+    smoke_profiles_ap.set_defaults(func=cmd_smoke)
+
+    # initial
+    initial_ap = sub.add_parser("initial", help="Inspect and tune illuminated image initials")
+    initial_sub = initial_ap.add_subparsers(dest="initial_command")
+    initial_recipes_ap = initial_sub.add_parser("recipes", help="List named of-initial tuning recipes")
+    initial_recipes_ap.set_defaults(func=cmd_initial)
+    initial_inspect_ap = initial_sub.add_parser("inspect", help="Inspect PNG alpha bounds for drop-cap cropping")
+    initial_inspect_ap.add_argument("input", help="Drop-cap PNG path")
+    initial_inspect_ap.add_argument("--alpha-threshold", type=int, default=0)
+    initial_inspect_ap.set_defaults(func=cmd_initial)
+
+    # proof
+    proof_ap = sub.add_parser("proof", help="Generate visual proof artifacts for rendered PDFs")
+    proof_sub = proof_ap.add_subparsers(dest="proof_command")
+    contact_ap = proof_sub.add_parser("contact-sheet", help="Rasterize a PDF and create a labeled SVG contact sheet")
+    contact_ap.add_argument("input", help="Rendered PDF path")
+    contact_ap.add_argument("--output", default="generated/proofs/contact_sheet")
+    contact_ap.add_argument("--max-pages", type=int, default=12)
+    contact_ap.add_argument("--columns", type=int, default=3)
+    contact_ap.add_argument("--dpi", type=int, default=120)
+    contact_ap.set_defaults(func=cmd_proof)
 
     args = ap.parse_args()
     if args.command is None:

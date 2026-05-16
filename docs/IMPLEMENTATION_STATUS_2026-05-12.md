@@ -3,7 +3,7 @@ uid: optical-foundry-code-change-status-2026-05-12
 kind: implementation_status
 status: active
 created: 2026-05-12
-updated: 2026-05-15
+updated: 2026-05-16
 title: "Optical Foundry — Code Change Status"
 summary: "Code-level status for the May 2026 Optical Foundry manifest/rendering changes. This document intentionally excludes packet-specific document content notes."
 tags:
@@ -23,7 +23,20 @@ This file records **code and contract changes only**. It should not be used as a
 - Branch: `main`
 - Baseline HEAD before current uncommitted implementation slice: `ed22971c76849357cb40d4086e075856b5fe4a3c`
 - Validation command: `python3.14 -m pytest -q`
-- Latest observed result: `149 passed`
+- Latest observed result: `224 passed`
+
+## Archive-readiness validation
+
+See `docs/PROFILE_ARCHIVE_READINESS_2026-05-16.md` for the exhaustive Foundry-owned profile runtime check before archiving the external `40_latex` tree.
+
+Current result:
+
+- 23/23 canonical profiles covered.
+- 17/17 document-compatible profiles pass basic PDF smoke.
+- 17/17 document-compatible profiles pass illuminated-initial PDF smoke.
+- 6/6 fixed-layout/non-prose profiles pass profile-specific PDF builds.
+- 40 current evidence files parsed; no render failures, no retired evidence keys, no absolute legacy path hits, and no bad legacy boundary assertions.
+- Full tests: `224 passed`.
 
 ## Implemented code surfaces
 
@@ -78,6 +91,7 @@ Compiler behavior:
 - `blank_after: true` adds a labeled intentional blank page after a divider; default is false;
 - `background_image` attaches a full-page background to the divider page using the guarded render-resource path rules;
 - `profile_id` / `profile_family` resolve a divider-local profile hook for compatible templates and evidence;
+- source-level and divider-level `running_text` overrides can change section-local header/footer text without changing profile assets or geometry;
 - `render.numbering_strategy: section_dividers` makes divider titles own numbered top-level sections, demotes following source headings one level, emits frontmatter/mainmatter/appendix transitions, and reflects the resulting structure through memoir/Pandoc TOC numbering;
 - `AssemblyView.generated_sections` records `section_divider:<uid>` entries;
 - generic divider text is LaTeX-escaped;
@@ -96,7 +110,8 @@ Evidence boundary fields include:
 
 - `section_dividers_enabled`
 - `section_divider_count`
-- `section_dividers` inventory with UID, kind, resolved target UID/order, pagination flags, background image path, divider-local profile evidence, and source path when applicable.
+- `section_dividers` inventory with UID, kind, resolved target UID/order, pagination flags, background image path, divider-local profile evidence, divider-local `running_text`, and source path when applicable.
+- `source_running_text_overrides` inventory for per-source header/footer text overrides.
 - `titlepage_blank_after`
 - `section_divider_numbering`
 
@@ -104,13 +119,39 @@ Evidence boundary fields include:
 
 Updated implementation surfaces include:
 
-- bundle manifest schema support for `section_dividers`, divider pagination/background/profile options, `frontmatter` source role, and divider-faithful numbering strategy;
+- bundle manifest schema support for `section_dividers`, divider pagination/background/profile options, per-source/per-divider `running_text`, `frontmatter` source role, and divider-faithful numbering strategy;
 - bundle assembly contract documentation for divider insertion order, recto/blank semantics, and frontmatter/mainmatter/appendix transitions;
 - render-manifest contract documentation for generic vs source-backed divider semantics, title/divider background support, and intentional blank-page text;
 - compiler tests for generic divider insertion, source-backed divider insertion, recto/title blank defaults, divider profile/background/blank-after controls, faithful numbering, template blank text, and validation failures;
 - smoke evidence for title-page blank defaults, divider backgrounds, section-divider manifest behavior, and divider-faithful TOC/numbering.
 
-### 4. Vendored `wrapfig` support for source-placed layout images
+### 4. Foundry-owned profile runtime imports
+
+Optical Foundry no longer uses the external legacy profile tree as an active runtime fallback. The renderer and profile checker resolve defaults, templates, styles, and profile assets through the Foundry-owned import tree:
+
+```text
+profiles/40_latex_import/
+  defaults/
+  templates/
+  assets/
+  styles/texmf/
+```
+
+Runtime behavior:
+
+- missing defaults/templates are reported as `missing`, not silently loaded from the external legacy tree;
+- `TEXINPUTS`, `TEXMFHOME`, Pandoc `--resource-path`, and profile asset roots are built from the Foundry-owned import surface plus the repo root;
+- explicit relative template overrides resolve only under `profiles/40_latex_import/templates/`;
+- profile capability JSON reports `uses_legacy_profile_tree: false` for all profiles;
+- render/profile evidence uses `target_legacy_profile_tree_mutated: false` and `reads_legacy_profile_tree: false`.
+
+Validation guardrails:
+
+- runtime code under `engine/`, `renderers/`, and `cli/` is tested against absolute references to `~/Digital_Workspace/40_latex`;
+- profile summaries require local defaults/templates for all currently resolved profiles;
+- generated smoke evidence must not contain legacy profile-tree boundary keys.
+
+### 5. Vendored `wrapfig` support for source-placed layout images
 
 The local imported TeX tree now vendors CTAN `wrapfig.sty` under:
 
@@ -147,7 +188,7 @@ For exact intra-source full-page figures, the current safe boundary is:
 2. create a generated/staged source copy;
 3. insert the full-page image block at the semantic anchor inside that staged source;
 4. render the staged source through the manifest;
-5. verify evidence, `pdfimages`, page count, text markers, and `target_40_latex_mutated: false`.
+5. verify evidence, `pdfimages`, page count, text markers, and `target_legacy_profile_tree_mutated: false`.
 
 If exact full-page figure placement should become manifest-owned later, it needs a separate anchored-placement contract rather than overloading `figures:`.
 

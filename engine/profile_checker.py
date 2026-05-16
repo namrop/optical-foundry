@@ -1,25 +1,21 @@
 """Profile capability inventory / checker.
 
 Checks each profile known to PandocRenderer for:
-- defaults availability (40_latex defaults/ or greenfield profiles/)
-- template availability (40_latex templates/)
+- Foundry-owned defaults availability
+- Foundry-owned template availability
 - TOC support (template has $if(toc)$ guard — pandoc --toc engages it)
 - bundle compatibility (ok / partial / incompatible with reasons)
 
-Read-only: never mutates 40_latex, never writes to disk.
+Read-only: reports profile capability, never writes to disk.
 """
 
 from __future__ import annotations
 
 import json
 from dataclasses import dataclass, field
-from pathlib import Path
 from typing import Any
 
 from engine.profile_resolver import resolve_profile
-
-# Read-only reference path for 40_latex.
-LATEX40 = Path("~/Digital_Workspace/40_latex")
 
 # ── Profile → template mapping (mirrors PandocRenderer._infer_template) ──────
 
@@ -32,6 +28,7 @@ PROFILE_TEMPLATE_MAP: dict[str, str] = {
     "yugen-civic": "base.tex",
     "cam": "cam.tex",
     "mythic": "mythic.tex",
+    "codex0": "codex0.tex",
     "mythic-letter": "personal_letter.tex",
     "mythic-letter-johannah": "mythic_letter_johannah.tex",
     "letter": "personal_letter.tex",
@@ -58,6 +55,7 @@ PROFILE_IDS = [
     "yugen-civic",
     "cam",
     "mythic",
+    "codex0",
     "mythic-letter",
     "mythic-letter-johannah",
     "letter",
@@ -77,9 +75,9 @@ PROFILE_IDS = [
 
 # ── Known template facts ─────────────────────────────────────────────────────
 
-# Templates that exist on disk in 40_latex/templates/
+# Templates whose local Foundry-owned copies expose bundle-compatible features.
 KNOWN_TEMPLATES = {
-    "base.tex", "cam.tex", "convergence.tex",
+    "base.tex", "cam.tex", "codex0.tex", "convergence.tex",
     "elian_packet.tex", "elian_poster.tex",
     "generic_report.tex", "keeper.tex",
     "label_sheet.tex", "mythic.tex",
@@ -100,7 +98,7 @@ TEMPLATE_CORRECTIONS: dict[str, str] = {
 # Profiles with TOC guard ($if(toc)$) in their effective template.
 TOC_GUARD_PROFILES = {
     "generic-report", "risk", "tech", "creative", "yugen-civic", "cam",
-    "mythic", "letter", "mythic-letter", "mythic-letter-johannah",
+    "mythic", "codex0", "letter", "mythic-letter", "mythic-letter-johannah",
     "convergence", "keeper", "life",
     "yugen-brand", "yugen-brand-elevated", "prometheus-packet",
 }
@@ -108,7 +106,7 @@ TOC_GUARD_PROFILES = {
 # Profiles whose effective template defines \tightlist.
 TIGHTLIST_PROFILES = {
     "generic-report", "risk", "tech", "creative", "yugen-civic", "cam",
-    "mythic", "letter", "mythic-letter", "mythic-letter-johannah",
+    "mythic", "codex0", "letter", "mythic-letter", "mythic-letter-johannah",
     "convergence", "keeper", "life",
     "yugen-brand", "yugen-brand-elevated", "prometheus-packet",
     "elian-packet", "resume", "labels-avery-5164", "labels-avery-15264",
@@ -118,7 +116,7 @@ TIGHTLIST_PROFILES = {
 # Profiles whose effective template defines \longtable.
 LONGTABLE_PROFILES = {
     "generic-report", "risk", "tech", "creative", "yugen-civic", "cam",
-    "mythic", "letter", "mythic-letter", "mythic-letter-johannah",
+    "mythic", "codex0", "letter", "mythic-letter", "mythic-letter-johannah",
     "convergence", "keeper", "life",
     "yugen-brand", "yugen-brand-elevated", "prometheus-packet",
     "elian-packet",
@@ -129,7 +127,7 @@ LONGTABLE_PROFILES = {
 # Profiles fully compatible with composite_bundle rendering.
 BUNDLE_OK = {
     "generic-report", "risk", "tech", "creative", "yugen-civic", "cam",
-    "mythic", "letter", "mythic-letter", "mythic-letter-johannah",
+    "mythic", "codex0", "letter", "mythic-letter", "mythic-letter-johannah",
     "convergence", "keeper", "life",
     "yugen-brand", "yugen-brand-elevated",
 }
@@ -193,11 +191,11 @@ class ProfileCapability:
 
     profile_id: str
     defaults_found: str | None = None   # resolved path, or None
-    defaults_source: str = "missing"     # local | 40_latex | missing
+    defaults_source: str = "missing"     # local | missing
     template_found: str | None = None   # resolved path, or None
-    template_source: str = "missing"     # local | 40_latex | missing
+    template_source: str = "missing"     # local | missing
     template_inferred: str = ""         # raw mapping lookup (before corrections)
-    uses_40_latex: bool = True
+    uses_legacy_profile_tree: bool = False
     supports_toc: bool = False
     has_tightlist: bool = False
     has_longtable: bool = False
@@ -213,7 +211,7 @@ class ProfileCapability:
             "template_found": self.template_found,
             "template_source": self.template_source,
             "template_inferred": self.template_inferred,
-            "uses_40_latex": self.uses_40_latex,
+            "uses_legacy_profile_tree": self.uses_legacy_profile_tree,
             "supports_toc": self.supports_toc,
             "has_tightlist": self.has_tightlist,
             "has_longtable": self.has_longtable,
@@ -244,11 +242,7 @@ def check_profile(profile_id: str) -> ProfileCapability:
         cap.template_source = "missing"
 
     for warning in resolved.warnings:
-        # The current checker intentionally reports legacy asset fallback as a
-        # boundary fact, not a per-profile capability warning, until the asset
-        # import phase lands.
-        if "legacy 40_latex/assets" not in warning:
-            cap.warnings.append(warning)
+        cap.warnings.append(warning)
 
     # ── feature checks ────────────────────────────────────────────
     cap.supports_toc = profile_id in TOC_GUARD_PROFILES
@@ -273,7 +267,7 @@ def check_profile(profile_id: str) -> ProfileCapability:
     if cap.template_found is None and cap.bundle_compatibility == "ok":
         cap.warnings.append(
             f"Classified as bundle-ok but template not found on disk — "
-            f"check 40_latex/templates/"
+            f"check profiles/40_latex_import/templates/"
         )
 
     return cap
@@ -296,12 +290,12 @@ def check_all_profiles_json() -> str:
         "summary": _build_summary(caps),
         "profiles": {pid: cap.to_dict() for pid, cap in caps.items()},
         "boundary": {
-            "target_40_latex_mutated": False,
-            "reads_40_latex_readonly": True,
+            "target_legacy_profile_tree_mutated": False,
+            "reads_legacy_profile_tree": False,
             "notes": (
-                "This report reads 40_latex/defaults/*.yaml and "
-                "40_latex/templates/*.tex as read-only references. "
-                "No files are modified."
+                "This report resolves defaults, templates, styles, and assets "
+                "from Foundry-owned profile imports. No external profile tree "
+                "fallback is used."
             ),
         },
     }
@@ -317,8 +311,8 @@ def _build_summary(caps: dict[str, ProfileCapability]) -> dict[str, Any]:
     with_toc = sum(1 for c in caps.values() if c.supports_toc)
     local_defaults = sum(1 for c in caps.values() if c.defaults_source == "local")
     local_templates = sum(1 for c in caps.values() if c.template_source == "local")
-    remote_defaults = sum(1 for c in caps.values() if c.defaults_source == "40_latex")
-    remote_templates = sum(1 for c in caps.values() if c.template_source == "40_latex")
+    remote_defaults = 0
+    remote_templates = 0
     return {
         "total": len(caps),
         "bundle_ok": ok,
@@ -332,74 +326,3 @@ def _build_summary(caps: dict[str, ProfileCapability]) -> dict[str, Any]:
         "templates_local": local_templates,
         "templates_40_latex": remote_templates,
     }
-
-
-# ── Helpers ───────────────────────────────────────────────────────────────────
-
-
-def _find_defaults_local_remote(profile_id: str, local_import: Path) -> tuple[Path | None, Path | None]:
-    """Find defaults YAML for a profile, returning (local_path, remote_path)."""
-    special: dict[str, str] = {
-        "tech": "technology.yaml",
-        "yugen-civic": "civic.yaml",
-        "resume": "resume_resume.yaml",
-        "prometheus-packet": "prometheus_packet.yaml",
-        "yugen-brand": "yugenbase.yaml",
-        "yugen-brand-elevated": "yugenbase.yaml",
-        "labels-avery-15264": "labels_avery_5164.yaml",
-    }
-    patterns = [
-        f"{profile_id}.yaml",
-        f"{profile_id.replace('_', '-')}.yaml",
-        f"{profile_id.replace('-', '_')}.yaml",
-    ]
-    if profile_id in special:
-        patterns.insert(0, special[profile_id])
-
-    local: Path | None = None
-    remote: Path | None = None
-    for p in patterns:
-        lc = local_import / "defaults" / p
-        if lc.exists() and local is None:
-            local = lc
-        rc = LATEX40 / "defaults" / p
-        if rc.exists() and remote is None:
-            remote = rc
-    return local, remote
-
-
-def _find_defaults(profile_id: str) -> Path | None:
-    """Find defaults YAML for a profile, checking 40_latex then greenfield."""
-    # 40_latex defaults/
-    for pattern in [
-        f"{profile_id}.yaml",
-        f"{profile_id.replace('_', '-')}.yaml",
-        f"{profile_id.replace('-', '_')}.yaml",
-    ]:
-        candidate = LATEX40 / "defaults" / pattern
-        if candidate.exists():
-            return candidate
-
-    # Special-case known mappings that don't follow naming convention.
-    special: dict[str, str] = {
-        "tech": "technology.yaml",
-        "yugen-civic": "civic.yaml",
-        "resume": "resume_resume.yaml",
-        "prometheus-packet": "prometheus_packet.yaml",
-        "yugen-brand": "yugenbase.yaml",
-        "yugen-brand-elevated": "yugenbase.yaml",
-        "labels-avery-15264": "labels_avery_5164.yaml",
-    }
-    if profile_id in special:
-        candidate = LATEX40 / "defaults" / special[profile_id]
-        if candidate.exists():
-            return candidate
-
-    # Greenfield profiles/
-    gf_root = Path(__file__).resolve().parents[1]
-    for pdir_name in ("reports", "labels", "stickers", "letters", "resumes"):
-        candidate = gf_root / "profiles" / pdir_name / f"{profile_id}.yaml"
-        if candidate.exists():
-            return candidate
-
-    return None

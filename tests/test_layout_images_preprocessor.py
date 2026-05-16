@@ -134,6 +134,59 @@ def test_layout_image_rejects_tex_unsafe_source_directory_with_actionable_error(
     assert "%" in message
 
 
+def test_image_initial_recipe_applies_defaults_and_records_recipe(tmp_path):
+    src = tmp_path / "initial-recipe.md"
+    src.write_text(
+        "```of-initial\n"
+        "recipe: codex0_a5_default\n"
+        "path: assets/dropcaps/codex0/I.png\n"
+        "```\n"
+        "n the beginning, the threshold stood open.\n"
+    )
+
+    result = preprocess_layout_image_blocks(src, tmp_path, "initial-recipe")
+    rewritten = result.rewritten_source.read_text()
+    entry = result.figure_inventory[0]
+
+    assert "\\OFImageInitialSetup{assets/dropcaps/codex0/I.png}{.72in}{4}{.06in}{0in}{bottom}" in rewritten
+    assert entry["recipe"] == "codex0_a5_default"
+    assert entry["width"] == ".72in"
+    assert entry["wrapped_lines"] == 4
+
+
+def test_image_initial_recipe_allows_explicit_tuning_override(tmp_path):
+    src = tmp_path / "initial-recipe-override.md"
+    src.write_text(
+        "```of-initial\n"
+        "recipe: codex0_a5_default\n"
+        "path: assets/dropcaps/codex0/I.png\n"
+        "gap: .09in\n"
+        "lines: 4\n"
+        "```\n"
+        "n the beginning, the threshold stood open.\n"
+    )
+
+    result = preprocess_layout_image_blocks(src, tmp_path, "initial-recipe-override")
+    rewritten = result.rewritten_source.read_text()
+    entry = result.figure_inventory[0]
+
+    assert "\\OFImageInitialSetup{assets/dropcaps/codex0/I.png}{.72in}{4}{.09in}{0in}{bottom}" in rewritten
+    assert entry["recipe"] == "codex0_a5_default"
+
+
+def test_image_initial_unknown_recipe_is_rejected(tmp_path):
+    src = tmp_path / "initial-bad-recipe.md"
+    src.write_text(
+        "```of-initial\n"
+        "recipe: missing_recipe\n"
+        "path: assets/dropcaps/codex0/I.png\n"
+        "```\n"
+    )
+
+    with pytest.raises(LayoutImageRenderError, match="unknown recipe"):
+        preprocess_layout_image_blocks(src, tmp_path, "initial-bad-recipe")
+
+
 def test_image_initial_block_rewrites_to_bottom_aligned_macro_with_live_text(tmp_path):
     src = tmp_path / "initial-image.md"
     src.write_text(

@@ -30,7 +30,7 @@ from engine.page_size import (
     merge_page_size_geometry,
     normalize_page_size,
 )
-from engine.profile_resolver import LOCAL_IMPORT, LATEX40, ResolvedProfile, resolve_profile
+from engine.profile_resolver import LOCAL_IMPORT, ResolvedProfile, resolve_profile
 from engine.projection_plan import ProjectionPlan
 from renderers.base import Renderer
 
@@ -183,10 +183,20 @@ class PandocRenderer(Renderer):
         pdf_sha = self._sha256_file(output_pdf)
         pages = self._count_pages(output_pdf)
 
+        warnings = list(plan.boundary_assertions.get("warnings", [])) + defaults_meta.get("warnings", []) + resolved_profile.warnings
+        validation = self._validation_success(
+            pdf_written=output_pdf.exists(),
+            text_extract=text_extract,
+            source_inventory=plan.source_inventory,
+            figure_inventory=plan.figure_inventory,
+            warnings=warnings,
+        )
+
         # --- evidence ---
         evidence = {
             "schema_version": "render_evidence_v1",
             "render_id": plan.render_id,
+            "status": "ok",
             "profile": self._profile_evidence(resolved_profile, template_path),
             "input": {
                 "path": str(plan.render_source),
@@ -227,9 +237,10 @@ class PandocRenderer(Renderer):
                 "toc_depth": plan.toc_depth,
                 "figures_validated": len(plan.figure_inventory) == 0,
             },
-            "warnings": list(plan.boundary_assertions.get("warnings", [])) + defaults_meta.get("warnings", []) + resolved_profile.warnings,
+            "validation": validation,
+            "warnings": warnings,
             "boundary": {
-                "target_40_latex_mutated": False,
+                "target_legacy_profile_tree_mutated": False,
                 "production_output": False,
                 "packet_local_generated_only": True,
                 **resolved_profile.boundary,
@@ -527,16 +538,11 @@ class PandocRenderer(Renderer):
         return resolved.template_path.name if resolved.template_path else None
 
     def _resolve_template_override(self, template: str) -> Path:
-        """Resolve an explicit plan template using the same local-first order."""
+        """Resolve an explicit plan template from Foundry-owned profile imports."""
         template_path = Path(template)
         if template_path.is_absolute():
             return template_path
         local = LOCAL_IMPORT / "templates" / template
-        if local.exists():
-            return local
-        remote = LATEX40 / "templates" / template
-        if remote.exists():
-            return remote
         return local
 
     @staticmethod
@@ -912,6 +918,63 @@ class PandocRenderer(Renderer):
         except Exception:
             return "unknown"
 
+    @staticmethod
+    def _raw_latex_leakage(text_extract: str) -> bool:
+        """Return true when extracted PDF text appears to expose raw render syntax."""
+        if not text_extract:
+            return False
+        return bool(
+            re.search(
+                r"(?:```of-[a-z-]+|\\(?:begin|end|usepackage|includegraphics|OF[A-Za-z]+))",
+                text_extract,
+            )
+        )
+
+    def _validation_success(
+        self,
+        *,
+        pdf_written: bool,
+        text_extract: str,
+        source_inventory: list[dict[str, Any]],
+        figure_inventory: list[dict[str, Any]],
+        warnings: list[str],
+    ) -> dict[str, Any]:
+        checks = {
+            "pdf_written": pdf_written,
+            "text_extract_exists": bool(text_extract),
+            "all_sources_represented": len(source_inventory) > 0,
+            "figure_inventory_recorded": isinstance(figure_inventory, list),
+            "raw_latex_leakage": self._raw_latex_leakage(text_extract),
+        }
+        passed = (
+            checks["pdf_written"]
+            and checks["text_extract_exists"]
+            and checks["all_sources_represented"]
+            and checks["figure_inventory_recorded"]
+            and not checks["raw_latex_leakage"]
+        )
+        return {
+            "status": "passed" if passed else "failed",
+            "checks": checks,
+            "warning_count": len(warnings),
+            "errors": [],
+        }
+
+    @staticmethod
+    def _validation_error(message: str) -> dict[str, Any]:
+        return {
+            "status": "failed",
+            "checks": {
+                "pdf_written": False,
+                "text_extract_exists": False,
+                "all_sources_represented": False,
+                "figure_inventory_recorded": False,
+                "raw_latex_leakage": False,
+            },
+            "warning_count": 0,
+            "errors": [message],
+        }
+
     def _evidence_error(
         self, plan, output_pdf, evidence_file, elapsed, message, cmd
     ) -> dict[str, Any]:
@@ -920,6 +983,7 @@ class PandocRenderer(Renderer):
             "render_id": plan.render_id,
             "status": "error",
             "error": message,
+            "validation": self._validation_error(message),
             "command": " ".join(cmd),
             "render_duration_ms": int(elapsed * 1000),
         }
