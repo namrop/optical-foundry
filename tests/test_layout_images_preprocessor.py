@@ -93,6 +93,18 @@ def test_illumination_package_resolves_through_profile_env():
     assert path == Path("profiles/40_latex_import/styles/texmf/tex/latex/yugen/yugenillumination.sty").resolve()
 
 
+def test_illumination_package_uses_wrapfigure_exclusion_not_hangindent_overlay():
+    sty = Path("profiles/40_latex_import/styles/texmf/tex/latex/yugen/yugenillumination.sty").read_text()
+
+    assert "\\RequirePackage{wrapfig}" in sty
+    assert "\\begin{wrapfigure}[#3]{l}{\\dimexpr\\OFInitialWidth+\\OFInitialGap\\relax}" in sty
+    assert "\\vspace*{\\dimexpr#5-.85\\baselineskip\\relax}" in sty
+    assert "\\includegraphics[width=\\OFInitialWidth]{#1}" in sty
+    assert "\\hangindent" not in sty
+    assert "\\hangafter" not in sty
+    assert "\\raisebox" not in sty
+
+
 def test_layout_image_adds_source_and_output_graphicspath_roots(tmp_path):
     source_dir = tmp_path / "source"
     output_dir = tmp_path / "render"
