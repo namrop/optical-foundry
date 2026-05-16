@@ -34,6 +34,8 @@ from renderers.document_renderer import DocumentRenderer
 from engine.profile_checker import check_all_profiles, check_all_profiles_json, check_profile
 from engine.profile_smoke import DEFAULT_DOCUMENT_SMOKE_PROFILES, run_profile_smoke_matrix
 from engine.visual_proof import build_visual_proof
+from engine.dropcap_assets import analyze_dropcap_alpha_bounds
+from engine.layout_images import image_initial_recipes
 
 
 def _default_registry() -> ManifestRegistry:
@@ -200,6 +202,19 @@ def cmd_manifest(args: argparse.Namespace) -> int:
     return 0 if success else 1
 
 
+def cmd_initial(args: argparse.Namespace) -> int:
+    """Inspect and list illuminated image-initial tuning surfaces."""
+    if args.initial_command == "recipes":
+        print(json.dumps({"recipes": image_initial_recipes()}, indent=2, sort_keys=True))
+        return 0
+    if args.initial_command == "inspect":
+        report = analyze_dropcap_alpha_bounds(Path(args.input), alpha_threshold=args.alpha_threshold)
+        print(json.dumps(report, indent=2, sort_keys=True))
+        return 0 if report.get("status") == "ok" else 1
+    print("ERROR: initial subcommand required", file=sys.stderr)
+    return 1
+
+
 def cmd_proof(args: argparse.Namespace) -> int:
     """Generate visual proof artifacts for rendered PDFs."""
     if args.proof_command != "contact-sheet":
@@ -339,6 +354,16 @@ def main() -> int:
     smoke_profiles_ap.add_argument("--proof-columns", type=int, default=3)
     smoke_profiles_ap.add_argument("--proof-dpi", type=int, default=120)
     smoke_profiles_ap.set_defaults(func=cmd_smoke)
+
+    # initial
+    initial_ap = sub.add_parser("initial", help="Inspect and tune illuminated image initials")
+    initial_sub = initial_ap.add_subparsers(dest="initial_command")
+    initial_recipes_ap = initial_sub.add_parser("recipes", help="List named of-initial tuning recipes")
+    initial_recipes_ap.set_defaults(func=cmd_initial)
+    initial_inspect_ap = initial_sub.add_parser("inspect", help="Inspect PNG alpha bounds for drop-cap cropping")
+    initial_inspect_ap.add_argument("input", help="Drop-cap PNG path")
+    initial_inspect_ap.add_argument("--alpha-threshold", type=int, default=0)
+    initial_inspect_ap.set_defaults(func=cmd_initial)
 
     # proof
     proof_ap = sub.add_parser("proof", help="Generate visual proof artifacts for rendered PDFs")

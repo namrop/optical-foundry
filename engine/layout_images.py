@@ -49,6 +49,36 @@ _ALLOWED_ANCHORS = {"north east", "north west", "south east", "south west", "cen
 _ALLOWED_EDGES = {"", "none", "fade", "vignette", "soft", "soft-edge", "soft_edge"}
 _ALLOWED_INITIAL_ALIGNMENTS = {"bottom", "top"}
 _IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".pdf"}
+_IMAGE_INITIAL_RECIPES: dict[str, dict[str, Any]] = {
+    "codex0_a5_default": {
+        "width": ".72in",
+        "lines": 4,
+        "gap": ".06in",
+        "raise": "0in",
+        "align": "bottom",
+    },
+    "mythic_letter_default": {
+        "width": ".84in",
+        "lines": 4,
+        "gap": ".08in",
+        "raise": "0in",
+        "align": "bottom",
+    },
+    "cam_letter_default": {
+        "width": ".80in",
+        "lines": 4,
+        "gap": ".08in",
+        "raise": "0in",
+        "align": "bottom",
+    },
+    "generic_report_default": {
+        "width": ".78in",
+        "lines": 4,
+        "gap": ".08in",
+        "raise": "0in",
+        "align": "bottom",
+    },
+}
 _LATEX_TEXT_REPLACEMENTS = {
     "\\": r"\textbackslash{}",
     "&": r"\&",
@@ -198,6 +228,11 @@ def _parse_block_yaml(raw: str, idx: int) -> dict[str, Any]:
     }
 
 
+def image_initial_recipes() -> dict[str, dict[str, Any]]:
+    """Return the named `of-initial` tuning recipes available to source authors."""
+    return {name: dict(values) for name, values in _IMAGE_INITIAL_RECIPES.items()}
+
+
 def _parse_initial_yaml(raw: str, idx: int) -> dict[str, Any]:
     try:
         import yaml
@@ -207,24 +242,38 @@ def _parse_initial_yaml(raw: str, idx: int) -> dict[str, Any]:
     if not isinstance(data, dict):
         raise LayoutImageRenderError(f"of-initial[{idx}] must contain a YAML mapping")
 
+    recipe_name = data.get("recipe")
+    recipe: dict[str, Any] = {}
+    if recipe_name is not None:
+        if not isinstance(recipe_name, str) or recipe_name not in _IMAGE_INITIAL_RECIPES:
+            raise LayoutImageRenderError(
+                f"of-initial[{idx}] unknown recipe: {recipe_name}. Available recipes: {', '.join(sorted(_IMAGE_INITIAL_RECIPES))}"
+            )
+        recipe = _IMAGE_INITIAL_RECIPES[recipe_name]
+
     path = data.get("path") or data.get("src") or data.get("image")
     if not _safe_resource_path(path):
         raise LayoutImageRenderError(f"of-initial[{idx}] path must be a relative image/PDF path inside render resource roots")
 
-    width = _safe_dimension(data.get("width"), default="0.84in")
-    gap = _safe_dimension(data.get("gap"), default="0.08in")
-    raise_amount = _safe_dimension(data.get("raise", data.get("vertical_raise")), default="0in")
+    width = _safe_dimension(data.get("width", recipe.get("width")), default="0.84in")
+    gap = _safe_dimension(data.get("gap", recipe.get("gap")), default="0.08in")
+    raise_amount = _safe_dimension(
+        data.get("raise", data.get("vertical_raise", recipe.get("raise"))),
+        default="0in",
+    )
     if width.startswith("-") or gap.startswith("-"):
         raise LayoutImageRenderError(f"of-initial[{idx}] width and gap must be positive dimensions")
 
     try:
-        wrapped_lines = int(data.get("lines", data.get("wrapped_lines", 4)))
+        wrapped_lines = int(data.get("lines", data.get("wrapped_lines", recipe.get("lines", 4))))
     except (TypeError, ValueError) as exc:
         raise LayoutImageRenderError(f"of-initial[{idx}] lines must be an integer") from exc
     if wrapped_lines < 1 or wrapped_lines > 12:
         raise LayoutImageRenderError(f"of-initial[{idx}] lines must be between 1 and 12")
 
-    alignment = str(data.get("align", data.get("alignment", "bottom"))).strip().lower().replace("_", "-")
+    alignment = str(
+        data.get("align", data.get("alignment", recipe.get("align", "bottom")))
+    ).strip().lower().replace("_", "-")
     if alignment not in _ALLOWED_INITIAL_ALIGNMENTS:
         raise LayoutImageRenderError(f"of-initial[{idx}] align must be bottom or top")
 
@@ -235,6 +284,7 @@ def _parse_initial_yaml(raw: str, idx: int) -> dict[str, Any]:
         "raise": raise_amount,
         "wrapped_lines": wrapped_lines,
         "alignment": alignment,
+        "recipe": recipe_name,
     }
 
 
@@ -372,6 +422,7 @@ def _initial_inventory_entry(cfg: dict[str, Any], idx: int) -> dict[str, Any]:
         "wrapped_lines": cfg["wrapped_lines"],
         "alignment": cfg["alignment"],
         "raise": cfg["raise"],
+        "recipe": cfg.get("recipe"),
     }
 
 
