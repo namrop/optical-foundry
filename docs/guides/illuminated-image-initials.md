@@ -198,7 +198,7 @@ For a new profile:
    - normal paragraph flow resumes after the image block;
    - body text remains live/selectable in the PDF;
    - evidence warnings are empty or explained;
-   - `target_40_latex_mutated: false`.
+   - `target_legacy_profile_tree_mutated: false`.
 5. Tune in this order:
    - crop transparent image margin;
    - `gap`;

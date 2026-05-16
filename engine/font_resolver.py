@@ -12,7 +12,6 @@ from typing import Any
 
 GF_ROOT = Path(__file__).resolve().parents[1]
 LOCAL_IMPORT = GF_ROOT / "profiles" / "40_latex_import"
-LATEX40 = Path("~/Digital_Workspace/40_latex")
 POLICY_NAME = "foundry_local_first_declared_system_fallback"
 
 # These names are compatibility declarations inherited from the current profile

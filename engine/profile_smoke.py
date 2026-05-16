@@ -135,7 +135,7 @@ def run_profile_smoke_matrix(
             "pdf_path": output.get("pdf_path", "unknown"),
             "pdf_pages": output.get("pdf_pages", 0),
             "warnings": evidence.get("warnings", []),
-            "target_40_latex_mutated": boundary.get("target_40_latex_mutated"),
+            "target_legacy_profile_tree_mutated": boundary.get("target_legacy_profile_tree_mutated"),
             "render_id": evidence.get("render_id"),
             "evidence_status": evidence_status,
         }

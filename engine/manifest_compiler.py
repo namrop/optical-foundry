@@ -721,7 +721,7 @@ class MarkdownDocumentCompiler(ManifestCompiler):
 
         source_digest = _sha256_hex(source_path)
         boundary_assertions = {
-            "target_40_latex_mutated": False,
+            "target_legacy_profile_tree_mutated": False,
             "profile_manifest_axes_separate": True,
             "document_manifest_lane": True,
             "manifest_family": "document",

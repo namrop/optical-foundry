@@ -112,7 +112,33 @@ Updated implementation surfaces include:
 - compiler tests for generic divider insertion, source-backed divider insertion, recto/title blank defaults, divider profile/background/blank-after controls, faithful numbering, template blank text, and validation failures;
 - smoke evidence for title-page blank defaults, divider backgrounds, section-divider manifest behavior, and divider-faithful TOC/numbering.
 
-### 4. Vendored `wrapfig` support for source-placed layout images
+### 4. Foundry-owned profile runtime imports
+
+Optical Foundry no longer uses the external legacy profile tree as an active runtime fallback. The renderer and profile checker resolve defaults, templates, styles, and profile assets through the Foundry-owned import tree:
+
+```text
+profiles/40_latex_import/
+  defaults/
+  templates/
+  assets/
+  styles/texmf/
+```
+
+Runtime behavior:
+
+- missing defaults/templates are reported as `missing`, not silently loaded from the external legacy tree;
+- `TEXINPUTS`, `TEXMFHOME`, Pandoc `--resource-path`, and profile asset roots are built from the Foundry-owned import surface plus the repo root;
+- explicit relative template overrides resolve only under `profiles/40_latex_import/templates/`;
+- profile capability JSON reports `uses_legacy_profile_tree: false` for all profiles;
+- render/profile evidence uses `target_legacy_profile_tree_mutated: false` and `reads_legacy_profile_tree: false`.
+
+Validation guardrails:
+
+- runtime code under `engine/`, `renderers/`, and `cli/` is tested against absolute references to `~/Digital_Workspace/40_latex`;
+- profile summaries require local defaults/templates for all currently resolved profiles;
+- generated smoke evidence must not contain legacy profile-tree boundary keys.
+
+### 5. Vendored `wrapfig` support for source-placed layout images
 
 The local imported TeX tree now vendors CTAN `wrapfig.sty` under:
 
@@ -149,7 +175,7 @@ For exact intra-source full-page figures, the current safe boundary is:
 2. create a generated/staged source copy;
 3. insert the full-page image block at the semantic anchor inside that staged source;
 4. render the staged source through the manifest;
-5. verify evidence, `pdfimages`, page count, text markers, and `target_40_latex_mutated: false`.
+5. verify evidence, `pdfimages`, page count, text markers, and `target_legacy_profile_tree_mutated: false`.
 
 If exact full-page figure placement should become manifest-owned later, it needs a separate anchored-placement contract rather than overloading `figures:`.
 

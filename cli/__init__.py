@@ -306,7 +306,7 @@ def _print_profile_table_row(cap: "ProfileCapability") -> None:
     print(f"Profile: {cap.profile_id}")
     print(f"  Defaults:    {cap.defaults_found or 'MISSING'}  (source: {cap.defaults_source})")
     print(f"  Template:    {cap.template_found or 'MISSING'}  (source: {cap.template_source}, inferred: {cap.template_inferred})")
-    print(f"  Uses 40_latex ref: {cap.uses_40_latex}")
+    print(f"  Uses external profile ref: {cap.uses_legacy_profile_tree}")
     print(f"  TOC support:   {cap.supports_toc}")
     print(f"  Tightlist:     {cap.has_tightlist}")
     print(f"  Longtable:     {cap.has_longtable}")

@@ -15,38 +15,34 @@ profiles/40_latex_import/
     └── yugen/    ← yugencommon.sty, yugenrisk.sty, etc.
 ```
 
-**Resolution order**: PandocRenderer and profile checker prefer local imports
-(`profiles/40_latex_import/`) first. If a local copy doesn't exist, they fall
-back to `40_latex/` as a read-only reference. All 20 profiles currently resolve
-their defaults and templates from local import.
+**Resolution order**: PandocRenderer and profile checker resolve defaults,
+templates, styles, and profile assets from the Foundry-owned import tree
+(`profiles/40_latex_import/`). There is no active runtime fallback to the
+external legacy profile tree.
 
 **Editing policy**: Files in `profiles/40_latex_import/` are editable Optical
-Foundry copies. The original `40_latex/` tree remains untouched and serves as
-the canonical reference. Future profile modifications should happen in the
-local import, not in `40_latex/`.
+Foundry copies. Profile modifications happen in that local import tree.
 
 **TEXMFHOME**: The pandoc renderer points `TEXMFHOME` to
-`profiles/40_latex_import/styles/texmf` when available, falling back to
-`40_latex/styles/texmf`.
+`profiles/40_latex_import/styles/texmf`.
 
 ---
 
-## Original reference wiring
+## Runtime wiring
 
-How the greenfield `42_optical_foundry` pipeline references `40_latex`
-as a read-only template/style/defaults source.
-
-## Architecture
+Optical Foundry no longer treats the legacy profile tree as a live fallback.
+The renderer resolves through this Foundry-owned surface:
 
 ```
-42_optical_foundry (greenfield)
+42_optical_foundry
   │
   ├── renderers/pandoc_renderer.py       ← PandocRenderDispatch
   │     │
-  │     ├── reads templates from:        40_latex/templates/*.tex
-  │     ├── reads defaults from:         40_latex/defaults/*.yaml
-  │     ├── sets TEXMFHOME to:          40_latex/styles/texmf
-  │     └── shells out to:              pandoc + xelatex
+  │     ├── reads templates from:        profiles/40_latex_import/templates/*.tex
+  │     ├── reads defaults from:         profiles/40_latex_import/defaults/*.yaml
+  │     ├── reads assets from:           profiles/40_latex_import/assets/
+  │     ├── sets TEXMFHOME to:           profiles/40_latex_import/styles/texmf
+  │     └── shells out to:               pandoc + xelatex
   │
   ├── engine/manifest_compiler.py        ← Manifest compilers
   │     └── produces ProjectionPlans consumed by PandocRenderDispatch
@@ -57,9 +53,8 @@ as a read-only template/style/defaults source.
 
 ## Profile ID → template mapping
 
-The `PandocRenderer._infer_template()` method maps profile IDs to template
-filenames. Templates live in `40_latex/templates/`. This is a read-only
-reference — no template is modified.
+The shared profile resolver maps profile IDs to template/default filenames under
+`profiles/40_latex_import/`.
 
 | Profile ID | Template file | Defaults file |
 |---|---|---|
@@ -69,24 +64,24 @@ reference — no template is modified.
 | `tech` | `tech.tex` | `tech.yaml` |
 | `creative` | `creative.tex` | `creative.yaml` |
 | `mythic` | `mythic.tex` | `mythic.yaml` |
-| `mythic-letter` | `mythic_letter.tex` | `mythic_letter.yaml` |
-| `letter` | `letter.tex` | `letter.yaml` |
-| `resume` | `resume.tex` | `resume.yaml` |
-| `prometheus-packet` | `prometheus_packet.tex` | `prometheus_packet.yaml` |
+| `mythic-letter` | `personal_letter.tex` | `mythic_letter.yaml` |
+| `letter` | `personal_letter.tex` | `letter.yaml` |
+| `resume` | `resume.tex` | `resume_resume.yaml` |
+| `prometheus-packet` | `generic_report.tex` | `prometheus_packet.yaml` |
 | `convergence` | `convergence.tex` | `convergence.yaml` |
 | `keeper` | `keeper.tex` | `keeper.yaml` |
-| `labels-avery-5164` | `labels_avery_5164.tex` | `labels_avery_5164.yaml` |
-| `labels-avery-15264` | `labels_avery_5164.tex` | `labels_avery_5164.yaml` |
-| `sticker-sheet` | `sticker_sheet.tex` | `sticker_sheet.yaml` |
+| `labels-avery-5164` | `label_sheet.tex` | `labels_avery_5164.yaml` |
+| `labels-avery-15264` | `label_sheet.tex` | `labels_avery_5164.yaml` |
+| `sticker-sheet` | `label_sheet.tex` | `sticker_sheet.yaml` |
 
 ## Style resolution
 
-The Pandoc renderer sets `TEXMFHOME` to `40_latex/styles/texmf` before
-invoking xelatex. This lets LaTeX find style packages (`.sty` files) in the
-standard TEXMF tree:
+The Pandoc renderer sets `TEXMFHOME` to
+`profiles/40_latex_import/styles/texmf` before invoking xelatex. This lets
+LaTeX find style packages (`.sty` files) in the Foundry-owned TEXMF tree:
 
 ```
-40_latex/styles/texmf/tex/latex/
+profiles/40_latex_import/styles/texmf/tex/latex/
   ├── generic/genericreport.sty
   ├── yugen/yugencommon.sty
   ├── yugen/yugenrisk.sty
@@ -98,28 +93,24 @@ standard TEXMF tree:
   └── resume/resume.sty, resumecommon.sty, cv.sty
 ```
 
-## How to add a new profile reference
+## How to add or modify a profile
 
-1. Ensure the profile has a template in `40_latex/templates/`.
-2. Ensure the profile has a defaults YAML in `40_latex/defaults/`.
-3. Add the mapping to `PandocRenderer._infer_template()`.
-4. Add a test fixture in `fixtures/sources/` and/or `fixtures/manifests/`.
-5. Run `python -m cli doc <fixture> --profile <new-profile>` to validate.
-
-No `40_latex` files are modified. This is a read-only reference architecture.
+1. Add/edit the template in `profiles/40_latex_import/templates/`.
+2. Add/edit the defaults YAML in `profiles/40_latex_import/defaults/`.
+3. Add/edit assets under `profiles/40_latex_import/assets/`.
+4. Add/update the resolver mapping if the profile ID does not map by convention.
+5. Add a test fixture in `fixtures/sources/` and/or `fixtures/manifests/`.
+6. Run `python3.14 -m cli doc <fixture> --profile <new-profile>` to validate.
 
 ## Known gaps
 
-Some profiles may have defaults files but no corresponding template (e.g.,
-`resume_base`, `resume_cv`). These are recorded in the Optical Foundry packet's
-gap report. The greenfield can still render through them if `pandoc` defaults
-alone are sufficient; otherwise the profile needs a template.
+Profiles with no Foundry-owned template/default are reported as missing rather
+than silently falling through to an external profile tree. That makes ownership
+explicit: copy/import the needed surface first, then modify and render locally.
 
-The source `40_latex` `mythic-letter-johannah` template has a known
-`\tightlist` gap documented in the packet. Optical Foundry's **local imported
-copy** now carries bundle compatibility support (`\tightlist`, longtable/
-booktabs/array, and a `$if(toc)$`-guarded TOC slot) without mutating source
-`40_latex`.
+The local imported `mythic-letter-johannah` template carries bundle compatibility
+support (`\tightlist`, longtable/booktabs/array, and a `$if(toc)$`-guarded TOC
+slot) directly in Optical Foundry's profile copy.
 
 ## Profile Capability Checker
 
@@ -135,8 +126,8 @@ python -m cli profiles --json
 ```
 
 Implemented in `engine/profile_checker.py`. Reports for each profile:
-- `defaults_found` — resolved path to defaults YAML (40_latex or greenfield)
-- `template_found` — resolved path to template .tex (40_latex)
+- `defaults_found` — resolved path to defaults YAML under `profiles/40_latex_import/defaults/`
+- `template_found` — resolved path to template `.tex` under `profiles/40_latex_import/templates/`
 - `supports_toc` — template has `$if(toc)$` guard (pandoc `--toc` engages it)
 - `has_tightlist` — template defines `\tightlist`
 - `has_longtable` — template supports longtable

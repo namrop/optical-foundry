@@ -141,6 +141,6 @@ properties:
   boundary:
     type: object
     properties:
-      target_40_latex_mutated: { type: boolean, const: false }
+      target_legacy_profile_tree_mutated: { type: boolean, const: false }
       production_output: { type: boolean, const: false }
       packet_local_generated_only: { type: boolean, const: true }

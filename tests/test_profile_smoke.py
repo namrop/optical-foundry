@@ -22,13 +22,13 @@ class FakeRenderer:
                 "status": "error",
                 "warnings": ["synthetic failure"],
                 "output": {"pdf_path": "unknown", "pdf_pages": 0},
-                "boundary": {"target_40_latex_mutated": False},
+                "boundary": {"target_legacy_profile_tree_mutated": False},
             }
         return {
             "status": "ok",
             "warnings": [],
             "output": {"pdf_path": f"{output_dir}/{profile_id}.pdf", "pdf_pages": 1},
-            "boundary": {"target_40_latex_mutated": False},
+            "boundary": {"target_legacy_profile_tree_mutated": False},
         }
 
 
@@ -57,7 +57,7 @@ def test_profile_smoke_matrix_records_success_failure_and_writes_summary(tmp_pat
     assert summary["profiles_failed"] == 1
     assert [entry["profile"] for entry in summary["results"]] == ["mythic", "cam"]
     assert summary["results"][0]["status"] == "passed"
-    assert summary["results"][0]["target_40_latex_mutated"] is False
+    assert summary["results"][0]["target_legacy_profile_tree_mutated"] is False
     assert summary["results"][1]["status"] == "failed"
     assert "synthetic failure" in summary["results"][1]["warnings"]
 

@@ -1137,16 +1137,16 @@ The renderer discovers sheet specs dynamically. No code change.
 
 ### 8.3 Proven path
 
-The greenfield pipeline validates against 40_latex by:
+The Foundry-owned profile import validates by:
 
-1. **Input parity**: Same Markdown source → greenfield profile → greenfield output
-   must be visually equivalent to 40_latex output
-2. **Profile parity**: Each 40_latex profile has an equivalent greenfield profile
-   declaration
-3. **Fixture-based regression**: Synthetic fixtures render on both pipelines;
-   greenfield output is compared to 40_latex golden output
-4. **Transition**: Once greenfield proves equivalent-or-better for all profiles,
-   40_latex can be archived
+1. **Input parity**: Same Markdown source → Foundry-owned profile copy → Foundry output
+   must remain visually stable against approved fixtures
+2. **Profile ownership**: Each supported imported profile has a Foundry-owned
+   defaults/template/style/asset surface under `profiles/40_latex_import/`
+3. **Fixture-based regression**: Synthetic fixtures render through the Foundry
+   profile surface without external profile-tree fallback
+4. **Transition**: External profile-tree references are archival/import history,
+   not active runtime dependencies
 
 ---
 
@@ -1154,9 +1154,9 @@ The greenfield pipeline validates against 40_latex by:
 
 ### 9.1 Current profile coverage
 
-Every profile in `40_latex/defaults/` maps to a greenfield profile:
+Every supported imported profile maps to a Foundry-owned profile surface:
 
-| 40_latex profile | Greenfield class | Greenfield location |
+| Imported profile | Foundry class | Foundry-owned location |
 |---|---|---|
 | `yugenbase.yaml` | base (extended by others) | `profiles/reports/yugenbase.yaml` |
 | `risk.yaml` | document | `profiles/reports/risk.yaml` |
@@ -1201,7 +1201,7 @@ Every profile in `40_latex/defaults/` maps to a greenfield profile:
 
 | Gap ID | Description | Resolution in greenfield |
 |---|---|---|
-| G1 | tightlist-mythic-letter-johannah | Fixed in `mythic_letter_johannah.tex` preamble (template carried from 40_latex with fix) |
+| G1 | tightlist-mythic-letter-johannah | Fixed in the Foundry-owned `mythic_letter_johannah.tex` profile copy |
 | G2 | elian-campaign-asset-paths | Content-dependent; profile declares `requires.assets` for validation |
 | G3 | resume-base-cv-orphan-wiring | Resume profiles wired via profile declaration, not hidden in doc_pipeline.py |
 | G4 | sticker-sheet-no-grid-layout | StickerSheetManifestCompiler generates TikZ grid from `sticker_sheet` manifest declaration |

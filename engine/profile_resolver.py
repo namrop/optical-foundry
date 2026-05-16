@@ -17,7 +17,6 @@ from typing import Any
 from engine.font_resolver import POLICY_NAME, resolve_fonts_from_defaults
 
 GF_ROOT = Path(__file__).resolve().parents[1]
-LATEX40 = Path("~/Digital_Workspace/40_latex")
 LOCAL_IMPORT = GF_ROOT / "profiles" / "40_latex_import"
 
 
@@ -144,37 +143,28 @@ def resolve_profile(profile_id: str) -> ResolvedProfile:
     template_path, template_source = _resolve_template(str(spec.get("template", "")))
 
     local_texmf = LOCAL_IMPORT / "styles" / "texmf"
-    remote_texmf = LATEX40 / "styles" / "texmf"
-    texmfhome = local_texmf if local_texmf.exists() else (remote_texmf if remote_texmf.exists() else None)
+    texmfhome = local_texmf if local_texmf.exists() else None
 
     local_assets = LOCAL_IMPORT / "assets"
-    asset_roots = [p for p in [local_assets, LATEX40 / "assets"] if p.exists()]
-    # Defaults inherited from 40_latex often reference assets as
-    # `assets/<name>`, so resource roots must include the profile root and the
-    # legacy pipeline root, not only the assets directories themselves.
-    resource_paths = [LOCAL_IMPORT, LOCAL_IMPORT / "templates", *asset_roots, LATEX40, GF_ROOT]
+    asset_roots = [p for p in [local_assets] if p.exists()]
+    # Profile defaults reference Foundry-owned assets as `assets/<name>`, so
+    # resource roots include the local import root and its asset/template trees.
+    resource_paths = [LOCAL_IMPORT, LOCAL_IMPORT / "templates", *asset_roots, GF_ROOT]
     texinputs_parts = [
         LOCAL_IMPORT / "templates",
         LOCAL_IMPORT / "styles" / "texmf" / "tex" / "latex" / "generic",
         LOCAL_IMPORT / "styles" / "texmf" / "tex" / "latex" / "resume",
         LOCAL_IMPORT / "styles" / "texmf" / "tex" / "latex" / "yugen",
-        LATEX40 / "templates",
-        LATEX40 / "styles" / "texmf" / "tex" / "latex" / "generic",
-        LATEX40 / "styles" / "texmf" / "tex" / "latex" / "resume",
-        LATEX40 / "styles" / "texmf" / "tex" / "latex" / "yugen",
     ]
     texinputs = ":".join(str(p) for p in texinputs_parts if p.exists()) + ":"
 
     uses_local = any(source == "local" for source in defaults_sources) or template_source == "local"
-    uses_40 = any(source == "40_latex" for source in defaults_sources) or template_source == "40_latex"
     font_policy = resolve_fonts_from_defaults(defaults_stack)
     warnings: list[str] = []
     if not defaults_stack:
         warnings.append(f"No defaults resolved for profile {profile_id}")
     if not template_path.exists():
         warnings.append(f"Template missing for profile {profile_id}: {template_path}")
-    if (LATEX40 / "assets").exists() and not local_assets.exists():
-        warnings.append("Profile may still read legacy 40_latex/assets until local assets are imported.")
 
     return ResolvedProfile(
         profile_id=profile_id,
@@ -194,9 +184,9 @@ def resolve_profile(profile_id: str) -> ResolvedProfile:
         ),
         font_policy=font_policy,
         boundary={
-            "target_40_latex_mutated": False,
+            "target_legacy_profile_tree_mutated": False,
             "uses_local_imports": uses_local,
-            "reads_40_latex_readonly": uses_40 or (LATEX40 / "assets").exists(),
+            "reads_legacy_profile_tree": False,
             "defaults_source": _summarize_sources(defaults_sources),
             "template_source": template_source,
             "font_policy": POLICY_NAME,
@@ -219,13 +209,9 @@ def _resolve_defaults_stack(names: list[str]) -> tuple[list[Path], list[str]]:
     sources: list[str] = []
     for name in names:
         local = LOCAL_IMPORT / "defaults" / name
-        remote = LATEX40 / "defaults" / name
         if local.exists():
             paths.append(local)
             sources.append("local")
-        elif remote.exists():
-            paths.append(remote)
-            sources.append("40_latex")
         else:
             sources.append("missing")
     return paths, sources
@@ -233,11 +219,8 @@ def _resolve_defaults_stack(names: list[str]) -> tuple[list[Path], list[str]]:
 
 def _resolve_template(name: str) -> tuple[Path, str]:
     local = LOCAL_IMPORT / "templates" / name
-    remote = LATEX40 / "templates" / name
     if local.exists():
         return local, "local"
-    if remote.exists():
-        return remote, "40_latex"
     return local, "missing"
 
 
@@ -247,6 +230,4 @@ def _summarize_sources(sources: list[str]) -> str:
         return "missing"
     if unique == {"local"}:
         return "local"
-    if unique == {"40_latex"}:
-        return "40_latex"
     return "+".join(sorted(unique))

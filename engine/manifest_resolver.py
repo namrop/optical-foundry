@@ -80,7 +80,7 @@ def resolve_manifest(manifest: dict[str, Any]) -> ResolvedManifest:
         numbering_strategy=numbering_strategy,
         children=children,
         boundary={
-            "target_40_latex_mutated": False,
+            "target_legacy_profile_tree_mutated": False,
             "profile_manifest_axes_separate": True,
         },
     )

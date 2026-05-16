@@ -30,7 +30,7 @@ from engine.page_size import (
     merge_page_size_geometry,
     normalize_page_size,
 )
-from engine.profile_resolver import LOCAL_IMPORT, LATEX40, ResolvedProfile, resolve_profile
+from engine.profile_resolver import LOCAL_IMPORT, ResolvedProfile, resolve_profile
 from engine.projection_plan import ProjectionPlan
 from renderers.base import Renderer
 
@@ -240,7 +240,7 @@ class PandocRenderer(Renderer):
             "validation": validation,
             "warnings": warnings,
             "boundary": {
-                "target_40_latex_mutated": False,
+                "target_legacy_profile_tree_mutated": False,
                 "production_output": False,
                 "packet_local_generated_only": True,
                 **resolved_profile.boundary,
@@ -538,16 +538,11 @@ class PandocRenderer(Renderer):
         return resolved.template_path.name if resolved.template_path else None
 
     def _resolve_template_override(self, template: str) -> Path:
-        """Resolve an explicit plan template using the same local-first order."""
+        """Resolve an explicit plan template from Foundry-owned profile imports."""
         template_path = Path(template)
         if template_path.is_absolute():
             return template_path
         local = LOCAL_IMPORT / "templates" / template
-        if local.exists():
-            return local
-        remote = LATEX40 / "templates" / template
-        if remote.exists():
-            return remote
         return local
 
     @staticmethod

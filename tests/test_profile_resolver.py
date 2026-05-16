@@ -22,7 +22,7 @@ def test_tech_resolves_document_spine_yugen_overlay_and_technology_defaults():
     assert resolved.profile_family == "document_spine"
     assert [p.name for p in resolved.defaults_stack] == ["document_spine.yaml", "yugenbase.yaml", "technology.yaml"]
     assert resolved.template_path.name == "base.tex"
-    assert resolved.boundary["target_40_latex_mutated"] is False
+    assert resolved.boundary["target_legacy_profile_tree_mutated"] is False
     assert resolved.boundary["defaults_source"] == "local"
     assert resolved.boundary["template_source"] == "local"
 
@@ -84,6 +84,8 @@ def test_resolver_sets_local_import_environment():
     assert "profiles/40_latex_import" in str(env.cwd)
     assert any("profiles/40_latex_import/assets" in str(path) for path in resolved.asset_roots)
     assert any("profiles/40_latex_import" in str(path) for path in env.resource_paths)
-    assert any(str(path).endswith("40_latex") for path in env.resource_paths)
+    assert all("/Digital_Workspace/40_latex" not in str(path) for path in env.resource_paths)
+    assert "/Digital_Workspace/40_latex" not in env.texinputs
     assert resolved.boundary["uses_local_imports"] is True
-    assert resolved.boundary["target_40_latex_mutated"] is False
+    assert resolved.boundary["reads_legacy_profile_tree"] is False
+    assert resolved.boundary["target_legacy_profile_tree_mutated"] is False
