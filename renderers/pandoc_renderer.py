@@ -21,6 +21,7 @@ from typing import Any
 from engine.d2 import D2RenderError, preprocess_d2_blocks
 from engine.graphviz import GraphvizRenderError, preprocess_graphviz_blocks
 from engine.imposition import ImpositionError, impose_pdf
+from engine.bindery_preflight import generate_bindery_preflight
 from engine.layout_images import LayoutImageRenderError, preprocess_layout_image_blocks
 from engine.mermaid import MermaidRenderError, preprocess_mermaid_blocks
 from engine.vega import VegaRenderError, preprocess_vega_blocks
@@ -184,6 +185,12 @@ class PandocRenderer(Renderer):
         pdf_sha = self._sha256_file(output_pdf)
         pages = self._count_pages(output_pdf)
         imposition_output = self._maybe_impose_bound_pdf(plan, output_pdf, out_dir)
+        bindery_preflight = generate_bindery_preflight(
+            output_pdf,
+            out_dir=out_dir,
+            plan=plan,
+            imposition=imposition_output,
+        )
 
         warnings = list(plan.boundary_assertions.get("warnings", [])) + defaults_meta.get("warnings", []) + resolved_profile.warnings
         validation = self._validation_success(
@@ -232,6 +239,7 @@ class PandocRenderer(Renderer):
                 "pdf_sha256": pdf_sha,
                 "page_size": plan.page_size,
                 **({"imposition": imposition_output} if imposition_output else {}),
+                **({"bindery_preflight": bindery_preflight} if bindery_preflight else {}),
             },
             "integrity": {
                 "text_extract_exists": bool(text_extract),

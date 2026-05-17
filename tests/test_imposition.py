@@ -205,6 +205,11 @@ render:
     assert imposition["sheet_size"] == "letter"
     assert Path(imposition["output_pdf"]).exists()
     assert Path(imposition["mapping_json"]).exists()
+    preflight = evidence["output"]["bindery_preflight"]
+    assert preflight["recommendation"]["send_default"] == "single_page_pdf"
+    assert preflight["readiness"]["prototype_ready"] is True
+    assert Path(preflight["report_json"]).exists()
+    assert Path(preflight["safe_area_guide"]["tex_path"]).exists()
 
 
 def _make_half_letter_source_pdf(tmp_path: Path, *, pages: int) -> Path:
