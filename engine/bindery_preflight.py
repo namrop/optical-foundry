@@ -43,7 +43,13 @@ def generate_bindery_preflight(
     pdfinfo_text = _run_tool(["pdfinfo", "-box", str(pdf)])
     pdffonts_text = _run_tool(["pdffonts", str(pdf)])
     pdfimages_text = _run_tool(["pdfimages", "-list", str(pdf)])
-    safe_area_guide = write_safe_area_guide_tex(plan, dest)
+    pdfinfo_boxes = parse_pdfinfo_boxes(pdfinfo_text)
+    safe_area_guide = write_safe_area_guide_tex(
+        plan,
+        dest,
+        overlay_pdf_path=pdf,
+        overlay_page_count=pdfinfo_boxes.get("Pages"),
+    )
 
     report = build_bindery_preflight_report(
         pdf_path=pdf,
@@ -158,11 +164,59 @@ def write_safe_area_guide_tex(
     *,
     deckle_zone: str = "0.20in",
     critical_safe_inset: str = "0.25in",
+    overlay_pdf_path: str | Path | None = None,
+    overlay_page_count: int | None = None,
 ) -> dict[str, Any]:
-    """Write a bound-layout guide TeX/PDF sidecar showing trim, body, rail, deckle."""
+    """Write bound-layout guide TeX/PDF sidecars showing trim, body, rail, deckle."""
 
     dest = Path(out_dir).expanduser().resolve()
     dest.mkdir(parents=True, exist_ok=True)
+    layout = compute_safe_area_layout(plan, deckle_zone=deckle_zone, critical_safe_inset=critical_safe_inset)
+    page_w = layout["trim_inches"]["width"]
+    page_h = layout["trim_inches"]["height"]
+    tex_path = dest / f"{plan.render_id}.safe_area_guide.tex"
+    pdf_path = tex_path.with_suffix(".pdf")
+    tex_path.write_text(_safe_area_guide_tex(layout), encoding="utf-8")
+
+    status, error = _compile_tex(tex_path, dest)
+    result = {
+        "status": status,
+        "tex_path": str(tex_path),
+        "pdf_path": str(pdf_path) if pdf_path.exists() else "",
+        **layout,
+    }
+    if error:
+        result["error"] = error
+
+    if overlay_pdf_path is not None and overlay_page_count:
+        overlay_source = Path(overlay_pdf_path).expanduser().resolve()
+        overlay_tex_path = dest / f"{plan.render_id}.safe_area_overlay.tex"
+        overlay_output_path = dest / f"{plan.render_id}.safe_area_overlay.pdf"
+        overlay_tex_path.write_text(
+            _safe_area_overlay_tex(layout, overlay_source=overlay_source, page_count=int(overlay_page_count)),
+            encoding="utf-8",
+        )
+        overlay_status, overlay_error = _compile_tex(overlay_tex_path, dest)
+        result.update(
+            {
+                "overlay_status": overlay_status,
+                "overlay_tex_path": str(overlay_tex_path),
+                "overlay_pdf_path": str(overlay_output_path) if overlay_output_path.exists() else str(overlay_output_path),
+            }
+        )
+        if overlay_error:
+            result["overlay_error"] = overlay_error
+    return result
+
+
+def compute_safe_area_layout(
+    plan: ProjectionPlan,
+    *,
+    deckle_zone: str = "0.20in",
+    critical_safe_inset: str = "0.25in",
+) -> dict[str, Any]:
+    """Compute all guide boxes in top-origin inches and clamp them inside trim."""
+
     page_w, page_h = PAGE_SIZE_INCHES[normalize_page_size(plan.page_size)]
     margins = _margin_map(plan.page_margins)
     inner = margins.get("inner", margins.get("left", margins.get("margin", 1.0)))
@@ -177,55 +231,23 @@ def write_safe_area_guide_tex(
     deckle = _dimension_to_inches(deckle_zone)
     critical = _dimension_to_inches(critical_safe_inset)
 
-    recto_body = {"x": round(inner, 3), "y": round(top, 3), "width": text_w, "height": text_h}
-    verso_body = {"x": round(outer, 3), "y": round(top, 3), "width": text_w, "height": text_h}
-    recto_rail = _rail_box(page_w, outer, top, text_h, rail_w, sep, recto=True)
-    verso_rail = _rail_box(page_w, outer, top, text_h, rail_w, sep, recto=False)
-    tex_path = dest / f"{plan.render_id}.safe_area_guide.tex"
-    pdf_path = tex_path.with_suffix(".pdf")
-    tex_path.write_text(
-        _safe_area_guide_tex(
-            page_w=page_w,
-            page_h=page_h,
-            recto_body=recto_body,
-            verso_body=verso_body,
-            recto_rail=recto_rail,
-            verso_rail=verso_rail,
-            deckle=deckle,
-            critical=critical,
-        ),
-        encoding="utf-8",
-    )
-    status = "tex_written"
-    error = ""
-    xelatex = shutil.which("xelatex") or ("/Library/TeX/texbin/xelatex" if Path("/Library/TeX/texbin/xelatex").exists() else "")
-    if xelatex:
-        proc = subprocess.run(
-            [xelatex, "-interaction=nonstopmode", "-halt-on-error", tex_path.name],
-            cwd=dest,
-            text=True,
-            capture_output=True,
-            timeout=120,
-        )
-        if proc.returncode == 0 and pdf_path.exists():
-            status = "pdf_written"
-        else:
-            status = "tex_written_pdf_failed"
-            error = (proc.stderr or proc.stdout)[-800:]
-
-    result = {
-        "status": status,
-        "tex_path": str(tex_path),
-        "pdf_path": str(pdf_path) if pdf_path.exists() else "",
+    recto_body = _clamp_box({"x": inner, "y": top, "width": text_w, "height": text_h}, page_w, page_h)
+    verso_body = _clamp_box({"x": outer, "y": top, "width": text_w, "height": text_h}, page_w, page_h)
+    recto_rail = _clamp_box(_rail_box(page_w, outer, top, text_h, rail_w, sep, recto=True), page_w, page_h)
+    verso_rail = _clamp_box(_rail_box(page_w, outer, top, text_h, rail_w, sep, recto=False), page_w, page_h)
+    recto_deckle = _clamp_box({"x": page_w - deckle, "y": 0.0, "width": deckle, "height": page_h}, page_w, page_h)
+    verso_deckle = _clamp_box({"x": 0.0, "y": 0.0, "width": deckle, "height": page_h}, page_w, page_h)
+    recto_critical = _clamp_box({"x": page_w - critical, "y": 0.0, "width": critical, "height": page_h}, page_w, page_h)
+    verso_critical = _clamp_box({"x": 0.0, "y": 0.0, "width": critical, "height": page_h}, page_w, page_h)
+    return {
         "trim_inches": {"width": page_w, "height": page_h},
         "deckle_zone_inches": round(deckle, 3),
         "critical_safe_inset_inches": round(critical, 3),
         "body_box_inches": {"recto": recto_body, "verso": verso_body},
         "rail_box_inches": {"recto": recto_rail, "verso": verso_rail},
+        "deckle_box_inches": {"recto": recto_deckle, "verso": verso_deckle},
+        "critical_safe_box_inches": {"recto": recto_critical, "verso": verso_critical},
     }
-    if error:
-        result["error"] = error
-    return result
 
 
 def parse_pdfinfo_boxes(text: str) -> dict[str, Any]:
@@ -297,72 +319,122 @@ def parse_pdfimages(text: str) -> dict[str, Any]:
     }
 
 
-def _safe_area_guide_tex(
-    *,
-    page_w: float,
-    page_h: float,
-    recto_body: dict[str, float],
-    verso_body: dict[str, float],
-    recto_rail: dict[str, float],
-    verso_rail: dict[str, float],
-    deckle: float,
-    critical: float,
-) -> str:
-    # picture y=0 is bottom; input boxes are top-origin inches.
-    def put_box(box: dict[str, float], color: str, label: str = "") -> str:
-        x = box["x"]
-        y = page_h - box["y"] - box["height"]
-        text = rf"\scriptsize {label}" if label else ""
-        return rf"\textcolor{{{color}}}{{\put({x:.3f},{y:.3f}){{\framebox({box['width']:.3f},{box['height']:.3f}){{{text}}}}}}}"
-
-    def fill_box(box: dict[str, float], color: str) -> str:
-        x = box["x"]
-        y = page_h - box["y"] - box["height"]
-        return rf"\put({x:.3f},{y:.3f}){{\textcolor{{{color}}}{{\rule{{{box['width']:.3f}in}}{{{box['height']:.3f}in}}}}}}"
-
-    legend = rf"""\put(0.12,{page_h - 0.45:.3f}){{\scriptsize \textcolor{{LightGoldenrod3}}{{\rule{{0.16in}}{{0.05in}}}} Deckle / sacrificial zone}}
-\put(0.12,{page_h - 0.62:.3f}){{\scriptsize \textcolor{{IndianRed3}}{{\rule{{0.16in}}{{0.05in}}}} Critical-safe inset}}
-\put(0.12,{page_h - 0.79:.3f}){{\scriptsize \textcolor{{RoyalBlue3}}{{\rule{{0.16in}}{{0.05in}}}} Body text block}}
-\put(0.12,{page_h - 0.96:.3f}){{\scriptsize \textcolor{{DarkOliveGreen4}}{{\rule{{0.16in}}{{0.05in}}}} Outer illumination rail}}"""
-
-    recto_deckle = {"x": page_w - deckle, "y": 0.0, "width": deckle, "height": page_h}
-    verso_deckle = {"x": 0.0, "y": 0.0, "width": deckle, "height": page_h}
-    recto_critical = {"x": page_w - critical, "y": 0.0, "width": critical, "height": page_h}
-    verso_critical = {"x": 0.0, "y": 0.0, "width": critical, "height": page_h}
+def _safe_area_guide_tex(layout: dict[str, Any]) -> str:
+    page_w = layout["trim_inches"]["width"]
+    page_h = layout["trim_inches"]["height"]
+    recto_overlay = _guide_tikz(layout, "recto", include_legend=True, title="Recto/right-hand page safe-area guide")
+    verso_overlay = _guide_tikz(layout, "verso", include_legend=True, title="Verso/left-hand page safe-area guide")
     return rf"""
 \documentclass{{article}}
 \usepackage[paperwidth={page_w}in,paperheight={page_h}in,margin=0in]{{geometry}}
 \usepackage[x11names]{{xcolor}}
+\usepackage{{tikz}}
 \pagestyle{{empty}}
-\setlength{{\unitlength}}{{1in}}
 \begin{{document}}
-\noindent\begin{{picture}}({page_w},{page_h})
-\put(0.12,{page_h - 0.25:.3f}){{\scriptsize Recto/right-hand page safe-area guide}}
-{fill_box(recto_body, "RoyalBlue3!6")}
-{fill_box(recto_critical, "IndianRed3!14")}
-{fill_box(recto_rail, "DarkOliveGreen4!16") if recto_rail['width'] else ''}
-{fill_box(recto_deckle, "LightGoldenrod3!28")}
-{put_box(recto_deckle, "LightGoldenrod3")}
-{put_box(recto_critical, "IndianRed3")}
-{put_box(recto_body, "RoyalBlue3", "Body")}
-{put_box(recto_rail, "DarkOliveGreen4") if recto_rail['width'] else ''}
-{legend}
-\end{{picture}}
+\noindent{recto_overlay}
 \newpage
-\noindent\begin{{picture}}({page_w},{page_h})
-\put(0.12,{page_h - 0.25:.3f}){{\scriptsize Verso/left-hand page safe-area guide}}
-{fill_box(verso_body, "RoyalBlue3!6")}
-{fill_box(verso_critical, "IndianRed3!14")}
-{fill_box(verso_rail, "DarkOliveGreen4!16") if verso_rail['width'] else ''}
-{fill_box(verso_deckle, "LightGoldenrod3!28")}
-{put_box(verso_deckle, "LightGoldenrod3")}
-{put_box(verso_critical, "IndianRed3")}
-{put_box(verso_body, "RoyalBlue3", "Body")}
-{put_box(verso_rail, "DarkOliveGreen4") if verso_rail['width'] else ''}
-{legend}
-\end{{picture}}
+\noindent{verso_overlay}
 \end{{document}}
 """.lstrip()
+
+
+def _safe_area_overlay_tex(layout: dict[str, Any], *, overlay_source: Path, page_count: int) -> str:
+    page_w = layout["trim_inches"]["width"]
+    page_h = layout["trim_inches"]["height"]
+    source = _tex_path(overlay_source)
+    recto = _guide_tikz(layout, "recto", include_legend=False, title="")
+    verso = _guide_tikz(layout, "verso", include_legend=False, title="")
+    includes = []
+    for page in range(1, page_count + 1):
+        command = "\\OFRectoOverlay" if page % 2 == 1 else "\\OFVersoOverlay"
+        includes.append(rf"\includepdf[pages={{{page}}},fitpaper=true,pagecommand={{{command}}}]{{{source}}}")
+    return rf"""
+\documentclass{{article}}
+\usepackage[paperwidth={page_w}in,paperheight={page_h}in,margin=0in]{{geometry}}
+\usepackage[x11names]{{xcolor}}
+\usepackage{{tikz}}
+\usepackage{{pdfpages}}
+\pagestyle{{empty}}
+\newcommand{{\OFRectoOverlay}}{{{recto}}}
+\newcommand{{\OFVersoOverlay}}{{{verso}}}
+\begin{{document}}
+{chr(10).join(includes)}
+\end{{document}}
+""".lstrip()
+
+
+def _guide_tikz(layout: dict[str, Any], side: str, *, include_legend: bool, title: str) -> str:
+    page_w = layout["trim_inches"]["width"]
+    page_h = layout["trim_inches"]["height"]
+    boxes = [
+        (layout["body_box_inches"][side], "RoyalBlue3", "Body", "0.05"),
+        (layout["critical_safe_box_inches"][side], "IndianRed3", "Critical-safe inset", "0.12"),
+        (layout["rail_box_inches"][side], "DarkOliveGreen4", "Outer illumination rail", "0.14"),
+        (layout["deckle_box_inches"][side], "LightGoldenrod3", "Deckle / sacrificial zone", "0.24"),
+    ]
+    lines = [rf"\begin{{tikzpicture}}[x=1in,y=1in]", rf"\clip (0,0) rectangle ({page_w:.3f},{page_h:.3f});"]
+    if title:
+        lines.append(rf"\node[anchor=west,font=\scriptsize] at (0.120,{page_h - 0.250:.3f}) {{{title}}};")
+    for box, color, _label, opacity in boxes:
+        if box["width"] <= 0 or box["height"] <= 0:
+            continue
+        x, y, w, h = _tikz_box(box, page_h)
+        lines.append(rf"\fill[{color},opacity={opacity}] ({x:.3f},{y:.3f}) rectangle ({x + w:.3f},{y + h:.3f});")
+    for box, color, label, _opacity in boxes:
+        if box["width"] <= 0 or box["height"] <= 0:
+            continue
+        x, y, w, h = _tikz_box(box, page_h)
+        lines.append(rf"\draw[{color},line width=0.35pt] ({x:.3f},{y:.3f}) rectangle ({x + w:.3f},{y + h:.3f});")
+        if label == "Body":
+            lines.append(rf"\node[{color},font=\scriptsize] at ({x + w / 2:.3f},{y + h / 2:.3f}) {{Body}};")
+    if include_legend:
+        lines.extend(
+            [
+                rf"\node[anchor=west,font=\scriptsize] at (0.120,{page_h - 0.450:.3f}) {{\textcolor{{LightGoldenrod3}}{{\rule{{0.16in}}{{0.05in}}}} Deckle / sacrificial zone}};",
+                rf"\node[anchor=west,font=\scriptsize] at (0.120,{page_h - 0.620:.3f}) {{\textcolor{{IndianRed3}}{{\rule{{0.16in}}{{0.05in}}}} Critical-safe inset}};",
+                rf"\node[anchor=west,font=\scriptsize] at (0.120,{page_h - 0.790:.3f}) {{\textcolor{{RoyalBlue3}}{{\rule{{0.16in}}{{0.05in}}}} Body text block}};",
+                rf"\node[anchor=west,font=\scriptsize] at (0.120,{page_h - 0.960:.3f}) {{\textcolor{{DarkOliveGreen4}}{{\rule{{0.16in}}{{0.05in}}}} Outer illumination rail}};",
+            ]
+        )
+    lines.append("\\end{tikzpicture}")
+    return "\n".join(lines)
+
+
+def _tikz_box(box: dict[str, float], page_h: float) -> tuple[float, float, float, float]:
+    x = float(box["x"])
+    y = page_h - float(box["y"]) - float(box["height"])
+    return x, y, float(box["width"]), float(box["height"])
+
+
+def _tex_path(path: Path) -> str:
+    return rf"\detokenize{{{path}}}"
+
+
+def _clamp_box(box: dict[str, float], page_w: float, page_h: float) -> dict[str, float]:
+    x = max(0.0, round(float(box["x"]), 3))
+    y = max(0.0, round(float(box["y"]), 3))
+    width = max(0.0, round(float(box["width"]), 3))
+    height = max(0.0, round(float(box["height"]), 3))
+    width = min(width, max(0.0, round(page_w - x, 3)))
+    height = min(height, max(0.0, round(page_h - y, 3)))
+    return {"x": round(x, 3), "y": round(y, 3), "width": round(width, 3), "height": round(height, 3)}
+
+
+def _compile_tex(tex_path: Path, dest: Path) -> tuple[str, str]:
+    xelatex = shutil.which("xelatex") or ("/Library/TeX/texbin/xelatex" if Path("/Library/TeX/texbin/xelatex").exists() else "")
+    if not xelatex:
+        return "tex_written", ""
+    proc = subprocess.run(
+        [xelatex, "-interaction=nonstopmode", "-halt-on-error", tex_path.name],
+        cwd=dest,
+        text=True,
+        capture_output=True,
+        timeout=120,
+    )
+    output_pdf = tex_path.with_suffix(".pdf")
+    if proc.returncode == 0 and output_pdf.exists():
+        return "pdf_written", ""
+    return "tex_written_pdf_failed", (proc.stderr or proc.stdout)[-800:]
 
 
 def _rail_box(page_w: float, outer: float, top: float, text_h: float, rail_w: float, sep: float, *, recto: bool) -> dict[str, float]:

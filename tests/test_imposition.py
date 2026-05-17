@@ -210,6 +210,8 @@ render:
     assert preflight["readiness"]["prototype_ready"] is True
     assert Path(preflight["report_json"]).exists()
     assert Path(preflight["safe_area_guide"]["tex_path"]).exists()
+    assert Path(preflight["safe_area_guide"]["overlay_pdf_path"]).exists()
+    assert Path(preflight["safe_area_guide"]["overlay_tex_path"]).exists()
 
 
 def _make_half_letter_source_pdf(tmp_path: Path, *, pages: int) -> Path:
