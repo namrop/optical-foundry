@@ -227,6 +227,82 @@ def test_pandoc_renderer_page_margin_override_replaces_profile_margin(tmp_path):
     assert variables["classoption"] == ["11pt", "oneside", "statementpaper"]
 
 
+def test_pandoc_renderer_bound_delivery_defaults_mirror_geometry_and_outer_numbers(tmp_path):
+    plan = ProjectionPlan(
+        profile_id="mythic",
+        render_id="bound-half-letter-doc",
+        render_source=GF / "fixtures" / "sources" / "source-001.md",
+        page_size="half_letter",
+        page_margins=["inner=0.85in", "outer=0.60in", "top=0.65in", "bottom=0.70in"],
+        delivery={
+            "mode": "bound",
+            "binding": "side_staple",
+            "duplex": True,
+            "page_numbers": "outer",
+            "colophon": {"enabled": True, "placement": "title_verso"},
+            "footer_metadata": {"suppress_repeated": True},
+        },
+    )
+    resolved = resolve_profile("mythic")
+
+    defaults = PandocRenderer()._page_geometry_defaults(plan, resolved, tmp_path)
+
+    assert defaults is not None
+    import yaml
+    variables = yaml.safe_load(defaults.read_text())["variables"]
+    assert variables["geometry"] == [
+        "paperwidth=5.5in",
+        "paperheight=8.5in",
+        "inner=0.85in",
+        "outer=0.60in",
+        "top=0.65in",
+        "bottom=0.70in",
+    ]
+    assert variables["classoption"] == ["11pt", "twoside", "statementpaper"]
+    assert variables["pagestyle"] == "ofBoundOuter"
+    assert variables["footeremail"] == ""
+    header_includes = "\n".join(variables["header-includes"])
+    assert "\\makeevenfoot{ofBoundOuter}{\\thepage}{}{}" in header_includes
+    assert "\\makeoddfoot {ofBoundOuter}{}{}{\\thepage}" in header_includes
+
+
+def test_pandoc_renderer_bound_delivery_running_headers_use_memoir_marks(tmp_path):
+    plan = ProjectionPlan(
+        profile_id="mythic",
+        render_id="bound-running-headers-doc",
+        render_source=GF / "fixtures" / "sources" / "source-001.md",
+        page_size="half_letter",
+        page_margins=["inner=0.85in", "outer=0.60in", "top=0.65in", "bottom=0.70in"],
+        title="Bound Running Headers",
+        delivery={
+            "mode": "bound",
+            "binding": "side_staple",
+            "duplex": True,
+            "page_numbers": "outer",
+            "running_headers": {
+                "enabled": True,
+                "source": "chapter",
+                "suppress_on": ["title_page", "title_verso", "blank_pages", "chapter_openers"],
+            },
+            "colophon": {"enabled": True, "placement": "title_verso"},
+            "footer_metadata": {"suppress_repeated": True},
+        },
+    )
+    resolved = resolve_profile("mythic")
+
+    defaults = PandocRenderer()._page_geometry_defaults(plan, resolved, tmp_path)
+
+    assert defaults is not None
+    import yaml
+    variables = yaml.safe_load(defaults.read_text())["variables"]
+    header_includes = "\n".join(variables["header-includes"])
+    assert variables["pagestyle"] == "ofBoundOuter"
+    assert "\\makeevenhead{ofBoundOuter}{\\small\\itshape\\leftmark}{}{}" in header_includes
+    assert "\\makeoddhead {ofBoundOuter}{}{}{\\small\\itshape\\rightmark}" in header_includes
+    assert "\\makepagestyle{ofBoundPlain}" in header_includes
+    assert "\\aliaspagestyle{plain}{ofBoundPlain}" in header_includes
+
+
 def test_pandoc_renderer_page_size_overlay_is_document_spine_only(tmp_path):
     plan = ProjectionPlan(
         profile_id="letter",

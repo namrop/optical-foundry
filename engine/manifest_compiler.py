@@ -34,6 +34,16 @@ from engine.page_size import (
     page_size_from_mapping,
     profile_default_page_size,
 )
+from engine.delivery import (
+    bound_colophon_block,
+    delivery_boundary,
+    delivery_page_margins,
+    insert_title_verso_colophon,
+    normalize_delivery,
+    suppress_bound_pagination_overrides,
+    inject_bound_running_header_marks,
+    validate_delivery,
+)
 
 
 class ManifestCompiler(ABC):
@@ -712,10 +722,45 @@ class MarkdownDocumentCompiler(ManifestCompiler):
         page_margins, page_margins_source = page_margins_from_mapping(render_cfg, scope="manifest.render")
         if page_margins_source == "default" and preserve_source_metadata:
             page_margins, page_margins_source = page_margins_from_mapping(source_fm, scope="source_frontmatter")
+        delivery = normalize_delivery(render_cfg, scope="render.delivery")
+        if page_margins_source == "default" and delivery.get("mode") == "bound":
+            page_margins = delivery_page_margins(delivery)
+            page_margins_source = "manifest.render.delivery"
         matter_role = _document_matter_role(source_cfg, source_fm)
 
         render_id = manifest.get("document_id") or manifest.get("render_id") or merged_fm.get("uid") or source_path.stem
         compiled_body = _inject_document_matter_command(body, matter_role)
+        delivery_pagination_overrides = {
+            "policy": "none",
+            "enlargethispage_suppressed": 0,
+            "commands_suppressed": [],
+        }
+        delivery_running_header_marks = {
+            "enabled": False,
+            "source": "chapter",
+            "marks_inserted": 0,
+        }
+        if delivery.get("mode") == "bound":
+            compiled_body, delivery_pagination_overrides = suppress_bound_pagination_overrides(compiled_body)
+            running_headers = delivery.get("running_headers", {}) if isinstance(delivery.get("running_headers"), dict) else {}
+            if running_headers.get("enabled"):
+                compiled_body, delivery_running_header_marks = inject_bound_running_header_marks(
+                    compiled_body,
+                    source=str(running_headers.get("source", "chapter")),
+                )
+        delivery_colophon_emitted = False
+        colophon = delivery.get("colophon", {}) if isinstance(delivery.get("colophon"), dict) else {}
+        if delivery.get("mode") == "bound" and colophon.get("enabled") and colophon.get("placement") == "title_verso":
+            compiled_body, delivery_colophon_emitted = insert_title_verso_colophon(
+                compiled_body,
+                bound_colophon_block(
+                    title=str(title) if title is not None else "",
+                    author=str(author) if author is not None else "",
+                    date=str(date) if date is not None else "",
+                    render_id=str(render_id),
+                    delivery=delivery,
+                ),
+            )
         compiled_text = _frontmatter_to_markdown(merged_fm, compiled_body)
         render_source = _write_temp_markdown(f"document_{render_id}", compiled_text)
 
@@ -738,6 +783,10 @@ class MarkdownDocumentCompiler(ManifestCompiler):
             "page_size_source": page_size_source,
             "page_margins": page_margins,
             "page_margins_source": page_margins_source,
+            "delivery_colophon_emitted": delivery_colophon_emitted,
+            "delivery_pagination_overrides": delivery_pagination_overrides,
+            "delivery_running_header_marks": delivery_running_header_marks,
+            **delivery_boundary(delivery),
             "accepted_manifest_variables": sorted(accepted_variables.keys()),
             "rejected_manifest_variables": rejected_variables,
         }
@@ -760,6 +809,7 @@ class MarkdownDocumentCompiler(ManifestCompiler):
             numbersections=numbersections,
             page_size=page_size,
             page_margins=page_margins,
+            delivery=delivery,
             source_inventory=[
                 {
                     "uid": str(render_id),
@@ -769,6 +819,7 @@ class MarkdownDocumentCompiler(ManifestCompiler):
                     "manifest_lane": self.kind,
                 }
             ],
+            source_resource_roots=[source_path.parent],
             boundary_assertions=boundary_assertions,
         )
 
@@ -819,6 +870,7 @@ class MarkdownDocumentCompiler(ManifestCompiler):
                 page_margins_from_mapping(render_cfg, scope="render")
             except PageMarginError as exc:
                 errors.append(str(exc))
+            errors.extend(validate_delivery(render_cfg, scope="render.delivery"))
         variables = manifest.get("variables", {})
         if variables is not None and not isinstance(variables, dict):
             errors.append("variables must be a mapping")

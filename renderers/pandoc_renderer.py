@@ -218,6 +218,7 @@ class PandocRenderer(Renderer):
                 "page_geometry_defaults": str(page_geometry_defaults) if page_geometry_defaults else "",
                 "page_geometry_options": page_geometry_options,
                 "page_margin_options": plan.page_margins if page_geometry_options else [],
+                "delivery": plan.delivery,
                 "render_duration_ms": int(elapsed * 1000),
                 "rendered_at": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
                 "success": success,
@@ -277,7 +278,7 @@ class PandocRenderer(Renderer):
             plan.render_source,
             out_dir,
             plan.render_id,
-            [LOCAL_IMPORT, *resolved_profile.asset_roots],
+            [LOCAL_IMPORT, *resolved_profile.asset_roots, *plan.source_resource_roots],
         )
         if not result.changed:
             return plan
@@ -737,13 +738,76 @@ class PandocRenderer(Renderer):
             "geometry": geometry,
             "header-includes": list(dict.fromkeys(header_includes)),
         }
+        if plan.delivery.get("mode") == "bound":
+            variables["header-includes"] = list(
+                dict.fromkeys([*variables["header-includes"], *PandocRenderer._bound_delivery_header_includes(plan)])
+            )
+            if plan.delivery.get("page_numbers") == "outer":
+                variables["pagestyle"] = "ofBoundOuter"
+            if plan.delivery.get("footer_metadata", {}).get("suppress_repeated", False):
+                variables["footeremail"] = ""
         existing_classoption = collect_profile_classoption(resolved_profile.defaults_stack)
         classoption = merge_page_size_classoption(plan.page_size, existing_classoption)
+        if plan.delivery.get("mode") == "bound" and plan.delivery.get("duplex") is True:
+            classoption = [option for option in classoption if str(option).lower() != "oneside"]
+            if not any(str(option).lower() == "twoside" for option in classoption):
+                classoption.insert(max(len(classoption) - 1, 0), "twoside")
         if classoption:
             variables["classoption"] = classoption
         payload = {"variables": variables}
         path.write_text(yaml.safe_dump(payload, sort_keys=False), encoding="utf-8")
         return path
+
+    @staticmethod
+    def _bound_delivery_header_includes(plan: ProjectionPlan) -> list[str]:
+        if plan.delivery.get("mode") != "bound":
+            return []
+        includes: list[str] = []
+        if plan.delivery.get("page_numbers") == "outer":
+            running_headers = plan.delivery.get("running_headers", {})
+            headers_enabled = bool(running_headers.get("enabled")) if isinstance(running_headers, dict) else False
+            header_source = str(running_headers.get("source", "chapter")) if isinstance(running_headers, dict) else "chapter"
+            suppress_on = set(running_headers.get("suppress_on", [])) if isinstance(running_headers, dict) else set()
+            even_head, odd_head = PandocRenderer._bound_running_header_cells(
+                enabled=headers_enabled,
+                source=header_source,
+                title=plan.title,
+            )
+            plain_alias = "ofBoundPlain" if headers_enabled and "chapter_openers" in suppress_on else "ofBoundOuter"
+            includes.append(
+                "\\makeatletter\n"
+                "\\@ifclassloaded{memoir}{%\n"
+                "  \\makepagestyle{ofBoundOuter}\n"
+                f"  \\makeevenhead{{ofBoundOuter}}{{{even_head}}}{{}}{{}}\n"
+                f"  \\makeoddhead {{ofBoundOuter}}{{}}{{}}{{{odd_head}}}\n"
+                "  \\makeevenfoot{ofBoundOuter}{\\thepage}{}{}\n"
+                "  \\makeoddfoot {ofBoundOuter}{}{}{\\thepage}\n"
+                "  \\makepagestyle{ofBoundPlain}\n"
+                "  \\makeevenhead{ofBoundPlain}{}{}{}\n"
+                "  \\makeoddhead {ofBoundPlain}{}{}{}\n"
+                "  \\makeevenfoot{ofBoundPlain}{\\thepage}{}{}\n"
+                "  \\makeoddfoot {ofBoundPlain}{}{}{\\thepage}\n"
+                f"  \\aliaspagestyle{{plain}}{{{plain_alias}}}\n"
+                "}{}\n"
+                "\\makeatother"
+            )
+        return includes
+
+    @staticmethod
+    def _bound_running_header_cells(*, enabled: bool, source: str, title: str) -> tuple[str, str]:
+        if not enabled:
+            return "", ""
+        source = source.strip().lower().replace("-", "_").replace(" ", "_")
+        if source == "document_title":
+            escaped = PandocRenderer._latex_header_text(title)
+            return rf"\small\itshape {escaped}" if escaped else "", rf"\small\itshape {escaped}" if escaped else ""
+        if source == "section":
+            return r"\small\itshape\rightmark", r"\small\itshape\rightmark"
+        return r"\small\itshape\leftmark", r"\small\itshape\rightmark"
+
+    @staticmethod
+    def _latex_header_text(value: str) -> str:
+        return str(value or "").replace("\\", r"\\").replace("&", r"\&").replace("%", r"\%").replace("#", r"\#").replace("_", r"\_").strip()
 
     @staticmethod
     def _source_header_includes(render_source: Path) -> list[str]:
