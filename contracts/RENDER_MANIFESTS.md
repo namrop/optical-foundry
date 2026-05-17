@@ -90,6 +90,10 @@ For page size and margins:
 - Page-size and margin overrides are PDF/LaTeX geometry overrides. They are
   reliable for document-spine profiles/templates that consume Pandoc `geometry`
   variables. Non-PDF outputs and physical sheet specs remain separate lanes.
+- Physical booklet/signature imposition is currently a post-render CLI lane, not
+  a manifest-owned render output. Use `python3.14 -m cli impose ...` after the
+  source PDF has passed page-size/evidence validation. A future `render.delivery`
+  object should integrate bound/booklet delivery, but that is not implemented yet.
 
 For title pages:
 

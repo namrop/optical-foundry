@@ -192,6 +192,48 @@ For exact intra-source full-page figures, the current safe boundary is:
 
 If exact full-page figure placement should become manifest-owned later, it needs a separate anchored-placement contract rather than overloading `figures:`.
 
+### 6. Source-level layout images and illuminated initials
+
+Optical Foundry supports source-authored decorative layout blocks that lower into guarded render-only LaTeX while preserving canonical Markdown sources:
+
+- `of-image` supports `wrap`, `absolute`, `inline`, and `block` placements with guarded relative image/PDF paths, safe dimensions, opacity bounds, and optional soft/vignette edge treatment.
+- `of-initial` supports transparent image initials with `path`, `width`, `lines`, `gap`, `raise`, `align`, and optional named recipes. The following paragraph remains live text and should not repeat the visible initial letter.
+- The preprocessor writes generated Markdown under the render output directory and injects `\graphicspath` roots for the source directory and output directory so staged-source art can resolve without mutating canonical source.
+- CTAN `wrapfig.sty` and `yugenillumination.sty` resolve through the Foundry-owned TeX import tree.
+- `python3.14 -m cli initial inspect <png>` reports transparent PNG alpha bounds/crop guidance for drop-cap spacing diagnosis; `python3.14 -m cli initial recipes` lists named initial recipes.
+
+For generic manuscript-style outputs, the artifact source chooses chapter placement and exact tuning values; Foundry only owns the reusable block contract, preprocessing, path safety, and evidence inventory.
+
+### 7. Booklet/signature imposition CLI
+
+Optical Foundry now has a post-render imposition lane:
+
+```bash
+python3.14 -m cli impose input.pdf \
+  --output generated/impositions/<run-name> \
+  --page-size half_letter \
+  --sheet-size letter \
+  --signature-size 16 \
+  --duplex short-edge
+```
+
+Implemented behavior:
+
+- layout: `booklet_signature_2up`;
+- validates input PDF page size before imposing;
+- emits two portrait source pages per landscape sheet side;
+- pads final signatures with blank slots when needed;
+- writes an imposed PDF plus `.imposition.json` page-map evidence;
+- verifies the imposed output sheet size/orientation.
+
+This is not yet manifest-integrated delivery output. Use it after the source PDF has been rendered and validated. See `contracts/IMPOSITION.md`.
+
+### 8. Foundry/artifact division for manuscript rendering
+
+The renderer documentation now records the line between generic Foundry support and artifact-specific packet material in `docs/guides/manuscript-rendering-support-boundaries.md`.
+
+Foundry owns reusable support for profiles, manifests, source layout block preprocessing, path safety, evidence, proof tooling, and imposition. Artifact packets own their manifest, Markdown source text, exact art inventory, chapter/drop-cap choices, edition/proof wording, and approval state.
+
 ## Roadmap — next code surfaces
 
 ### 1. `--format docx` CLI adapter

@@ -1,8 +1,8 @@
 # Optical Foundry
 
-Pandoc-backed render engine and greenfield replacement lane for the current `40_latex` renderer. Optical Foundry now has working local runtime surfaces: profile resolution, typed render manifests, document rendering, bundle/CAM/Codex assembly, generated-figure preprocessors, title-page controls, bundle section dividers, and evidence sidecars.
+Pandoc-backed render engine and greenfield replacement lane for the current `40_latex` renderer. Optical Foundry now has working local runtime surfaces: profile resolution, typed render manifests, document rendering, bundle/CAM/Codex assembly, generated-figure preprocessors, title-page controls, bundle section dividers, source-level layout images/illuminated initials, booklet/signature imposition, and evidence sidecars.
 
-`40_latex` remains the known-good behavioral reference. Normal Foundry renders may read it as fallback/reference but should not mutate it.
+`40_latex` remains the known-good behavioral reference and archive/provenance source. Normal Foundry renders resolve through the Foundry-owned `profiles/40_latex_import/` runtime surface, not an active external legacy fallback, and must not mutate legacy trees.
 
 ## Quickstart
 
@@ -16,6 +16,9 @@ python3.14 -m cli doc path/to/source.md --profile cam --output generated/<run-na
 
 # Render a typed manifest: markdown_document, composite_bundle, cam_stack, codex_bundle, etc.
 python3.14 -m cli manifest manifests/<manifest>.yaml --output generated/manifests/<run-name>
+
+# Impose an already-rendered PDF into booklet/signature sheet sides.
+python3.14 -m cli impose input.pdf --page-size half_letter --sheet-size letter --signature-size 16 --duplex short-edge --output generated/impositions/<run-name>
 
 # Inspect available profiles.
 python3.14 -m cli profiles
@@ -38,8 +41,10 @@ Implemented and exercised code surfaces:
 - CAM/Yugen Civic profile rendering.
 - Title pages, default blank-after-title behavior, and guarded title-page background images.
 - Generated figure preprocessors for Mermaid, Vega, D2, and Graphviz/DOT.
+- Source-level `of-image` and `of-initial` layout blocks, including transparent PNG initial diagnostics.
 - Evidence JSON sidecars with profile, boundary, output, source, and figure assertions.
 - Bundle section dividers via top-level `section_dividers:` in bundle-family manifests.
+- Post-render `booklet_signature_2up` imposition for half-letter-on-Letter and geometrically compatible booklet signatures.
 
 Current code-change status is tracked in:
 
@@ -93,8 +98,11 @@ Exact mid-source full-page figure placement is still a source/staged-source conc
 - `docs/IMPLEMENTATION_STATUS_2026-05-12.md` — current code-change status.
 - `contracts/RENDER_MANIFESTS.md` — manifest taxonomy and runtime contract.
 - `contracts/BUNDLE_ASSEMBLY.md` — bundle assembly contract, including section dividers.
+- `contracts/IMPOSITION.md` — booklet/signature imposition contract and verification checklist.
 - `contracts/EXPANSION.md` — adding new profiles.
 - `docs/PROFILE_AND_PANDOC_REFERENCE.md` — profile/Pandoc operational notes.
+- `docs/guides/illuminated-image-initials.md` — `of-initial` asset/tuning guide.
+- `docs/guides/manuscript-rendering-support-boundaries.md` — Foundry/artifact division for illuminated/bound manuscript rendering.
 
 ## Validation posture
 
