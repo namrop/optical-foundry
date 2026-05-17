@@ -233,8 +233,13 @@ def compute_safe_area_layout(
 
     recto_body = _clamp_box({"x": inner, "y": top, "width": text_w, "height": text_h}, page_w, page_h)
     verso_body = _clamp_box({"x": outer, "y": top, "width": text_w, "height": text_h}, page_w, page_h)
-    recto_rail = _clamp_box(_rail_box(page_w, outer, top, text_h, rail_w, sep, recto=True), page_w, page_h)
-    verso_rail = _clamp_box(_rail_box(page_w, outer, top, text_h, rail_w, sep, recto=False), page_w, page_h)
+    recto_rail_requested = _clamp_box(_rail_box(page_w, outer, top, text_h, rail_w, sep, recto=True), page_w, page_h)
+    verso_rail_requested = _clamp_box(_rail_box(page_w, outer, top, text_h, rail_w, sep, recto=False), page_w, page_h)
+    recto_rail = _clip_rail_to_critical_safe_zone(recto_rail_requested, page_w, critical, recto=True)
+    verso_rail = _clip_rail_to_critical_safe_zone(verso_rail_requested, page_w, critical, recto=False)
+    fit_warnings = []
+    if recto_rail["width"] < recto_rail_requested["width"] or verso_rail["width"] < verso_rail_requested["width"]:
+        fit_warnings.append("rail_width_exceeds_critical_safe_outer_margin")
     recto_deckle = _clamp_box({"x": page_w - deckle, "y": 0.0, "width": deckle, "height": page_h}, page_w, page_h)
     verso_deckle = _clamp_box({"x": 0.0, "y": 0.0, "width": deckle, "height": page_h}, page_w, page_h)
     recto_critical = _clamp_box({"x": page_w - critical, "y": 0.0, "width": critical, "height": page_h}, page_w, page_h)
@@ -244,9 +249,11 @@ def compute_safe_area_layout(
         "deckle_zone_inches": round(deckle, 3),
         "critical_safe_inset_inches": round(critical, 3),
         "body_box_inches": {"recto": recto_body, "verso": verso_body},
+        "rail_requested_box_inches": {"recto": recto_rail_requested, "verso": verso_rail_requested},
         "rail_box_inches": {"recto": recto_rail, "verso": verso_rail},
         "deckle_box_inches": {"recto": recto_deckle, "verso": verso_deckle},
         "critical_safe_box_inches": {"recto": recto_critical, "verso": verso_critical},
+        "fit_warnings": fit_warnings,
     }
 
 
@@ -433,17 +440,38 @@ def _compile_tex(tex_path: Path, dest: Path) -> tuple[str, str]:
     xelatex = shutil.which("xelatex") or ("/Library/TeX/texbin/xelatex" if Path("/Library/TeX/texbin/xelatex").exists() else "")
     if not xelatex:
         return "tex_written", ""
-    proc = subprocess.run(
-        [xelatex, "-interaction=nonstopmode", "-halt-on-error", tex_path.name],
-        cwd=dest,
-        text=True,
-        capture_output=True,
-        timeout=120,
-    )
     output_pdf = tex_path.with_suffix(".pdf")
-    if proc.returncode == 0 and output_pdf.exists():
+    last_proc = None
+    for _ in range(2):
+        proc = subprocess.run(
+            [xelatex, "-interaction=nonstopmode", "-halt-on-error", tex_path.name],
+            cwd=dest,
+            text=True,
+            capture_output=True,
+            timeout=120,
+        )
+        last_proc = proc
+        if proc.returncode != 0:
+            return "tex_written_pdf_failed", (proc.stderr or proc.stdout)[-800:]
+    if output_pdf.exists():
         return "pdf_written", ""
-    return "tex_written_pdf_failed", (proc.stderr or proc.stdout)[-800:]
+    if last_proc is not None:
+        return "tex_written_pdf_failed", (last_proc.stderr or last_proc.stdout)[-800:]
+    return "tex_written_pdf_failed", "xelatex did not run"
+
+
+def _clip_rail_to_critical_safe_zone(box: dict[str, float], page_w: float, critical: float, *, recto: bool) -> dict[str, float]:
+    if box["width"] <= 0:
+        return box
+    if recto:
+        safe_right = round(page_w - critical, 3)
+        width = max(0.0, round(min(box["x"] + box["width"], safe_right) - box["x"], 3))
+        return {**box, "width": width}
+    safe_left = round(critical, 3)
+    right = box["x"] + box["width"]
+    x = max(box["x"], safe_left)
+    width = max(0.0, round(right - x, 3))
+    return {**box, "x": round(x, 3), "width": width}
 
 
 def _rail_box(page_w: float, outer: float, top: float, text_h: float, rail_w: float, sep: float, *, recto: bool) -> dict[str, float]:

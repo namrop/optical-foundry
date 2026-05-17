@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from engine.bindery_preflight import build_bindery_preflight_report, compute_safe_area_layout, write_safe_area_guide_tex
+from engine.bindery_preflight import _compile_tex, build_bindery_preflight_report, compute_safe_area_layout, write_safe_area_guide_tex
 from engine.projection_plan import ProjectionPlan
 
 
@@ -65,7 +65,10 @@ def test_safe_area_layout_clamps_all_guide_boxes_inside_trim(tmp_path):
 
     assert layout["trim_inches"] == {"width": 5.5, "height": 8.5}
     assert layout["body_box_inches"]["recto"] == {"x": 0.85, "y": 0.65, "width": 4.05, "height": 7.15}
-    assert layout["rail_box_inches"]["recto"] == {"x": 4.95, "y": 0.65, "width": 0.45, "height": 7.15}
+    assert layout["rail_requested_box_inches"]["recto"] == {"x": 4.95, "y": 0.65, "width": 0.45, "height": 7.15}
+    assert layout["rail_box_inches"]["recto"] == {"x": 4.95, "y": 0.65, "width": 0.3, "height": 7.15}
+    assert layout["rail_box_inches"]["verso"] == {"x": 0.25, "y": 0.65, "width": 0.3, "height": 7.15}
+    assert "rail_width_exceeds_critical_safe_outer_margin" in layout["fit_warnings"]
     for group in ("body_box_inches", "rail_box_inches", "deckle_box_inches", "critical_safe_box_inches"):
         for side, box in layout[group].items():
             assert box["x"] >= 0, (group, side, box)
@@ -83,7 +86,8 @@ def test_safe_area_guide_tex_records_trim_deckle_rail_and_body_boxes(tmp_path):
     assert tex.exists()
     assert guide["trim_inches"] == {"width": 5.5, "height": 8.5}
     assert guide["body_box_inches"]["recto"] == {"x": 0.85, "y": 0.65, "width": 4.05, "height": 7.15}
-    assert guide["rail_box_inches"]["recto"] == {"x": 4.95, "y": 0.65, "width": 0.45, "height": 7.15}
+    assert guide["rail_requested_box_inches"]["recto"] == {"x": 4.95, "y": 0.65, "width": 0.45, "height": 7.15}
+    assert guide["rail_box_inches"]["recto"] == {"x": 4.95, "y": 0.65, "width": 0.3, "height": 7.15}
     body = tex.read_text()
     assert "\\clip (0,0) rectangle (5.500,8.500);" in body
     assert "Deckle / sacrificial zone" in body
@@ -114,6 +118,31 @@ def test_safe_area_guide_can_overlay_boxes_on_source_pdf(tmp_path):
     assert "\\includepdf[pages={1},fitpaper=true,pagecommand={\\OFRectoOverlay}]" in body
     assert "\\includepdf[pages={2},fitpaper=true,pagecommand={\\OFVersoOverlay}]" in body
     assert "\\includepdf[pages={3},fitpaper=true,pagecommand={\\OFRectoOverlay}]" in body
+
+
+def test_compile_tex_runs_twice_for_page_anchor_resolution(tmp_path, monkeypatch):
+    tex = tmp_path / "overlay.tex"
+    tex.write_text("\\documentclass{article}\\begin{document}x\\end{document}")
+    calls = []
+
+    monkeypatch.setattr("engine.bindery_preflight.shutil.which", lambda name: "/fake/xelatex")
+
+    def fake_run(command, **kwargs):
+        calls.append(command)
+        tex.with_suffix(".pdf").write_bytes(b"%PDF-1.7 fake\n")
+        class Result:
+            returncode = 0
+            stdout = ""
+            stderr = ""
+        return Result()
+
+    monkeypatch.setattr("engine.bindery_preflight.subprocess.run", fake_run)
+
+    status, error = _compile_tex(tex, tmp_path)
+
+    assert status == "pdf_written"
+    assert error == ""
+    assert len(calls) == 2
 
 
 def _bound_rail_plan(tmp_path: Path) -> ProjectionPlan:
