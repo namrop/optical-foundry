@@ -322,8 +322,8 @@ def parse_pdfimages(text: str) -> dict[str, Any]:
 def _safe_area_guide_tex(layout: dict[str, Any]) -> str:
     page_w = layout["trim_inches"]["width"]
     page_h = layout["trim_inches"]["height"]
-    recto_overlay = _guide_tikz(layout, "recto", include_legend=True, title="Recto/right-hand page safe-area guide")
-    verso_overlay = _guide_tikz(layout, "verso", include_legend=True, title="Verso/left-hand page safe-area guide")
+    recto_overlay = _guide_tikz(layout, "recto", include_legend=True, title="Recto/right-hand page safe-area guide", page_anchor=False)
+    verso_overlay = _guide_tikz(layout, "verso", include_legend=True, title="Verso/left-hand page safe-area guide", page_anchor=False)
     return rf"""
 \documentclass{{article}}
 \usepackage[paperwidth={page_w}in,paperheight={page_h}in,margin=0in]{{geometry}}
@@ -342,8 +342,8 @@ def _safe_area_overlay_tex(layout: dict[str, Any], *, overlay_source: Path, page
     page_w = layout["trim_inches"]["width"]
     page_h = layout["trim_inches"]["height"]
     source = _tex_path(overlay_source)
-    recto = _guide_tikz(layout, "recto", include_legend=False, title="")
-    verso = _guide_tikz(layout, "verso", include_legend=False, title="")
+    recto = _guide_tikz(layout, "recto", include_legend=False, title="", page_anchor=True)
+    verso = _guide_tikz(layout, "verso", include_legend=False, title="", page_anchor=True)
     includes = []
     for page in range(1, page_count + 1):
         command = "\\OFRectoOverlay" if page % 2 == 1 else "\\OFVersoOverlay"
@@ -363,7 +363,7 @@ def _safe_area_overlay_tex(layout: dict[str, Any], *, overlay_source: Path, page
 """.lstrip()
 
 
-def _guide_tikz(layout: dict[str, Any], side: str, *, include_legend: bool, title: str) -> str:
+def _guide_tikz(layout: dict[str, Any], side: str, *, include_legend: bool, title: str, page_anchor: bool) -> str:
     page_w = layout["trim_inches"]["width"]
     page_h = layout["trim_inches"]["height"]
     boxes = [
@@ -372,7 +372,14 @@ def _guide_tikz(layout: dict[str, Any], side: str, *, include_legend: bool, titl
         (layout["rail_box_inches"][side], "DarkOliveGreen4", "Outer illumination rail", "0.14"),
         (layout["deckle_box_inches"][side], "LightGoldenrod3", "Deckle / sacrificial zone", "0.24"),
     ]
-    lines = [rf"\begin{{tikzpicture}}[x=1in,y=1in]", rf"\clip (0,0) rectangle ({page_w:.3f},{page_h:.3f});"]
+    if page_anchor:
+        lines = [
+            r"\begin{tikzpicture}[remember picture,overlay,x=1in,y=1in]",
+            r"\begin{scope}[shift={(current page.south west)}]",
+            rf"\clip (0,0) rectangle ({page_w:.3f},{page_h:.3f});",
+        ]
+    else:
+        lines = [rf"\begin{{tikzpicture}}[x=1in,y=1in]", rf"\clip (0,0) rectangle ({page_w:.3f},{page_h:.3f});"]
     if title:
         lines.append(rf"\node[anchor=west,font=\scriptsize] at (0.120,{page_h - 0.250:.3f}) {{{title}}};")
     for box, color, _label, opacity in boxes:
@@ -396,6 +403,8 @@ def _guide_tikz(layout: dict[str, Any], side: str, *, include_legend: bool, titl
                 rf"\node[anchor=west,font=\scriptsize] at (0.120,{page_h - 0.960:.3f}) {{\textcolor{{DarkOliveGreen4}}{{\rule{{0.16in}}{{0.05in}}}} Outer illumination rail}};",
             ]
         )
+    if page_anchor:
+        lines.append("\\end{scope}")
     lines.append("\\end{tikzpicture}")
     return "\n".join(lines)
 

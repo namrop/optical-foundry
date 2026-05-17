@@ -109,6 +109,8 @@ def test_safe_area_guide_can_overlay_boxes_on_source_pdf(tmp_path):
     assert overlay_tex.exists()
     assert guide["overlay_pdf_path"].endswith(".safe_area_overlay.pdf")
     body = overlay_tex.read_text()
+    assert "remember picture,overlay" in body
+    assert "current page.south west" in body
     assert "\\includepdf[pages={1},fitpaper=true,pagecommand={\\OFRectoOverlay}]" in body
     assert "\\includepdf[pages={2},fitpaper=true,pagecommand={\\OFVersoOverlay}]" in body
     assert "\\includepdf[pages={3},fitpaper=true,pagecommand={\\OFRectoOverlay}]" in body
