@@ -20,6 +20,7 @@ from typing import Any
 
 from engine.d2 import D2RenderError, preprocess_d2_blocks
 from engine.graphviz import GraphvizRenderError, preprocess_graphviz_blocks
+from engine.imposition import ImpositionError, impose_pdf
 from engine.layout_images import LayoutImageRenderError, preprocess_layout_image_blocks
 from engine.mermaid import MermaidRenderError, preprocess_mermaid_blocks
 from engine.vega import VegaRenderError, preprocess_vega_blocks
@@ -182,6 +183,7 @@ class PandocRenderer(Renderer):
         pdf_bytes = output_pdf.stat().st_size
         pdf_sha = self._sha256_file(output_pdf)
         pages = self._count_pages(output_pdf)
+        imposition_output = self._maybe_impose_bound_pdf(plan, output_pdf, out_dir)
 
         warnings = list(plan.boundary_assertions.get("warnings", [])) + defaults_meta.get("warnings", []) + resolved_profile.warnings
         validation = self._validation_success(
@@ -229,6 +231,7 @@ class PandocRenderer(Renderer):
                 "pdf_bytes": pdf_bytes,
                 "pdf_sha256": pdf_sha,
                 "page_size": plan.page_size,
+                **({"imposition": imposition_output} if imposition_output else {}),
             },
             "integrity": {
                 "text_extract_exists": bool(text_extract),
@@ -254,6 +257,41 @@ class PandocRenderer(Renderer):
 
         evidence_file.write_text(json.dumps(evidence, indent=2) + "\n")
         return evidence
+
+    def _maybe_impose_bound_pdf(self, plan: ProjectionPlan, output_pdf: Path, out_dir: Path) -> dict[str, Any] | None:
+        imposition = plan.delivery.get("imposition", {}) if isinstance(plan.delivery.get("imposition", {}), dict) else {}
+        if plan.delivery.get("mode") != "bound" or not imposition.get("enabled"):
+            return None
+        try:
+            result = impose_pdf(
+                output_pdf,
+                output=out_dir / "imposition",
+                page_size=plan.page_size,
+                sheet_size=str(imposition.get("sheet_size", "letter")),
+                signature_size=int(imposition.get("signature_size", 4)),
+                duplex_mode=str(imposition.get("duplex", "short_edge")),
+            )
+        except ImpositionError as exc:
+            return {
+                "status": "error",
+                "error": str(exc),
+                "layout": str(imposition.get("layout", "booklet_signature_2up")),
+            }
+        return {
+            "status": "ok",
+            "layout": str(imposition.get("layout", "booklet_signature_2up")),
+            "input_pdf": str(output_pdf),
+            "output_pdf": str(result.output_pdf),
+            "mapping_json": str(result.mapping_json),
+            "page_size": plan.page_size,
+            "sheet_size": str(imposition.get("sheet_size", "letter")),
+            "signature_size": int(imposition.get("signature_size", 4)),
+            "duplex": str(imposition.get("duplex", "short_edge")),
+            "input_pages": result.input_pages,
+            "output_pages": result.output_pages,
+            "padded_pages": result.padded_pages,
+            "blank_count": result.blank_count,
+        }
 
     def _prepare_layout_image_source(
         self,
@@ -746,6 +784,9 @@ class PandocRenderer(Renderer):
                 variables["pagestyle"] = "ofBoundOuter"
             if plan.delivery.get("footer_metadata", {}).get("suppress_repeated", False):
                 variables["footeremail"] = ""
+            illumination = plan.delivery.get("illumination", {}) if isinstance(plan.delivery.get("illumination", {}), dict) else {}
+            if illumination.get("enabled"):
+                variables["of_illumination_rail_width"] = str(illumination.get("width", "0.45in"))
         existing_classoption = collect_profile_classoption(resolved_profile.defaults_stack)
         classoption = merge_page_size_classoption(plan.page_size, existing_classoption)
         if plan.delivery.get("mode") == "bound" and plan.delivery.get("duplex") is True:
@@ -791,7 +832,23 @@ class PandocRenderer(Renderer):
                 "}{}\n"
                 "\\makeatother"
             )
+        illumination = plan.delivery.get("illumination", {}) if isinstance(plan.delivery.get("illumination", {}), dict) else {}
+        if illumination.get("enabled"):
+            includes.append(PandocRenderer._bound_illumination_rail_header_include(str(illumination.get("width", "0.45in"))))
         return includes
+
+    @staticmethod
+    def _bound_illumination_rail_header_include(width: str) -> str:
+        return (
+            "\\usepackage{graphicx}\n"
+            "\\newlength{\\OFIlluminationRailWidth}\n"
+            f"\\setlength{{\\OFIlluminationRailWidth}}{{{width}}}\n"
+            "\\setlength{\\marginparwidth}{\\OFIlluminationRailWidth}\n"
+            "\\setlength{\\marginparsep}{0.05in}\n"
+            "\\newcommand{\\OFOuterRail}[1]{%\n"
+            "  \\marginpar{\\centering\\includegraphics[width=\\OFIlluminationRailWidth]{#1}}%\n"
+            "}"
+        )
 
     @staticmethod
     def _bound_running_header_cells(*, enabled: bool, source: str, title: str) -> tuple[str, str]:

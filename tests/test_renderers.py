@@ -303,6 +303,46 @@ def test_pandoc_renderer_bound_delivery_running_headers_use_memoir_marks(tmp_pat
     assert "\\aliaspagestyle{plain}{ofBoundPlain}" in header_includes
 
 
+def test_pandoc_renderer_bound_delivery_illumination_rail_header_include(tmp_path):
+    plan = ProjectionPlan(
+        profile_id="mythic",
+        render_id="bound-illumination-rail-doc",
+        render_source=GF / "fixtures" / "sources" / "source-001.md",
+        page_size="half_letter",
+        page_margins=["inner=0.85in", "outer=0.60in", "top=0.65in", "bottom=0.70in"],
+        title="Bound Illumination Rail",
+        delivery={
+            "mode": "bound",
+            "binding": "saddle_stitch",
+            "duplex": True,
+            "page_numbers": "outer",
+            "running_headers": {"enabled": False, "source": "chapter", "suppress_on": []},
+            "colophon": {"enabled": True, "placement": "title_verso"},
+            "footer_metadata": {"suppress_repeated": True},
+            "illumination": {
+                "enabled": True,
+                "rail": "outer",
+                "width": "0.45in",
+                "reserve_space": True,
+                "placement": "chapter_openers",
+                "assets": [{"id": "vine_gold", "source": "assets/illuminations/vine_gold.png", "pages": "chapter_openers"}],
+            },
+            "imposition": {"enabled": True, "layout": "booklet_signature_2up", "sheet_size": "letter", "signature_size": 8, "duplex": "short_edge"},
+        },
+    )
+    resolved = resolve_profile("mythic")
+
+    defaults = PandocRenderer()._page_geometry_defaults(plan, resolved, tmp_path)
+
+    assert defaults is not None
+    import yaml
+    variables = yaml.safe_load(defaults.read_text())["variables"]
+    header_includes = "\n".join(variables["header-includes"])
+    assert "\\newcommand{\\OFOuterRail}" in header_includes
+    assert "\\marginpar" in header_includes
+    assert variables["of_illumination_rail_width"] == "0.45in"
+
+
 def test_pandoc_renderer_page_size_overlay_is_document_spine_only(tmp_path):
     plan = ProjectionPlan(
         profile_id="letter",

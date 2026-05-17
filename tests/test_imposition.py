@@ -148,6 +148,65 @@ def test_cli_impose_accepts_requested_print_parameters(tmp_path):
     assert Path(payload["mapping"]).exists()
 
 
+def test_manifest_render_runs_requested_imposition(tmp_path):
+    if not shutil.which("pdfinfo") or not Path("/Library/TeX/texbin/xelatex").exists() or not shutil.which("pandoc"):
+        pytest.skip("pandoc/pdfinfo/xelatex unavailable")
+
+    source = tmp_path / "source.md"
+    source.write_text(
+        "---\n"
+        "title: Imposition Manifest\n"
+        "toc: false\n"
+        "numbersections: false\n"
+        "---\n\n"
+        "# Imposition Manifest\n\n"
+        "First page.\n\n"
+        "```{=latex}\n\\clearpage\n```\n\n"
+        "Second page.\n"
+    )
+    manifest = tmp_path / "manifest.yaml"
+    manifest.write_text(
+        f"""
+kind: markdown_document
+schema_version: document_manifest_v1
+document_id: manifest_imposition_smoke
+profile: mythic
+source:
+  path: {source}
+render:
+  include_toc: false
+  numbersections: false
+  page_size: half_letter
+  delivery:
+    mode: bound
+    binding: saddle_stitch
+    imposition:
+      enabled: true
+      layout: booklet_signature_2up
+      sheet_size: letter
+      signature_size: 4
+      duplex: short-edge
+""".lstrip()
+    )
+    out_dir = tmp_path / "out"
+    proc = subprocess.run(
+        [sys.executable, "-m", "cli", "manifest", str(manifest), "--output", str(out_dir)],
+        cwd=ROOT,
+        text=True,
+        capture_output=True,
+        timeout=180,
+    )
+
+    assert proc.returncode == 0, proc.stderr + proc.stdout
+    evidence = json.loads((out_dir / "manifest_imposition_smoke.evidence.json").read_text())
+    imposition = evidence["output"]["imposition"]
+    assert imposition["status"] == "ok"
+    assert imposition["layout"] == "booklet_signature_2up"
+    assert imposition["sheet_size"] == "letter"
+    assert Path(imposition["output_pdf"]).exists()
+    assert Path(imposition["mapping_json"]).exists()
+
+
 def _make_half_letter_source_pdf(tmp_path: Path, *, pages: int) -> Path:
     tex = tmp_path / "source.tex"
     body = "\n".join(

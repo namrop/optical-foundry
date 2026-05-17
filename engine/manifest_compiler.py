@@ -39,6 +39,7 @@ from engine.delivery import (
     delivery_boundary,
     delivery_page_margins,
     insert_title_verso_colophon,
+    inject_bound_illumination_rail_marks,
     normalize_delivery,
     suppress_bound_pagination_overrides,
     inject_bound_running_header_marks,
@@ -740,8 +741,17 @@ class MarkdownDocumentCompiler(ManifestCompiler):
             "source": "chapter",
             "marks_inserted": 0,
         }
+        delivery_illumination_marks = {
+            "enabled": False,
+            "placement": "",
+            "marks_inserted": 0,
+            "assets_used": [],
+        }
         if delivery.get("mode") == "bound":
             compiled_body, delivery_pagination_overrides = suppress_bound_pagination_overrides(compiled_body)
+            illumination = delivery.get("illumination", {}) if isinstance(delivery.get("illumination"), dict) else {}
+            if illumination.get("enabled"):
+                compiled_body, delivery_illumination_marks = inject_bound_illumination_rail_marks(compiled_body, illumination)
             running_headers = delivery.get("running_headers", {}) if isinstance(delivery.get("running_headers"), dict) else {}
             if running_headers.get("enabled"):
                 compiled_body, delivery_running_header_marks = inject_bound_running_header_marks(
@@ -786,6 +796,7 @@ class MarkdownDocumentCompiler(ManifestCompiler):
             "delivery_colophon_emitted": delivery_colophon_emitted,
             "delivery_pagination_overrides": delivery_pagination_overrides,
             "delivery_running_header_marks": delivery_running_header_marks,
+            "delivery_illumination_marks": delivery_illumination_marks,
             **delivery_boundary(delivery),
             "accepted_manifest_variables": sorted(accepted_variables.keys()),
             "rejected_manifest_variables": rejected_variables,

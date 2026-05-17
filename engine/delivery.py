@@ -5,7 +5,7 @@ from copy import deepcopy
 import re
 from typing import Any
 
-from engine.page_size import PageMarginError, _normalize_margin_dimension
+from engine.page_size import PageMarginError, PageSizeError, _normalize_margin_dimension, normalize_page_size
 
 BOUND_DEFAULT_MARGINS = {
     "inner": "0.85in",
@@ -18,6 +18,10 @@ SUPPORTED_DELIVERY_MODES = {"screen", "print", "bound", "booklet", "saddle_stitc
 SUPPORTED_BINDINGS = {"side_staple", "perfect", "saddle_stitch", "coil", "unknown"}
 SUPPORTED_PAGE_NUMBER_STRATEGIES = {"outer", "none", "center", "inner", "right"}
 SUPPORTED_COLOPHON_PLACEMENTS = {"title_verso", "end"}
+SUPPORTED_IMPOSITION_LAYOUTS = {"booklet_signature_2up"}
+SUPPORTED_DUPLEX_MODES = {"short_edge", "long_edge"}
+SUPPORTED_ILLUMINATION_RAILS = {"outer", "none"}
+SUPPORTED_ILLUMINATION_PLACEMENTS = {"chapter_openers", "all_body_pages", "explicit"}
 ENLARGETHISPAGE_RE = re.compile(r"(?m)^\s*\\enlargethispage\s*\{[^\n{}]*\}\s*\n?")
 
 
@@ -61,7 +65,8 @@ def normalize_delivery(render_cfg: dict[str, Any], *, scope: str = "render.deliv
     margins = _normalize_delivery_margins(raw.get("margins", {}), scope=f"{scope}.margins")
     colophon = _normalize_colophon(raw.get("colophon", {}), scope=f"{scope}.colophon")
     running_headers = _normalize_running_headers(raw.get("running_headers", {}))
-    illumination = _normalize_illumination(raw.get("illumination", {}))
+    illumination = _normalize_illumination(raw.get("illumination", {}), scope=f"{scope}.illumination")
+    imposition = _normalize_imposition(raw.get("imposition", {}), binding=binding, scope=f"{scope}.imposition")
 
     return {
         "mode": "bound",
@@ -74,13 +79,14 @@ def normalize_delivery(render_cfg: dict[str, Any], *, scope: str = "render.deliv
         "footer_metadata": {"suppress_repeated": bool(raw.get("footer_metadata", {}).get("suppress_repeated", True)) if isinstance(raw.get("footer_metadata", {}), dict) else True},
         "illumination": illumination,
         "signature": {"normalize_to_multiple": 4 if binding == "saddle_stitch" else None},
+        "imposition": imposition,
     }
 
 
 def validate_delivery(render_cfg: dict[str, Any], *, scope: str = "render.delivery") -> list[str]:
     try:
         normalize_delivery(render_cfg, scope=scope)
-    except (ValueError, PageMarginError) as exc:
+    except (ValueError, PageMarginError, PageSizeError) as exc:
         return [str(exc)]
     return []
 
@@ -134,6 +140,40 @@ def inject_bound_running_header_marks(body: str, *, source: str = "chapter") -> 
     return marked, {"enabled": True, "source": normalized_source, "marks_inserted": count}
 
 
+def inject_bound_illumination_rail_marks(body: str, illumination: dict[str, Any]) -> tuple[str, dict[str, Any]]:
+    """Insert render-only rail markers for bound chapter-opener illumination."""
+
+    if not illumination.get("enabled"):
+        return body, {"enabled": False, "placement": "", "marks_inserted": 0, "assets_used": []}
+    placement = str(illumination.get("placement", "chapter_openers"))
+    assets = illumination.get("assets", []) if isinstance(illumination.get("assets", []), list) else []
+    if placement != "chapter_openers" or not assets or "\\OFOuterRail" in body:
+        return body, {"enabled": True, "placement": placement, "marks_inserted": 0, "assets_used": []}
+
+    asset = assets[0]
+    asset_source = str(asset.get("source", "")).strip()
+    asset_id = str(asset.get("id") or _resource_id_from_source(asset_source))
+    count = 0
+
+    def replace(match: re.Match[str]) -> str:
+        nonlocal count
+        prefix = match.group("prefix")
+        title = match.group("title").strip()
+        if not title.lower().startswith("chapter "):
+            return match.group(0)
+        count += 1
+        mark = f"```{{=latex}}\n\\OFOuterRail{{{asset_source}}}\n```"
+        return f"{prefix}{title}\n\n{mark}"
+
+    marked = re.sub(r"(?m)^(?P<prefix>#{1,6}\s+)(?P<title>[^\n]+)$", replace, body)
+    return marked, {
+        "enabled": True,
+        "placement": placement,
+        "marks_inserted": count,
+        "assets_used": [asset_id] if count else [],
+    }
+
+
 def delivery_page_margins(delivery: dict[str, Any]) -> list[str]:
     if delivery.get("mode") != "bound":
         return []
@@ -158,6 +198,7 @@ def delivery_boundary(delivery: dict[str, Any]) -> dict[str, Any]:
         "delivery_colophon_placement": colophon.get("placement", ""),
         "delivery_illumination": deepcopy(delivery.get("illumination", {})),
         "delivery_signature": deepcopy(delivery.get("signature", {})),
+        "delivery_imposition": deepcopy(delivery.get("imposition", {})),
     }
 
 
@@ -267,17 +308,90 @@ def _normalize_running_headers(value: Any) -> dict[str, Any]:
     }
 
 
-def _normalize_illumination(value: Any) -> dict[str, Any]:
-    if not isinstance(value, dict):
+def _normalize_illumination(value: Any, *, scope: str) -> dict[str, Any]:
+    if value in (None, ""):
         value = {}
+    if not isinstance(value, dict):
+        raise ValueError(f"{scope} must be a mapping")
+    rail = _normalize_token(value.get("rail", "outer"), default="outer")
+    if rail not in SUPPORTED_ILLUMINATION_RAILS:
+        raise ValueError(f"{scope}.rail must be one of: {', '.join(sorted(SUPPORTED_ILLUMINATION_RAILS))}")
+    placement = _normalize_token(value.get("placement", "chapter_openers"), default="chapter_openers")
+    if placement not in SUPPORTED_ILLUMINATION_PLACEMENTS:
+        raise ValueError(f"{scope}.placement must be one of: {', '.join(sorted(SUPPORTED_ILLUMINATION_PLACEMENTS))}")
+    assets = value.get("assets", [])
+    if assets in (None, ""):
+        assets = []
+    if not isinstance(assets, list):
+        raise ValueError(f"{scope}.assets must be a list")
     return {
         "enabled": bool(value.get("enabled", False)),
-        "rail": _normalize_token(value.get("rail", "outer"), default="outer"),
-        "width": str(value.get("width", "0.45in")),
+        "rail": rail,
+        "width": _normalize_margin_dimension(value.get("width", "0.45in"), scope=f"{scope}.width"),
         "reserve_space": bool(value.get("reserve_space", False)),
-        "placement": _normalize_token(value.get("placement", "chapter_openers"), default="chapter_openers"),
-        "assets": list(value.get("assets", [])) if isinstance(value.get("assets", []), list) else [],
+        "placement": placement,
+        "suppress_on": list(value.get("suppress_on", ["title_page", "title_verso", "blank_pages", "dividers"])),
+        "assets": [_normalize_illumination_asset(asset, scope=f"{scope}.assets[{idx}]") for idx, asset in enumerate(assets)],
     }
+
+
+def _normalize_imposition(value: Any, *, binding: str, scope: str) -> dict[str, Any]:
+    if value in (None, ""):
+        value = {}
+    if value is True:
+        value = {"enabled": True}
+    if value is False:
+        value = {"enabled": False}
+    if not isinstance(value, dict):
+        raise ValueError(f"{scope} must be a mapping")
+    enabled = bool(value.get("enabled", False))
+    layout = _normalize_token(value.get("layout", "booklet_signature_2up"), default="booklet_signature_2up")
+    if layout not in SUPPORTED_IMPOSITION_LAYOUTS:
+        raise ValueError(f"{scope}.layout must be one of: {', '.join(sorted(SUPPORTED_IMPOSITION_LAYOUTS))}")
+    duplex = _normalize_token(value.get("duplex", "short_edge"), default="short_edge")
+    if duplex not in SUPPORTED_DUPLEX_MODES:
+        raise ValueError(f"{scope}.duplex must be one of: {', '.join(sorted(SUPPORTED_DUPLEX_MODES))}")
+    signature_size = int(value.get("signature_size", value.get("signature-size", 4)))
+    if signature_size <= 0 or signature_size % 4 != 0:
+        raise ValueError(f"{scope}.signature_size must be a positive multiple of 4")
+    return {
+        "enabled": enabled,
+        "layout": layout,
+        "sheet_size": normalize_page_size(value.get("sheet_size", "letter"), default="letter", scope=f"{scope}.sheet_size"),
+        "signature_size": signature_size,
+        "duplex": duplex,
+    }
+
+
+def _normalize_illumination_asset(value: Any, *, scope: str) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        raise ValueError(f"{scope} must be a mapping")
+    source = _normalize_resource_path(value.get("source", ""), scope=f"{scope}.source")
+    asset_id = str(value.get("id") or _resource_id_from_source(source)).strip()
+    if not asset_id:
+        raise ValueError(f"{scope}.id must not be empty")
+    pages = value.get("pages", "chapter_openers")
+    if isinstance(pages, list):
+        normalized_pages = [_normalize_token(page, default="chapter_openers") for page in pages]
+    else:
+        normalized_pages = _normalize_token(pages, default="chapter_openers")
+    return {"id": asset_id, "source": source, "pages": normalized_pages}
+
+
+def _normalize_resource_path(value: Any, *, scope: str) -> str:
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError(f"{scope} must be a relative render-resource path")
+    path = value.strip()
+    if path.startswith("/") or "\\" in path or ".." in path.split("/") or any(token in path for token in ("{", "}", "\x00")):
+        raise ValueError(f"{scope} must be a guarded relative render-resource path")
+    return path
+
+
+def _resource_id_from_source(source: str) -> str:
+    stem = str(source).rstrip("/").split("/")[-1]
+    if "." in stem:
+        stem = stem.rsplit(".", 1)[0]
+    return stem or "rail"
 
 
 def _latex_escape(value: str) -> str:
