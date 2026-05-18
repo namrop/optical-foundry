@@ -3,7 +3,7 @@ uid: optical-foundry-code-change-status-2026-05-12
 kind: implementation_status
 status: active
 created: 2026-05-12
-updated: 2026-05-16
+updated: 2026-05-18
 title: "Optical Foundry — Code Change Status"
 summary: "Code-level status for the May 2026 Optical Foundry manifest/rendering changes. This document intentionally excludes packet-specific document content notes."
 tags:
@@ -23,7 +23,7 @@ This file records **code and contract changes only**. It should not be used as a
 - Branch: `main`
 - Baseline HEAD before current uncommitted implementation slice: `ed22971c76849357cb40d4086e075856b5fe4a3c`
 - Validation command: `python3.14 -m pytest -q`
-- Latest observed result: `224 passed`
+- Latest observed result before documentation update: `249 passed`
 
 ## Archive-readiness validation
 
@@ -226,13 +226,36 @@ Implemented behavior:
 - writes an imposed PDF plus `.imposition.json` page-map evidence;
 - verifies the imposed output sheet size/orientation.
 
-This is not yet manifest-integrated delivery output. Use it after the source PDF has been rendered and validated. See `contracts/IMPOSITION.md`.
+This lane is now also callable from manifest-owned `render.delivery.imposition` for bound/booklet outputs. The standalone CLI remains useful for already-rendered PDFs. See `contracts/IMPOSITION.md`.
 
 ### 8. Foundry/artifact division for manuscript rendering
 
 The renderer documentation now records the line between generic Foundry support and artifact-specific packet material in `docs/guides/manuscript-rendering-support-boundaries.md`.
 
 Foundry owns reusable support for profiles, manifests, source layout block preprocessing, path safety, evidence, proof tooling, and imposition. Artifact packets own their manifest, Markdown source text, exact art inventory, chapter/drop-cap choices, edition/proof wording, and approval state.
+
+### 9. Manifest-owned bound delivery, imposition, preflight, and illumination rails
+
+`render.delivery` is implemented as the physical/use-context overlay for bound PDFs without adding bound-specific content profiles.
+
+Implemented behavior:
+
+- delivery normalization for `mode: bound` plus `booklet` / `saddle_stitch` aliases;
+- semantic bound margins, two-sided/mirrored geometry variables, outer page numbers, repeated-footer suppression, title-verso colophon insertion, and optional chapter-derived running-header marks;
+- guarded illumination rail assets for chapter openers, including outer rail and optional bottom rail placement;
+- manifest-owned `booklet_signature_2up` imposition using the existing imposition engine;
+- advisory bindery preflight JSON plus standalone and overlaid safe-area guide PDFs;
+- safe-area guide geometry that distinguishes requested outer rail width from the clipped critical-safe rail box and records bottom rail boxes.
+
+Documentation anchor: `docs/bound-delivery-status-2026-05-18.md`.
+
+Latest observed validation before documentation update:
+
+- Focused delivery/imposition/preflight/illumination tests passed.
+- Full regression: `249 passed`.
+- Bound proof smoke output: `generated/bound_delivery_story_baseline_2026-05-17/bound_render_bottom_rail/`.
+
+Remaining production gaps: CMYK/PDF-X, real bleed/trim boxes, creep compensation, richer vendor packets, per-chapter asset maps, recto/verso ornament variants, selector model beyond chapter openers, and dedicated SVG-to-bitmap/PDF asset conversion/cache.
 
 ## Roadmap — next code surfaces
 

@@ -1,6 +1,6 @@
 # Signature Imposition
 
-Optical Foundry supports booklet/signature imposition for already-rendered PDFs through the CLI. This is a generic Foundry capability; artifact-specific cover/interior splits, manuscript source trees, and art packets stay outside this contract unless reduced to fixtures:
+Optical Foundry supports booklet/signature imposition for already-rendered PDFs through the CLI and for bound/booklet manifest renders through `render.delivery.imposition`. This is a generic Foundry capability; artifact-specific cover/interior splits, manuscript source trees, and art packets stay outside this contract unless reduced to fixtures:
 
 ```bash
 python3.14 -m cli impose input.pdf \
@@ -10,6 +10,25 @@ python3.14 -m cli impose input.pdf \
   --signature-size 16 \
   --duplex short-edge
 ```
+
+## Manifest-owned use
+
+For a typed manifest, use:
+
+```yaml
+render:
+  delivery:
+    mode: bound
+    binding: saddle_stitch
+    imposition:
+      enabled: true
+      layout: booklet_signature_2up
+      sheet_size: letter
+      signature_size: 8
+      duplex: short_edge
+```
+
+The renderer writes the imposed PDF and `.imposition.json` sidecar next to the primary render output and records the imposition metadata in evidence.
 
 ## Current layout
 

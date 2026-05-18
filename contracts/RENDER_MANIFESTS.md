@@ -90,10 +90,9 @@ For page size and margins:
 - Page-size and margin overrides are PDF/LaTeX geometry overrides. They are
   reliable for document-spine profiles/templates that consume Pandoc `geometry`
   variables. Non-PDF outputs and physical sheet specs remain separate lanes.
-- Physical booklet/signature imposition is currently a post-render CLI lane, not
-  a manifest-owned render output. Use `python3.14 -m cli impose ...` after the
-  source PDF has passed page-size/evidence validation. A future `render.delivery`
-  object should integrate bound/booklet delivery, but that is not implemented yet.
+- Physical booklet/signature imposition is available both as the standalone
+  `python3.14 -m cli impose ...` command and as a manifest-owned delivery output
+  through `render.delivery.imposition` for bound/booklet-style PDF renders.
 
 For title pages:
 
@@ -111,6 +110,30 @@ For title pages:
 Title-page image paths are guarded render-resource paths: relative PNG/JPG/PDF
 paths only, no absolute paths, parent traversal, URLs, or LaTeX control-token
 injection.
+
+## Bound delivery surface
+
+`render.delivery` is the manifest-owned physical/use-context layer. It must not
+be modeled as bound-specific profile forks. The current implemented bound lane
+supports:
+
+- `mode`: `bound`; aliases `booklet` and `saddle_stitch` normalize into bound
+  delivery with saddle-stitch defaults.
+- `binding`: `side_staple`, `perfect`, `saddle_stitch`, `coil`, or `unknown`.
+- `duplex`: boolean.
+- `page_numbers`: `outer`, `none`, `center`, `inner`, or `right`.
+- `margins`: semantic bound margins `inner`, `outer`, `top`, `bottom`.
+- `running_headers`: optional chapter-derived marks and suppression policy.
+- `footer_metadata.suppress_repeated`: default true for bound output.
+- `colophon`: currently title-verso colophon insertion.
+- `illumination`: guarded relative render-resource assets for chapter-opener
+  outer rails and optional bottom rails.
+- `imposition`: optional manifest-owned `booklet_signature_2up` output with
+  `sheet_size`, `signature_size`, and `duplex` controls.
+
+A bound manifest render may emit the primary PDF, an imposed PDF plus
+`.imposition.json`, advisory `.bindery_preflight.json`, and safe-area guide PDFs.
+Preflight is advisory and does not block render success.
 
 A manifest may point to:
 
