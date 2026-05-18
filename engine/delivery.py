@@ -20,7 +20,7 @@ SUPPORTED_PAGE_NUMBER_STRATEGIES = {"outer", "none", "center", "inner", "right"}
 SUPPORTED_COLOPHON_PLACEMENTS = {"title_verso", "end"}
 SUPPORTED_IMPOSITION_LAYOUTS = {"booklet_signature_2up"}
 SUPPORTED_DUPLEX_MODES = {"short_edge", "long_edge"}
-SUPPORTED_ILLUMINATION_RAILS = {"outer", "none"}
+SUPPORTED_ILLUMINATION_RAILS = {"outer", "bottom", "none"}
 SUPPORTED_ILLUMINATION_PLACEMENTS = {"chapter_openers", "all_body_pages", "explicit"}
 ENLARGETHISPAGE_RE = re.compile(r"(?m)^\s*\\enlargethispage\s*\{[^\n{}]*\}\s*\n?")
 
@@ -147,9 +147,11 @@ def inject_bound_illumination_rail_marks(body: str, illumination: dict[str, Any]
         return body, {"enabled": False, "placement": "", "marks_inserted": 0, "assets_used": []}
     placement = str(illumination.get("placement", "chapter_openers"))
     assets = illumination.get("assets", []) if isinstance(illumination.get("assets", []), list) else []
-    if placement != "chapter_openers" or not assets or "\\OFOuterRail" in body:
+    if placement != "chapter_openers" or not assets or ("\\OFOuterRail" in body and "\\OFBottomRail" in body):
         return body, {"enabled": True, "placement": placement, "marks_inserted": 0, "assets_used": []}
 
+    rails = illumination.get("rails") if isinstance(illumination.get("rails"), list) else [illumination.get("rail", "outer")]
+    rails = [str(rail) for rail in rails if str(rail) != "none"]
     asset = assets[0]
     asset_source = str(asset.get("source", "")).strip()
     asset_id = str(asset.get("id") or _resource_id_from_source(asset_source))
@@ -161,8 +163,15 @@ def inject_bound_illumination_rail_marks(body: str, illumination: dict[str, Any]
         title = match.group("title").strip()
         if not title.lower().startswith("chapter "):
             return match.group(0)
-        count += 1
-        mark = f"```{{=latex}}\n\\OFOuterRail{{{asset_source}}}\n```"
+        marks = []
+        if "outer" in rails and "\\OFOuterRail" not in body:
+            marks.append(f"\\OFOuterRail{{{asset_source}}}")
+        if "bottom" in rails and "\\OFBottomRail" not in body:
+            marks.append(f"\\OFBottomRail{{{asset_source}}}")
+        if not marks:
+            return match.group(0)
+        count += len(marks)
+        mark = f"```{{=latex}}\n{chr(10).join(marks)}\n```"
         return f"{prefix}{title}\n\n{mark}"
 
     marked = re.sub(r"(?m)^(?P<prefix>#{1,6}\s+)(?P<title>[^\n]+)$", replace, body)
@@ -316,6 +325,7 @@ def _normalize_illumination(value: Any, *, scope: str) -> dict[str, Any]:
     rail = _normalize_token(value.get("rail", "outer"), default="outer")
     if rail not in SUPPORTED_ILLUMINATION_RAILS:
         raise ValueError(f"{scope}.rail must be one of: {', '.join(sorted(SUPPORTED_ILLUMINATION_RAILS))}")
+    rails = _normalize_illumination_rails(value.get("rails", None), rail=rail, bottom=bool(value.get("bottom", False)), scope=f"{scope}.rails")
     placement = _normalize_token(value.get("placement", "chapter_openers"), default="chapter_openers")
     if placement not in SUPPORTED_ILLUMINATION_PLACEMENTS:
         raise ValueError(f"{scope}.placement must be one of: {', '.join(sorted(SUPPORTED_ILLUMINATION_PLACEMENTS))}")
@@ -327,12 +337,36 @@ def _normalize_illumination(value: Any, *, scope: str) -> dict[str, Any]:
     return {
         "enabled": bool(value.get("enabled", False)),
         "rail": rail,
+        "rails": rails,
+        "bottom": "bottom" in rails,
         "width": _normalize_margin_dimension(value.get("width", "0.45in"), scope=f"{scope}.width"),
+        "bottom_height": _normalize_margin_dimension(value.get("bottom_height", "0.30in"), scope=f"{scope}.bottom_height"),
+        "bottom_offset": _normalize_margin_dimension(value.get("bottom_offset", "0.28in"), scope=f"{scope}.bottom_offset"),
         "reserve_space": bool(value.get("reserve_space", False)),
         "placement": placement,
         "suppress_on": list(value.get("suppress_on", ["title_page", "title_verso", "blank_pages", "dividers"])),
         "assets": [_normalize_illumination_asset(asset, scope=f"{scope}.assets[{idx}]") for idx, asset in enumerate(assets)],
     }
+
+
+def _normalize_illumination_rails(value: Any, *, rail: str, bottom: bool, scope: str) -> list[str]:
+    if value in (None, ""):
+        rails = [] if rail == "none" else [rail]
+    elif isinstance(value, str):
+        rails = [_normalize_token(value, default="outer")]
+    elif isinstance(value, list):
+        rails = [_normalize_token(item, default="outer") for item in value]
+    else:
+        raise ValueError(f"{scope} must be a string or list")
+    if bottom and "bottom" not in rails:
+        rails.append("bottom")
+    rails = list(dict.fromkeys(rails))
+    unknown = sorted(set(rails) - SUPPORTED_ILLUMINATION_RAILS)
+    if unknown:
+        raise ValueError(f"{scope} supports only: {', '.join(sorted(SUPPORTED_ILLUMINATION_RAILS))}")
+    if "none" in rails and len(rails) > 1:
+        rails = [item for item in rails if item != "none"]
+    return rails
 
 
 def _normalize_imposition(value: Any, *, binding: str, scope: str) -> dict[str, Any]:

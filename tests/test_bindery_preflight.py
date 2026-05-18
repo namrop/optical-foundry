@@ -68,8 +68,10 @@ def test_safe_area_layout_clamps_all_guide_boxes_inside_trim(tmp_path):
     assert layout["rail_requested_box_inches"]["recto"] == {"x": 4.95, "y": 0.65, "width": 0.45, "height": 7.15}
     assert layout["rail_box_inches"]["recto"] == {"x": 4.95, "y": 0.65, "width": 0.3, "height": 7.15}
     assert layout["rail_box_inches"]["verso"] == {"x": 0.25, "y": 0.65, "width": 0.3, "height": 7.15}
+    assert layout["bottom_rail_box_inches"]["recto"] == {"x": 0.85, "y": 7.92, "width": 4.05, "height": 0.3}
+    assert layout["bottom_rail_box_inches"]["verso"] == {"x": 0.6, "y": 7.92, "width": 4.05, "height": 0.3}
     assert "rail_width_exceeds_critical_safe_outer_margin" in layout["fit_warnings"]
-    for group in ("body_box_inches", "rail_box_inches", "deckle_box_inches", "critical_safe_box_inches"):
+    for group in ("body_box_inches", "rail_box_inches", "bottom_rail_box_inches", "deckle_box_inches", "critical_safe_box_inches"):
         for side, box in layout[group].items():
             assert box["x"] >= 0, (group, side, box)
             assert box["y"] >= 0, (group, side, box)
@@ -88,11 +90,13 @@ def test_safe_area_guide_tex_records_trim_deckle_rail_and_body_boxes(tmp_path):
     assert guide["body_box_inches"]["recto"] == {"x": 0.85, "y": 0.65, "width": 4.05, "height": 7.15}
     assert guide["rail_requested_box_inches"]["recto"] == {"x": 4.95, "y": 0.65, "width": 0.45, "height": 7.15}
     assert guide["rail_box_inches"]["recto"] == {"x": 4.95, "y": 0.65, "width": 0.3, "height": 7.15}
+    assert guide["bottom_rail_box_inches"]["recto"] == {"x": 0.85, "y": 7.92, "width": 4.05, "height": 0.3}
     body = tex.read_text()
     assert "\\clip (0,0) rectangle (5.500,8.500);" in body
     assert "Deckle / sacrificial zone" in body
     assert "Critical-safe inset" in body
     assert "Outer illumination rail" in body
+    assert "Bottom illumination rail" in body
 
 
 def test_safe_area_guide_can_overlay_boxes_on_source_pdf(tmp_path):
@@ -155,6 +159,6 @@ def _bound_rail_plan(tmp_path: Path) -> ProjectionPlan:
         delivery={
             "mode": "bound",
             "duplex": True,
-            "illumination": {"enabled": True, "width": "0.45in", "rail": "outer", "reserve_space": True},
+            "illumination": {"enabled": True, "rail": "outer", "bottom": True, "width": "0.45in", "bottom_height": "0.30in", "bottom_offset": "0.28in", "reserve_space": True},
         },
     )

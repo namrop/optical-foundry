@@ -226,7 +226,11 @@ def compute_safe_area_layout(
     text_w = round(page_w - inner - outer, 3)
     text_h = round(page_h - top - bottom, 3)
     illumination = plan.delivery.get("illumination", {}) if isinstance(plan.delivery.get("illumination", {}), dict) else {}
-    rail_w = _dimension_to_inches(illumination.get("width", "0.45in")) if illumination.get("enabled") else 0.0
+    rails = illumination.get("rails") if isinstance(illumination.get("rails"), list) else [illumination.get("rail", "outer")]
+    bottom_enabled = bool(illumination.get("bottom")) or "bottom" in rails
+    rail_w = _dimension_to_inches(illumination.get("width", "0.45in")) if illumination.get("enabled") and "outer" in rails else 0.0
+    bottom_h = _dimension_to_inches(illumination.get("bottom_height", "0.30in")) if illumination.get("enabled") and bottom_enabled else 0.0
+    bottom_offset = _dimension_to_inches(illumination.get("bottom_offset", "0.28in")) if bottom_h else 0.0
     sep = 0.05 if rail_w else 0.0
     deckle = _dimension_to_inches(deckle_zone)
     critical = _dimension_to_inches(critical_safe_inset)
@@ -240,6 +244,11 @@ def compute_safe_area_layout(
     fit_warnings = []
     if recto_rail["width"] < recto_rail_requested["width"] or verso_rail["width"] < verso_rail_requested["width"]:
         fit_warnings.append("rail_width_exceeds_critical_safe_outer_margin")
+    recto_bottom_rail = _clamp_box(_bottom_rail_box(inner, bottom, text_w, bottom_h, bottom_offset, page_h), page_w, page_h)
+    verso_bottom_rail = _clamp_box(_bottom_rail_box(outer, bottom, text_w, bottom_h, bottom_offset, page_h), page_w, page_h)
+    requested_bottom_bottom = bottom_offset + bottom_h
+    if bottom_h and (bottom_offset < critical or requested_bottom_bottom > bottom):
+        fit_warnings.append("bottom_rail_exceeds_critical_safe_bottom_margin")
     recto_deckle = _clamp_box({"x": page_w - deckle, "y": 0.0, "width": deckle, "height": page_h}, page_w, page_h)
     verso_deckle = _clamp_box({"x": 0.0, "y": 0.0, "width": deckle, "height": page_h}, page_w, page_h)
     recto_critical = _clamp_box({"x": page_w - critical, "y": 0.0, "width": critical, "height": page_h}, page_w, page_h)
@@ -251,6 +260,7 @@ def compute_safe_area_layout(
         "body_box_inches": {"recto": recto_body, "verso": verso_body},
         "rail_requested_box_inches": {"recto": recto_rail_requested, "verso": verso_rail_requested},
         "rail_box_inches": {"recto": recto_rail, "verso": verso_rail},
+        "bottom_rail_box_inches": {"recto": recto_bottom_rail, "verso": verso_bottom_rail},
         "deckle_box_inches": {"recto": recto_deckle, "verso": verso_deckle},
         "critical_safe_box_inches": {"recto": recto_critical, "verso": verso_critical},
         "fit_warnings": fit_warnings,
@@ -377,6 +387,7 @@ def _guide_tikz(layout: dict[str, Any], side: str, *, include_legend: bool, titl
         (layout["body_box_inches"][side], "RoyalBlue3", "Body", "0.05"),
         (layout["critical_safe_box_inches"][side], "IndianRed3", "Critical-safe inset", "0.12"),
         (layout["rail_box_inches"][side], "DarkOliveGreen4", "Outer illumination rail", "0.14"),
+        (layout["bottom_rail_box_inches"][side], "Purple3", "Bottom illumination rail", "0.14"),
         (layout["deckle_box_inches"][side], "LightGoldenrod3", "Deckle / sacrificial zone", "0.24"),
     ]
     if page_anchor:
@@ -408,6 +419,7 @@ def _guide_tikz(layout: dict[str, Any], side: str, *, include_legend: bool, titl
                 rf"\node[anchor=west,font=\scriptsize] at (0.120,{page_h - 0.620:.3f}) {{\textcolor{{IndianRed3}}{{\rule{{0.16in}}{{0.05in}}}} Critical-safe inset}};",
                 rf"\node[anchor=west,font=\scriptsize] at (0.120,{page_h - 0.790:.3f}) {{\textcolor{{RoyalBlue3}}{{\rule{{0.16in}}{{0.05in}}}} Body text block}};",
                 rf"\node[anchor=west,font=\scriptsize] at (0.120,{page_h - 0.960:.3f}) {{\textcolor{{DarkOliveGreen4}}{{\rule{{0.16in}}{{0.05in}}}} Outer illumination rail}};",
+                rf"\node[anchor=west,font=\scriptsize] at (0.120,{page_h - 1.130:.3f}) {{\textcolor{{Purple3}}{{\rule{{0.16in}}{{0.05in}}}} Bottom illumination rail}};",
             ]
         )
     if page_anchor:
@@ -472,6 +484,13 @@ def _clip_rail_to_critical_safe_zone(box: dict[str, float], page_w: float, criti
     x = max(box["x"], safe_left)
     width = max(0.0, round(right - x, 3))
     return {**box, "x": round(x, 3), "width": width}
+
+
+def _bottom_rail_box(x: float, bottom: float, text_w: float, height: float, offset: float, page_h: float) -> dict[str, float]:
+    if height <= 0:
+        return {"x": round(x, 3), "y": round(page_h - bottom, 3), "width": round(text_w, 3), "height": 0.0}
+    y = page_h - offset - height
+    return {"x": round(x, 3), "y": round(y, 3), "width": round(text_w, 3), "height": round(height, 3)}
 
 
 def _rail_box(page_w: float, outer: float, top: float, text_h: float, rail_w: float, sep: float, *, recto: bool) -> dict[str, float]:

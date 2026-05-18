@@ -215,6 +215,9 @@ def test_markdown_document_bound_delivery_normalizes_imposition_and_illumination
                 "illumination": {
                     "enabled": True,
                     "rail": "outer",
+                    "bottom": True,
+                    "bottom_height": "0.30in",
+                    "bottom_offset": "0.28in",
                     "width": "0.45in",
                     "reserve_space": True,
                     "placement": "chapter_openers",
@@ -239,13 +242,17 @@ def test_markdown_document_bound_delivery_normalizes_imposition_and_illumination
         "duplex": "short_edge",
     }
     assert plan.delivery["illumination"]["width"] == "0.45in"
+    assert plan.delivery["illumination"]["rails"] == ["outer", "bottom"]
+    assert plan.delivery["illumination"]["bottom_height"] == "0.30in"
+    assert plan.delivery["illumination"]["bottom_offset"] == "0.28in"
     assert plan.delivery["illumination"]["assets"][0]["source"] == "assets/illuminations/vine_gold.png"
     assert "\\OFOuterRail{assets/illuminations/vine_gold.png}" in assembled
+    assert "\\OFBottomRail{assets/illuminations/vine_gold.png}" in assembled
     assert plan.boundary_assertions["delivery_imposition"]["enabled"] is True
     assert plan.boundary_assertions["delivery_illumination_marks"] == {
         "enabled": True,
         "placement": "chapter_openers",
-        "marks_inserted": 1,
+        "marks_inserted": 2,
         "assets_used": ["vine_gold"],
     }
 

@@ -795,6 +795,8 @@ class PandocRenderer(Renderer):
             illumination = plan.delivery.get("illumination", {}) if isinstance(plan.delivery.get("illumination", {}), dict) else {}
             if illumination.get("enabled"):
                 variables["of_illumination_rail_width"] = str(illumination.get("width", "0.45in"))
+                variables["of_illumination_bottom_height"] = str(illumination.get("bottom_height", "0.30in"))
+                variables["of_illumination_bottom_offset"] = str(illumination.get("bottom_offset", "0.28in"))
         existing_classoption = collect_profile_classoption(resolved_profile.defaults_stack)
         classoption = merge_page_size_classoption(plan.page_size, existing_classoption)
         if plan.delivery.get("mode") == "bound" and plan.delivery.get("duplex") is True:
@@ -842,13 +844,54 @@ class PandocRenderer(Renderer):
             )
         illumination = plan.delivery.get("illumination", {}) if isinstance(plan.delivery.get("illumination", {}), dict) else {}
         if illumination.get("enabled"):
-            includes.append(PandocRenderer._bound_illumination_rail_header_include(str(illumination.get("width", "0.45in"))))
+            includes.append(
+                PandocRenderer._bound_illumination_rail_header_include(
+                    str(illumination.get("width", "0.45in")),
+                    bottom_enabled=bool(illumination.get("bottom")) or "bottom" in (illumination.get("rails") if isinstance(illumination.get("rails"), list) else [illumination.get("rail", "outer")]),
+                    bottom_height=str(illumination.get("bottom_height", "0.30in")),
+                    bottom_offset=str(illumination.get("bottom_offset", "0.28in")),
+                    inner_margin=str(plan.delivery.get("margins", {}).get("inner", "0.85in")) if isinstance(plan.delivery.get("margins", {}), dict) else "0.85in",
+                    outer_margin=str(plan.delivery.get("margins", {}).get("outer", "0.60in")) if isinstance(plan.delivery.get("margins", {}), dict) else "0.60in",
+                )
+            )
         return includes
 
     @staticmethod
-    def _bound_illumination_rail_header_include(width: str) -> str:
+    def _bound_illumination_rail_header_include(
+        width: str,
+        *,
+        bottom_enabled: bool = False,
+        bottom_height: str = "0.30in",
+        bottom_offset: str = "0.28in",
+        inner_margin: str = "0.85in",
+        outer_margin: str = "0.60in",
+    ) -> str:
+        bottom = ""
+        if bottom_enabled:
+            bottom = (
+                "\n\\newlength{\\OFIlluminationBottomRailWidth}\n"
+                "\\newlength{\\OFIlluminationBottomRailHeight}\n"
+                "\\newlength{\\OFIlluminationBottomOffset}\n"
+                "\\newlength{\\OFBoundInnerMargin}\n"
+                "\\newlength{\\OFBoundOuterMargin}\n"
+                "\\setlength{\\OFIlluminationBottomRailWidth}{\\textwidth}\n"
+                f"\\setlength{{\\OFIlluminationBottomRailHeight}}{{{bottom_height}}}\n"
+                f"\\setlength{{\\OFIlluminationBottomOffset}}{{{bottom_offset}}}\n"
+                f"\\setlength{{\\OFBoundInnerMargin}}{{{inner_margin}}}\n"
+                f"\\setlength{{\\OFBoundOuterMargin}}{{{outer_margin}}}\n"
+                "\\newcommand{\\OFBottomRail}[1]{%\n"
+                "  \\begin{tikzpicture}[remember picture,overlay]\n"
+                "    \\ifodd\\value{page}%\n"
+                "      \\node[anchor=south west,inner sep=0pt,xshift=\\OFBoundInnerMargin,yshift=\\OFIlluminationBottomOffset] at (current page.south west) {\\includegraphics[width=\\OFIlluminationBottomRailHeight,height=\\OFIlluminationBottomRailWidth,angle=90]{#1}};%\n"
+                "    \\else%\n"
+                "      \\node[anchor=south west,inner sep=0pt,xshift=\\OFBoundOuterMargin,yshift=\\OFIlluminationBottomOffset] at (current page.south west) {\\includegraphics[width=\\OFIlluminationBottomRailHeight,height=\\OFIlluminationBottomRailWidth,angle=90]{#1}};%\n"
+                "    \\fi%\n"
+                "  \\end{tikzpicture}%\n"
+                "}"
+            )
         return (
             "\\usepackage{graphicx}\n"
+            "\\usepackage{tikz}\n"
             "\\newlength{\\OFIlluminationRailWidth}\n"
             f"\\setlength{{\\OFIlluminationRailWidth}}{{{width}}}\n"
             "\\setlength{\\marginparwidth}{\\OFIlluminationRailWidth}\n"
@@ -856,6 +899,7 @@ class PandocRenderer(Renderer):
             "\\newcommand{\\OFOuterRail}[1]{%\n"
             "  \\marginpar{\\centering\\includegraphics[width=\\OFIlluminationRailWidth]{#1}}%\n"
             "}"
+            f"{bottom}"
         )
 
     @staticmethod

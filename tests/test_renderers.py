@@ -322,6 +322,9 @@ def test_pandoc_renderer_bound_delivery_illumination_rail_header_include(tmp_pat
             "illumination": {
                 "enabled": True,
                 "rail": "outer",
+                "bottom": True,
+                "bottom_height": "0.30in",
+                "bottom_offset": "0.28in",
                 "width": "0.45in",
                 "reserve_space": True,
                 "placement": "chapter_openers",
@@ -339,6 +342,9 @@ def test_pandoc_renderer_bound_delivery_illumination_rail_header_include(tmp_pat
     variables = yaml.safe_load(defaults.read_text())["variables"]
     header_includes = "\n".join(variables["header-includes"])
     assert "\\newcommand{\\OFOuterRail}" in header_includes
+    assert "\\newcommand{\\OFBottomRail}" in header_includes
+    assert "angle=90" in header_includes
+    assert "width=\\OFIlluminationBottomRailHeight,height=\\OFIlluminationBottomRailWidth" in header_includes
     assert "\\marginpar" in header_includes
     assert variables["of_illumination_rail_width"] == "0.45in"
 
