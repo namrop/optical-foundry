@@ -70,6 +70,212 @@ def test_markdown_document_render_page_margin_normalizes_supported_value():
     assert plan.boundary_assertions["page_margins_source"] == "manifest.render"
 
 
+def test_markdown_document_render_delivery_bound_normalizes_defaults_and_colophon():
+    compiler = MarkdownDocumentCompiler()
+    manifest = {
+        "kind": "markdown_document", "schema_version": "document_manifest_v1",
+        "document_id": "bound-doc", "profile": "mythic",
+        "source": {"path": str(SRC / "source-001.md")},
+        "metadata": {"title": "Bound Doc", "author": "Optical Foundry"},
+        "render": {
+            "include_toc": False,
+            "numbersections": False,
+            "page_size": "half_letter",
+            "delivery": {"mode": "bound"},
+        },
+    }
+
+    assert compiler.validate(manifest) == []
+    plan = compiler.compile(manifest)
+    assembled = plan.render_source.read_text()
+
+    assert plan.delivery["mode"] == "bound"
+    assert plan.delivery["binding"] == "side_staple"
+    assert plan.delivery["duplex"] is True
+    assert plan.delivery["page_numbers"] == "outer"
+    assert plan.delivery["colophon"]["enabled"] is True
+    assert plan.delivery["colophon"]["placement"] == "title_verso"
+    assert plan.delivery["imposition"]["enabled"] is False
+    assert plan.page_margins == ["inner=0.85in", "outer=0.60in", "top=0.65in", "bottom=0.70in"]
+    assert plan.boundary_assertions["delivery_mode"] == "bound"
+    assert plan.boundary_assertions["delivery_colophon_emitted"] is True
+    assert "\\OFBoundColophon" in assembled
+    assert "Bound Doc" in assembled
+
+
+def test_markdown_document_bound_delivery_suppresses_source_enlargethispage_override(tmp_path):
+    source = tmp_path / "pagination-override.md"
+    source.write_text(
+        "---\n"
+        "title: Pagination Override\n"
+        "---\n\n"
+        "# Title\n\n"
+        "```{=latex}\n"
+        "\\clearpage\n"
+        "```\n\n"
+        "Before override.\n\n"
+        "\\enlargethispage{3\\baselineskip}\n\n"
+        "After override.\n"
+    )
+    compiler = MarkdownDocumentCompiler()
+    manifest = {
+        "kind": "markdown_document",
+        "schema_version": "document_manifest_v1",
+        "document_id": "bound-pagination-override",
+        "profile": "mythic",
+        "source": {"path": str(source)},
+        "render": {
+            "include_toc": False,
+            "numbersections": False,
+            "page_size": "half_letter",
+            "delivery": {"mode": "bound"},
+        },
+    }
+
+    assert compiler.validate(manifest) == []
+    plan = compiler.compile(manifest)
+    assembled = plan.render_source.read_text()
+
+    assert "\\enlargethispage" not in assembled
+    assert "After override." in assembled
+    assert plan.boundary_assertions["delivery_pagination_overrides"] == {
+        "policy": "suppress_bound_unsafe",
+        "enlargethispage_suppressed": 1,
+        "commands_suppressed": ["enlargethispage"],
+    }
+
+
+def test_markdown_document_bound_delivery_injects_running_header_marks(tmp_path):
+    source = tmp_path / "running-header-source.md"
+    source.write_text(
+        "---\n"
+        "title: Running Header Source\n"
+        "---\n\n"
+        "## Chapter I — The Three Roads\n\n"
+        "Body.\n"
+    )
+    compiler = MarkdownDocumentCompiler()
+    manifest = {
+        "kind": "markdown_document",
+        "schema_version": "document_manifest_v1",
+        "document_id": "bound-running-header-marks",
+        "profile": "mythic",
+        "source": {"path": str(source)},
+        "render": {
+            "include_toc": False,
+            "numbersections": False,
+            "delivery": {
+                "mode": "bound",
+                "running_headers": {"enabled": True, "source": "chapter"},
+            },
+        },
+    }
+
+    plan = compiler.compile(manifest)
+    assembled = plan.render_source.read_text()
+
+    assert "\\markboth{Chapter I — The Three Roads}{Chapter I — The Three Roads}" in assembled
+    assert plan.boundary_assertions["delivery_running_header_marks"] == {
+        "enabled": True,
+        "source": "chapter",
+        "marks_inserted": 1,
+    }
+
+
+def test_markdown_document_bound_delivery_normalizes_imposition_and_illumination_rail(tmp_path):
+    source = tmp_path / "chapter-source.md"
+    source.write_text(
+        "---\n"
+        "title: Chapter Source\n"
+        "---\n\n"
+        "## Chapter I — The Rail\n\n"
+        "Body.\n"
+    )
+    compiler = MarkdownDocumentCompiler()
+    manifest = {
+        "kind": "markdown_document",
+        "schema_version": "document_manifest_v1",
+        "document_id": "bound-imposition-rail",
+        "profile": "mythic",
+        "source": {"path": str(source)},
+        "render": {
+            "include_toc": False,
+            "numbersections": False,
+            "page_size": "half_letter",
+            "delivery": {
+                "mode": "bound",
+                "binding": "saddle_stitch",
+                "imposition": {
+                    "enabled": True,
+                    "layout": "booklet_signature_2up",
+                    "sheet_size": "letter",
+                    "signature_size": 8,
+                    "duplex": "short-edge",
+                },
+                "illumination": {
+                    "enabled": True,
+                    "rail": "outer",
+                    "bottom": True,
+                    "bottom_height": "0.30in",
+                    "bottom_offset": "0.28in",
+                    "width": "0.45in",
+                    "reserve_space": True,
+                    "placement": "chapter_openers",
+                    "suppress_on": ["title_page", "title_verso", "blank_pages"],
+                    "assets": [
+                        {"id": "vine_gold", "source": "assets/illuminations/vine_gold.png", "pages": "chapter_openers"}
+                    ],
+                },
+            },
+        },
+    }
+
+    assert compiler.validate(manifest) == []
+    plan = compiler.compile(manifest)
+    assembled = plan.render_source.read_text()
+
+    assert plan.delivery["imposition"] == {
+        "enabled": True,
+        "layout": "booklet_signature_2up",
+        "sheet_size": "letter",
+        "signature_size": 8,
+        "duplex": "short_edge",
+    }
+    assert plan.delivery["illumination"]["width"] == "0.45in"
+    assert plan.delivery["illumination"]["rails"] == ["outer", "bottom"]
+    assert plan.delivery["illumination"]["bottom_height"] == "0.30in"
+    assert plan.delivery["illumination"]["bottom_offset"] == "0.28in"
+    assert plan.delivery["illumination"]["assets"][0]["source"] == "assets/illuminations/vine_gold.png"
+    assert "\\OFOuterRail{assets/illuminations/vine_gold.png}" in assembled
+    assert "\\OFBottomRail{assets/illuminations/vine_gold.png}" in assembled
+    assert plan.boundary_assertions["delivery_imposition"]["enabled"] is True
+    assert plan.boundary_assertions["delivery_illumination_marks"] == {
+        "enabled": True,
+        "placement": "chapter_openers",
+        "marks_inserted": 2,
+        "assets_used": ["vine_gold"],
+    }
+
+
+def test_markdown_document_validate_rejects_unsafe_delivery_margin():
+    compiler = MarkdownDocumentCompiler()
+    manifest = {
+        "kind": "markdown_document", "schema_version": "document_manifest_v1",
+        "document_id": "bad-bound-margin", "profile": "mythic",
+        "source": {"path": str(SRC / "source-001.md")},
+        "render": {
+            "delivery": {
+                "mode": "bound",
+                "margins": {"inner": "0.85in, \\input{evil}"},
+            }
+        },
+    }
+
+    errors = compiler.validate(manifest)
+
+    assert "render.delivery.margins.inner must be a plain TeX dimension" in errors
+
+
 def test_markdown_document_validate_rejects_unsafe_page_margin():
     compiler = MarkdownDocumentCompiler()
     manifest = {

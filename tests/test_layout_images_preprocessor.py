@@ -10,6 +10,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from engine.layout_images import LayoutImageRenderError, preprocess_layout_image_blocks
+from engine.manifest_compiler import MarkdownDocumentCompiler
 from engine.profile_resolver import resolve_profile
 from engine.projection_plan import ProjectionPlan
 from renderers.pandoc_renderer import PandocRenderer
@@ -277,6 +278,48 @@ def test_pandoc_renderer_records_image_initial_evidence(tmp_path):
     assert prepared.boundary_assertions["image_initial_count"] == 1
     assert prepared.boundary_assertions["image_initial_default_alignment"] == "bottom"
     assert prepared.boundary_assertions["figure_count_by_kind"] == {"image_initial": 1}
+
+
+def test_markdown_document_manifest_layout_images_include_original_source_root(tmp_path):
+    source_dir = tmp_path / "source"
+    output_dir = tmp_path / "rendered"
+    source_dir.mkdir()
+    src = source_dir / "story.md"
+    src.write_text(
+        "---\n"
+        "title: Story\n"
+        "---\n\n"
+        "```{=latex}\n"
+        "\\includegraphics{assets/plates/title.png}\n"
+        "```\n\n"
+        "```of-initial\n"
+        "path: assets/drop_caps_transparent/T.png\n"
+        "width: .72in\n"
+        "lines: 5\n"
+        "align: top\n"
+        "```\n"
+        "he story begins.\n"
+    )
+    plan = MarkdownDocumentCompiler().compile(
+        {
+            "kind": "markdown_document",
+            "schema_version": "document_manifest_v1",
+            "document_id": "story_manifest",
+            "profile": "mythic",
+            "source": {"path": str(src)},
+            "render": {"include_toc": False, "numbersections": False},
+        }
+    )
+
+    prepared = PandocRenderer()._prepare_layout_image_source(plan, output_dir)
+
+    roots = prepared.boundary_assertions["layout_image_graphicspath_roots"]
+    assert f"{source_dir.as_posix()}/" in roots
+    assert f"{output_dir.as_posix()}/" in roots
+    rewritten = prepared.render_source.read_text()
+    assert f"{{{source_dir.as_posix()}/}}" in rewritten
+    assert "\\includegraphics{assets/plates/title.png}" in rewritten
+    assert "\\OFImageInitialSetup{assets/drop_caps_transparent/T.png}{.72in}{5}" in rewritten
 
 
 def test_layout_image_absolute_block_rewrites_to_shipout_overlay(tmp_path):

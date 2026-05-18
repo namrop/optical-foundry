@@ -1,8 +1,8 @@
 # Optical Foundry
 
-Pandoc-backed render engine and greenfield replacement lane for the current `40_latex` renderer. Optical Foundry now has working local runtime surfaces: profile resolution, typed render manifests, document rendering, bundle/CAM/Codex assembly, generated-figure preprocessors, title-page controls, bundle section dividers, and evidence sidecars.
+Pandoc-backed render engine and greenfield replacement lane for the current `40_latex` renderer. Optical Foundry now has working local runtime surfaces: profile resolution, typed render manifests, document rendering, bundle/CAM/Codex assembly, generated-figure preprocessors, title-page controls, bundle section dividers, source-level layout images/illuminated initials, manifest-owned bound delivery overlays, booklet/signature imposition, bindery preflight guides, and evidence sidecars.
 
-`40_latex` remains the known-good behavioral reference. Normal Foundry renders may read it as fallback/reference but should not mutate it.
+`40_latex` remains the known-good behavioral reference and archive/provenance source. Normal Foundry renders resolve through the Foundry-owned `profiles/40_latex_import/` runtime surface, not an active external legacy fallback, and must not mutate legacy trees.
 
 ## Quickstart
 
@@ -16,6 +16,9 @@ python3.14 -m cli doc path/to/source.md --profile cam --output generated/<run-na
 
 # Render a typed manifest: markdown_document, composite_bundle, cam_stack, codex_bundle, etc.
 python3.14 -m cli manifest manifests/<manifest>.yaml --output generated/manifests/<run-name>
+
+# Impose an already-rendered PDF into booklet/signature sheet sides.
+python3.14 -m cli impose input.pdf --page-size half_letter --sheet-size letter --signature-size 16 --duplex short-edge --output generated/impositions/<run-name>
 
 # Inspect available profiles.
 python3.14 -m cli profiles
@@ -38,8 +41,11 @@ Implemented and exercised code surfaces:
 - CAM/Yugen Civic profile rendering.
 - Title pages, default blank-after-title behavior, and guarded title-page background images.
 - Generated figure preprocessors for Mermaid, Vega, D2, and Graphviz/DOT.
+- Source-level `of-image` and `of-initial` layout blocks, including transparent PNG initial diagnostics.
 - Evidence JSON sidecars with profile, boundary, output, source, and figure assertions.
 - Bundle section dividers via top-level `section_dividers:` in bundle-family manifests.
+- Manifest-owned bound delivery: mirrored margins, outer page numbers, title-verso colophon, optional running-header marks, outer/bottom illumination rails, and manifest-owned `booklet_signature_2up` imposition.
+- Advisory bindery preflight sidecars plus standalone and overlaid safe-area guide PDFs for prototype inspection.
 
 Current code-change status is tracked in:
 
@@ -93,9 +99,13 @@ Exact mid-source full-page figure placement is still a source/staged-source conc
 - `docs/IMPLEMENTATION_STATUS_2026-05-12.md` — current code-change status.
 - `contracts/RENDER_MANIFESTS.md` — manifest taxonomy and runtime contract.
 - `contracts/BUNDLE_ASSEMBLY.md` — bundle assembly contract, including section dividers.
+- `contracts/IMPOSITION.md` — booklet/signature imposition contract and verification checklist.
+- `docs/bound-delivery-status-2026-05-18.md` — implemented `render.delivery`, illumination rail, imposition, and preflight status.
 - `contracts/EXPANSION.md` — adding new profiles.
 - `docs/PROFILE_AND_PANDOC_REFERENCE.md` — profile/Pandoc operational notes.
+- `docs/guides/illuminated-image-initials.md` — `of-initial` asset/tuning guide.
+- `docs/guides/manuscript-rendering-support-boundaries.md` — Foundry/artifact division for illuminated/bound manuscript rendering.
 
 ## Validation posture
 
-Before reporting a render or code surface as ready, inspect the evidence JSON for `render_metadata.success`, `warnings`, page count, SHA-256, `target_legacy_profile_tree_mutated: false`, relevant title-page or section-divider boundary assertions, and required text markers.
+Before reporting a render or code surface as ready, inspect the evidence JSON for `render_metadata.success`, `warnings`, page count, SHA-256, `target_legacy_profile_tree_mutated: false`, relevant title-page, section-divider, delivery, imposition, and bindery-preflight boundary assertions, and required text markers.

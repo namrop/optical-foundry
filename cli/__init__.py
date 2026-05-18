@@ -31,6 +31,7 @@ from engine.manifest_compiler import (
 )
 from renderers.pandoc_renderer import PandocRenderer
 from renderers.document_renderer import DocumentRenderer
+from engine.imposition import ImpositionError, impose_pdf
 from engine.profile_checker import check_all_profiles, check_all_profiles_json, check_profile
 from engine.profile_smoke import DEFAULT_DOCUMENT_SMOKE_PROFILES, run_profile_smoke_matrix
 from engine.visual_proof import build_visual_proof
@@ -267,6 +268,38 @@ def cmd_profiles(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_impose(args: argparse.Namespace) -> int:
+    """Impose a rendered PDF into booklet/signature sheet sides."""
+    try:
+        result = impose_pdf(
+            Path(args.input),
+            output=args.output,
+            page_size=args.page_size,
+            sheet_size=args.sheet_size,
+            signature_size=args.signature_size,
+            duplex_mode=args.duplex,
+        )
+    except ImpositionError as exc:
+        print(f"ERROR: {exc}", file=sys.stderr)
+        return 1
+    print(json.dumps({
+        "status": "ok",
+        "layout": "booklet_signature_2up",
+        "input": str(Path(args.input).expanduser().resolve()),
+        "output": str(result.output_pdf),
+        "mapping": str(result.mapping_json),
+        "page_size": args.page_size.replace("-", "_").replace(" ", "_"),
+        "sheet_size": args.sheet_size.replace("-", "_").replace(" ", "_"),
+        "signature_size": int(args.signature_size),
+        "duplex_mode": args.duplex.replace("-", "_").replace(" ", "_"),
+        "input_pages": result.input_pages,
+        "output_pages": result.output_pages,
+        "padded_pages": result.padded_pages,
+        "blank_count": result.blank_count,
+    }, indent=2))
+    return 0
+
+
 def _print_profiles_table(caps: dict) -> None:
     """Pretty-print a table of all profile capabilities."""
     # Header
@@ -375,6 +408,21 @@ def main() -> int:
     contact_ap.add_argument("--columns", type=int, default=3)
     contact_ap.add_argument("--dpi", type=int, default=120)
     contact_ap.set_defaults(func=cmd_proof)
+
+    # impose
+    im_ap = sub.add_parser("impose", help="Impose a rendered PDF into booklet/signature sheets")
+    im_ap.add_argument("input", help="Input PDF path")
+    im_ap.add_argument("--output", default="generated/impositions", help="Output directory or final .pdf path")
+    im_ap.add_argument("--page-size", required=True, help="Input page size, e.g. half_letter")
+    im_ap.add_argument("--sheet-size", required=True, help="Printer sheet size, e.g. letter")
+    im_ap.add_argument("--signature-size", required=True, type=int, help="Pages per folded signature; must be a multiple of 4")
+    im_ap.add_argument(
+        "--duplex",
+        required=True,
+        choices=["short-edge", "short_edge", "long-edge", "long_edge"],
+        help="Printer duplex mode; short-edge is typical for landscape booklet sheets",
+    )
+    im_ap.set_defaults(func=cmd_impose)
 
     args = ap.parse_args()
     if args.command is None:

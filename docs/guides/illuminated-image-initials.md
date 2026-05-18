@@ -1,6 +1,6 @@
 # Illuminated Image Initials: Asset Size and Tuning Guide
 
-Status: draft implementation guide for the `of-initial` Option C lane.
+Status: implemented guide for the source-level `of-initial` lane.
 
 This guide covers image initials that are artwork, while the paragraph text remains live/selectable text. The source-facing surface is an `of-initial` fenced block lowered by Optical Foundry into a local LaTeX macro.
 
@@ -138,19 +138,16 @@ Target visual gap for the Option C style: about `.06in` to `.12in`, with `.06in`
 
 ## Vertical alignment
 
-Preferred default:
-
-- `align: bottom`
-
-Bottom alignment anchors the image against the block of wrapped text and is generally easier to make feel intentional. It also matched Luis's preference during the first implementation pass.
-
-Alternative:
+Supported values:
 
 - `align: top`
+- `align: bottom`
 
-Top alignment can work when the image should line up with the first text baseline or when an asset has heavy bottom ornament that makes bottom alignment feel too low.
+Use `align: top` for historically styled dropped initials where the top of the image should align with the opening text block and the image should descend through a fixed number of reserved lines. This is the safer default for book/manuscript-style chapter openers.
 
-Use `raise` for fine correction:
+Use `align: bottom` for letter-style or ceremonial initials where the image should visually anchor against the bottom of the wrapped text block.
+
+The choice is a source/artifact tuning decision, not a separate profile. Use `raise` for fine correction:
 
 - `raise: .03in` nudges the image up.
 - `raise: -.03in` nudges the image down.

@@ -33,9 +33,9 @@ python3.14 -m cli doc path/to/source.md --profile cam --output generated/<run-na
 python3.14 -m cli manifest manifests/<manifest>.yaml --output generated/manifests/<run-name>
 ```
 
-Implemented surfaces include single-document rendering, typed manifest rendering, local `40_latex` profile imports, bundle-family assembly (`composite_bundle`, `cam_stack`, `codex_bundle`), title-page background controls, generated Mermaid/Vega/D2/Graphviz figure preprocessing, section dividers, and evidence sidecars. See `docs/IMPLEMENTATION_STATUS_2026-05-12.md` for the current code-change status.
+Implemented surfaces include single-document rendering, typed manifest rendering, local `40_latex` profile imports, bundle-family assembly (`composite_bundle`, `cam_stack`, `codex_bundle`), title-page background controls, generated Mermaid/Vega/D2/Graphviz figure preprocessing, section dividers, source-level layout images/illuminated initials, manifest-owned bound delivery overlays, booklet/signature imposition, advisory bindery preflight/safe-area overlays, and evidence sidecars. See `docs/IMPLEMENTATION_STATUS_2026-05-12.md` for the current code-change status.
 
-The architectural boundary still holds: Foundry may read `40_latex` as a known-good reference/fallback, but normal Foundry renders must not mutate it.
+The architectural boundary still holds: Foundry owns reusable rendering capability, while artifact packets own their manifest/source/art. The external `40_latex` tree is a known-good reference/provenance source, not an active runtime fallback for normal Foundry renders, and legacy trees must not be mutated.
 
 ---
 

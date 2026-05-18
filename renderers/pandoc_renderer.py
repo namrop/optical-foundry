@@ -20,6 +20,8 @@ from typing import Any
 
 from engine.d2 import D2RenderError, preprocess_d2_blocks
 from engine.graphviz import GraphvizRenderError, preprocess_graphviz_blocks
+from engine.imposition import ImpositionError, impose_pdf
+from engine.bindery_preflight import generate_bindery_preflight
 from engine.layout_images import LayoutImageRenderError, preprocess_layout_image_blocks
 from engine.mermaid import MermaidRenderError, preprocess_mermaid_blocks
 from engine.vega import VegaRenderError, preprocess_vega_blocks
@@ -182,6 +184,13 @@ class PandocRenderer(Renderer):
         pdf_bytes = output_pdf.stat().st_size
         pdf_sha = self._sha256_file(output_pdf)
         pages = self._count_pages(output_pdf)
+        imposition_output = self._maybe_impose_bound_pdf(plan, output_pdf, out_dir)
+        bindery_preflight = generate_bindery_preflight(
+            output_pdf,
+            out_dir=out_dir,
+            plan=plan,
+            imposition=imposition_output,
+        )
 
         warnings = list(plan.boundary_assertions.get("warnings", [])) + defaults_meta.get("warnings", []) + resolved_profile.warnings
         validation = self._validation_success(
@@ -218,6 +227,7 @@ class PandocRenderer(Renderer):
                 "page_geometry_defaults": str(page_geometry_defaults) if page_geometry_defaults else "",
                 "page_geometry_options": page_geometry_options,
                 "page_margin_options": plan.page_margins if page_geometry_options else [],
+                "delivery": plan.delivery,
                 "render_duration_ms": int(elapsed * 1000),
                 "rendered_at": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
                 "success": success,
@@ -228,6 +238,8 @@ class PandocRenderer(Renderer):
                 "pdf_bytes": pdf_bytes,
                 "pdf_sha256": pdf_sha,
                 "page_size": plan.page_size,
+                **({"imposition": imposition_output} if imposition_output else {}),
+                **({"bindery_preflight": bindery_preflight} if bindery_preflight else {}),
             },
             "integrity": {
                 "text_extract_exists": bool(text_extract),
@@ -254,6 +266,41 @@ class PandocRenderer(Renderer):
         evidence_file.write_text(json.dumps(evidence, indent=2) + "\n")
         return evidence
 
+    def _maybe_impose_bound_pdf(self, plan: ProjectionPlan, output_pdf: Path, out_dir: Path) -> dict[str, Any] | None:
+        imposition = plan.delivery.get("imposition", {}) if isinstance(plan.delivery.get("imposition", {}), dict) else {}
+        if plan.delivery.get("mode") != "bound" or not imposition.get("enabled"):
+            return None
+        try:
+            result = impose_pdf(
+                output_pdf,
+                output=out_dir / "imposition",
+                page_size=plan.page_size,
+                sheet_size=str(imposition.get("sheet_size", "letter")),
+                signature_size=int(imposition.get("signature_size", 4)),
+                duplex_mode=str(imposition.get("duplex", "short_edge")),
+            )
+        except ImpositionError as exc:
+            return {
+                "status": "error",
+                "error": str(exc),
+                "layout": str(imposition.get("layout", "booklet_signature_2up")),
+            }
+        return {
+            "status": "ok",
+            "layout": str(imposition.get("layout", "booklet_signature_2up")),
+            "input_pdf": str(output_pdf),
+            "output_pdf": str(result.output_pdf),
+            "mapping_json": str(result.mapping_json),
+            "page_size": plan.page_size,
+            "sheet_size": str(imposition.get("sheet_size", "letter")),
+            "signature_size": int(imposition.get("signature_size", 4)),
+            "duplex": str(imposition.get("duplex", "short_edge")),
+            "input_pages": result.input_pages,
+            "output_pages": result.output_pages,
+            "padded_pages": result.padded_pages,
+            "blank_count": result.blank_count,
+        }
+
     def _prepare_layout_image_source(
         self,
         plan: ProjectionPlan,
@@ -277,7 +324,7 @@ class PandocRenderer(Renderer):
             plan.render_source,
             out_dir,
             plan.render_id,
-            [LOCAL_IMPORT, *resolved_profile.asset_roots],
+            [LOCAL_IMPORT, *resolved_profile.asset_roots, *plan.source_resource_roots],
         )
         if not result.changed:
             return plan
@@ -737,13 +784,139 @@ class PandocRenderer(Renderer):
             "geometry": geometry,
             "header-includes": list(dict.fromkeys(header_includes)),
         }
+        if plan.delivery.get("mode") == "bound":
+            variables["header-includes"] = list(
+                dict.fromkeys([*variables["header-includes"], *PandocRenderer._bound_delivery_header_includes(plan)])
+            )
+            if plan.delivery.get("page_numbers") == "outer":
+                variables["pagestyle"] = "ofBoundOuter"
+            if plan.delivery.get("footer_metadata", {}).get("suppress_repeated", False):
+                variables["footeremail"] = ""
+            illumination = plan.delivery.get("illumination", {}) if isinstance(plan.delivery.get("illumination", {}), dict) else {}
+            if illumination.get("enabled"):
+                variables["of_illumination_rail_width"] = str(illumination.get("width", "0.45in"))
+                variables["of_illumination_bottom_height"] = str(illumination.get("bottom_height", "0.30in"))
+                variables["of_illumination_bottom_offset"] = str(illumination.get("bottom_offset", "0.28in"))
         existing_classoption = collect_profile_classoption(resolved_profile.defaults_stack)
         classoption = merge_page_size_classoption(plan.page_size, existing_classoption)
+        if plan.delivery.get("mode") == "bound" and plan.delivery.get("duplex") is True:
+            classoption = [option for option in classoption if str(option).lower() != "oneside"]
+            if not any(str(option).lower() == "twoside" for option in classoption):
+                classoption.insert(max(len(classoption) - 1, 0), "twoside")
         if classoption:
             variables["classoption"] = classoption
         payload = {"variables": variables}
         path.write_text(yaml.safe_dump(payload, sort_keys=False), encoding="utf-8")
         return path
+
+    @staticmethod
+    def _bound_delivery_header_includes(plan: ProjectionPlan) -> list[str]:
+        if plan.delivery.get("mode") != "bound":
+            return []
+        includes: list[str] = []
+        if plan.delivery.get("page_numbers") == "outer":
+            running_headers = plan.delivery.get("running_headers", {})
+            headers_enabled = bool(running_headers.get("enabled")) if isinstance(running_headers, dict) else False
+            header_source = str(running_headers.get("source", "chapter")) if isinstance(running_headers, dict) else "chapter"
+            suppress_on = set(running_headers.get("suppress_on", [])) if isinstance(running_headers, dict) else set()
+            even_head, odd_head = PandocRenderer._bound_running_header_cells(
+                enabled=headers_enabled,
+                source=header_source,
+                title=plan.title,
+            )
+            plain_alias = "ofBoundPlain" if headers_enabled and "chapter_openers" in suppress_on else "ofBoundOuter"
+            includes.append(
+                "\\makeatletter\n"
+                "\\@ifclassloaded{memoir}{%\n"
+                "  \\makepagestyle{ofBoundOuter}\n"
+                f"  \\makeevenhead{{ofBoundOuter}}{{{even_head}}}{{}}{{}}\n"
+                f"  \\makeoddhead {{ofBoundOuter}}{{}}{{}}{{{odd_head}}}\n"
+                "  \\makeevenfoot{ofBoundOuter}{\\thepage}{}{}\n"
+                "  \\makeoddfoot {ofBoundOuter}{}{}{\\thepage}\n"
+                "  \\makepagestyle{ofBoundPlain}\n"
+                "  \\makeevenhead{ofBoundPlain}{}{}{}\n"
+                "  \\makeoddhead {ofBoundPlain}{}{}{}\n"
+                "  \\makeevenfoot{ofBoundPlain}{\\thepage}{}{}\n"
+                "  \\makeoddfoot {ofBoundPlain}{}{}{\\thepage}\n"
+                f"  \\aliaspagestyle{{plain}}{{{plain_alias}}}\n"
+                "}{}\n"
+                "\\makeatother"
+            )
+        illumination = plan.delivery.get("illumination", {}) if isinstance(plan.delivery.get("illumination", {}), dict) else {}
+        if illumination.get("enabled"):
+            includes.append(
+                PandocRenderer._bound_illumination_rail_header_include(
+                    str(illumination.get("width", "0.45in")),
+                    bottom_enabled=bool(illumination.get("bottom")) or "bottom" in (illumination.get("rails") if isinstance(illumination.get("rails"), list) else [illumination.get("rail", "outer")]),
+                    bottom_height=str(illumination.get("bottom_height", "0.30in")),
+                    bottom_offset=str(illumination.get("bottom_offset", "0.28in")),
+                    inner_margin=str(plan.delivery.get("margins", {}).get("inner", "0.85in")) if isinstance(plan.delivery.get("margins", {}), dict) else "0.85in",
+                    outer_margin=str(plan.delivery.get("margins", {}).get("outer", "0.60in")) if isinstance(plan.delivery.get("margins", {}), dict) else "0.60in",
+                )
+            )
+        return includes
+
+    @staticmethod
+    def _bound_illumination_rail_header_include(
+        width: str,
+        *,
+        bottom_enabled: bool = False,
+        bottom_height: str = "0.30in",
+        bottom_offset: str = "0.28in",
+        inner_margin: str = "0.85in",
+        outer_margin: str = "0.60in",
+    ) -> str:
+        bottom = ""
+        if bottom_enabled:
+            bottom = (
+                "\n\\newlength{\\OFIlluminationBottomRailWidth}\n"
+                "\\newlength{\\OFIlluminationBottomRailHeight}\n"
+                "\\newlength{\\OFIlluminationBottomOffset}\n"
+                "\\newlength{\\OFBoundInnerMargin}\n"
+                "\\newlength{\\OFBoundOuterMargin}\n"
+                "\\setlength{\\OFIlluminationBottomRailWidth}{\\textwidth}\n"
+                f"\\setlength{{\\OFIlluminationBottomRailHeight}}{{{bottom_height}}}\n"
+                f"\\setlength{{\\OFIlluminationBottomOffset}}{{{bottom_offset}}}\n"
+                f"\\setlength{{\\OFBoundInnerMargin}}{{{inner_margin}}}\n"
+                f"\\setlength{{\\OFBoundOuterMargin}}{{{outer_margin}}}\n"
+                "\\newcommand{\\OFBottomRail}[1]{%\n"
+                "  \\begin{tikzpicture}[remember picture,overlay]\n"
+                "    \\ifodd\\value{page}%\n"
+                "      \\node[anchor=south west,inner sep=0pt,xshift=\\OFBoundInnerMargin,yshift=\\OFIlluminationBottomOffset] at (current page.south west) {\\includegraphics[width=\\OFIlluminationBottomRailHeight,height=\\OFIlluminationBottomRailWidth,angle=90]{#1}};%\n"
+                "    \\else%\n"
+                "      \\node[anchor=south west,inner sep=0pt,xshift=\\OFBoundOuterMargin,yshift=\\OFIlluminationBottomOffset] at (current page.south west) {\\includegraphics[width=\\OFIlluminationBottomRailHeight,height=\\OFIlluminationBottomRailWidth,angle=90]{#1}};%\n"
+                "    \\fi%\n"
+                "  \\end{tikzpicture}%\n"
+                "}"
+            )
+        return (
+            "\\usepackage{graphicx}\n"
+            "\\usepackage{tikz}\n"
+            "\\newlength{\\OFIlluminationRailWidth}\n"
+            f"\\setlength{{\\OFIlluminationRailWidth}}{{{width}}}\n"
+            "\\setlength{\\marginparwidth}{\\OFIlluminationRailWidth}\n"
+            "\\setlength{\\marginparsep}{0.05in}\n"
+            "\\newcommand{\\OFOuterRail}[1]{%\n"
+            "  \\marginpar{\\centering\\includegraphics[width=\\OFIlluminationRailWidth]{#1}}%\n"
+            "}"
+            f"{bottom}"
+        )
+
+    @staticmethod
+    def _bound_running_header_cells(*, enabled: bool, source: str, title: str) -> tuple[str, str]:
+        if not enabled:
+            return "", ""
+        source = source.strip().lower().replace("-", "_").replace(" ", "_")
+        if source == "document_title":
+            escaped = PandocRenderer._latex_header_text(title)
+            return rf"\small\itshape {escaped}" if escaped else "", rf"\small\itshape {escaped}" if escaped else ""
+        if source == "section":
+            return r"\small\itshape\rightmark", r"\small\itshape\rightmark"
+        return r"\small\itshape\leftmark", r"\small\itshape\rightmark"
+
+    @staticmethod
+    def _latex_header_text(value: str) -> str:
+        return str(value or "").replace("\\", r"\\").replace("&", r"\&").replace("%", r"\%").replace("#", r"\#").replace("_", r"\_").strip()
 
     @staticmethod
     def _source_header_includes(render_source: Path) -> list[str]:

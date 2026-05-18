@@ -88,6 +88,16 @@ class ProjectionPlan:
     # Figure inventory.
     figure_inventory: list[dict[str, Any]] = field(default_factory=list)
 
+    # Directories that authored source-relative resources should resolve from.
+    # Manifest compilers may emit temporary assembled Markdown; this preserves
+    # source-local image roots for raw LaTeX / layout-image asset lookup.
+    source_resource_roots: list[Path] = field(default_factory=list)
+
+    # Manifest-owned delivery/use-context controls. Profiles remain visual /
+    # semantic identity; delivery records physical output requirements such as
+    # bound geometry, page-number strategy, and colophon behavior.
+    delivery: dict[str, Any] = field(default_factory=lambda: {"mode": "screen"})
+
     # Optionally filled for multi-source renders.
     assembly: AssemblyView | None = None
 
