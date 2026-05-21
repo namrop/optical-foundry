@@ -1,8 +1,8 @@
 # Optical Foundry
 
-Pandoc-backed render engine and greenfield replacement lane for the current `40_latex` renderer. Optical Foundry now has working local runtime surfaces: profile resolution, typed render manifests, document rendering, bundle/CAM/Codex assembly, generated-figure preprocessors, title-page controls, bundle section dividers, source-level layout images/illuminated initials, manifest-owned bound delivery overlays, booklet/signature imposition, bindery preflight guides, and evidence sidecars.
+Pandoc-backed render engine and active replacement lane for the former `40_latex` renderer. Optical Foundry now has working local runtime surfaces: profile resolution, typed render manifests, document rendering, bundle/CAM/Codex assembly, generated-figure preprocessors, title-page controls, bundle section dividers, source-level layout images/illuminated initials, manifest-owned bound delivery overlays, booklet/signature imposition, bindery preflight guides, and evidence sidecars.
 
-`40_latex` remains the known-good behavioral reference and archive/provenance source. Normal Foundry renders resolve through the Foundry-owned `profiles/40_latex_import/` runtime surface, not an active external legacy fallback, and must not mutate legacy trees.
+`40_latex` now lives at `../08_archives/deprecated/40_latex` as the known-good behavioral reference and archive/provenance source. Normal Foundry renders resolve through the Foundry-owned `profiles/40_latex_import/` runtime surface, not an active external legacy fallback, and must not mutate legacy trees.
 
 ## Quickstart
 
