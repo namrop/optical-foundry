@@ -272,3 +272,32 @@ What it needs:
 - tests for DOCX-path detection, evidence shape, and LaTeX-stripping correctness without requiring a full DOCX file.
 
 Tracking label: `of-docx-cli-adapter`
+
+### 2. Render-only emoji image substitution
+
+Some source documents use emoji or Unicode status glyphs as semantic markers. Font fallback is not a sufficient production strategy: XeLaTeX can drop glyphs when the active text font lacks coverage, while LuaLaTeX may succeed only by depending on host-installed emoji fonts. The Foundry needs a render-only substitution layer that preserves Markdown source exactly while lowering selected emoji clusters to vendored image assets during PDF projection.
+
+What it needs:
+
+- a small, explicit emoji asset registry seeded from Noto Emoji assets, with per-glyph provenance and a later Oasis-native override lane;
+- render-only source rewriting for PDF/LaTeX profiles that normalizes equivalent clusters such as `⚠` and `⚠️` to the same asset key;
+- raw-LaTeX inline image output using `graphicx`, with stable sizing/raise defaults and no source mutation;
+- guardrails that avoid rewriting fenced code blocks and inline code spans;
+- render evidence fields for policy, source asset family, substituted counts, asset paths, and whether host emoji fonts are required;
+- a smoke target against `20_digital_architecture/atrium_cleanup_sweep/evidence/atrium_root_beam_directory_tree_2026-05-24.md` proving zero missing-character warnings for `⚠️` under the existing keeper/XeLaTeX path.
+
+Tracking label: `of-render-only-emoji-assets`
+
+### 3. LuaLaTeX migration assessment
+
+LuaLaTeX already works for several profile families and can render color emoji through host fonts, but switching all profiles from XeLaTeX is a layout and implementation migration rather than a one-line fix. XeLaTeX remains the current stability baseline for several defaults and for hard-coded preflight/imposition paths.
+
+What it needs:
+
+- inventory and classify all profile defaults by engine: safe to switch, needs visual regression, or should remain XeLaTeX;
+- replace hard-coded XeLaTeX invocations in bindery preflight and imposition with the same engine-resolution policy used by document rendering;
+- update tests that currently skip only on XeLaTeX availability;
+- broad smoke renders comparing page count, warnings, fonts, and text extraction across representative profiles;
+- explicit policy that emoji correctness is handled by vendored render assets, not by assuming LuaLaTeX host emoji-font fallback.
+
+Tracking label: `of-lualatex-migration-assessment`

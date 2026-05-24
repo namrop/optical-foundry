@@ -22,6 +22,7 @@ from engine.d2 import D2RenderError, preprocess_d2_blocks
 from engine.graphviz import GraphvizRenderError, preprocess_graphviz_blocks
 from engine.imposition import ImpositionError, impose_pdf
 from engine.bindery_preflight import generate_bindery_preflight
+from engine.emoji_substitution import preprocess_emoji_substitutions
 from engine.layout_images import LayoutImageRenderError, preprocess_layout_image_blocks
 from engine.mermaid import MermaidRenderError, preprocess_mermaid_blocks
 from engine.vega import VegaRenderError, preprocess_vega_blocks
@@ -64,6 +65,7 @@ class PandocRenderer(Renderer):
             plan = self._prepare_vega_source(plan, out_dir)
             plan = self._prepare_d2_source(plan, out_dir)
             plan = self._prepare_graphviz_source(plan, out_dir)
+            plan = self._prepare_emoji_substitution_source(plan, out_dir)
         except (LayoutImageRenderError, MermaidRenderError, VegaRenderError, D2RenderError, GraphvizRenderError) as exc:
             elapsed = time.monotonic() - start
             return self._evidence_error(
@@ -300,6 +302,58 @@ class PandocRenderer(Renderer):
             "padded_pages": result.padded_pages,
             "blank_count": result.blank_count,
         }
+
+    def _prepare_emoji_substitution_source(
+        self,
+        plan: ProjectionPlan,
+        out_dir: Path,
+    ) -> ProjectionPlan:
+        """Rewrite supported emoji to vendored image assets for PDF/LaTeX output."""
+
+        if not plan.render_source.exists():
+            return plan
+
+        resolved_profile = resolve_profile(plan.profile_id)
+        if not self._layout_images_supported(plan, resolved_profile):
+            return plan
+
+        result = preprocess_emoji_substitutions(plan.render_source, out_dir, plan.render_id)
+        if not result.changed:
+            return plan
+
+        boundary = dict(plan.boundary_assertions)
+        figure_count_by_kind = dict(boundary.get("figure_count_by_kind", {}))
+        total = 0
+        counts_by_key: dict[str, int] = {}
+        for entry in result.inventory:
+            kind = str(entry.get("kind", "emoji_asset"))
+            count = int(entry.get("count", 0))
+            figure_count_by_kind[kind] = figure_count_by_kind.get(kind, 0) + count
+            total += count
+            counts_by_key[str(entry.get("asset_key", ""))] = count
+
+        warnings = [*boundary.get("warnings", []), *result.warnings]
+        boundary.update(
+            {
+                "emoji_policy": "vendored_image_assets",
+                "emoji_asset_family": "noto_emoji",
+                "emoji_render_mode": "pre_pandoc_raw_latex_inline_image",
+                "emoji_substitution_count": total,
+                "emoji_substitution_counts_by_key": counts_by_key,
+                "emoji_asset_paths": result.asset_paths,
+                "host_emoji_fonts_required": False,
+                "figure_count_by_kind": figure_count_by_kind,
+            }
+        )
+        if warnings:
+            boundary["warnings"] = warnings
+
+        return replace(
+            plan,
+            render_source=result.rewritten_source,
+            figure_inventory=[*plan.figure_inventory, *result.inventory],
+            boundary_assertions=boundary,
+        )
 
     def _prepare_layout_image_source(
         self,

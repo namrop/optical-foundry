@@ -186,6 +186,26 @@ def test_pandoc_renderer_template_inference_uses_shared_profile_resolver():
     assert r._infer_template("sticker-sheet") == "label_sheet.tex"
 
 
+def test_pandoc_renderer_prepares_render_only_emoji_substitution(tmp_path):
+    src = tmp_path / "keeper-emoji.md"
+    src.write_text("---\ntitle: Keeper Emoji\n---\n\nKeeper warning ⚠️.\n", encoding="utf-8")
+    plan = ProjectionPlan(
+        profile_id="keeper",
+        render_id="keeper-emoji",
+        render_source=src,
+    )
+
+    prepared = PandocRenderer()._prepare_emoji_substitution_source(plan, tmp_path / "out")
+
+    assert prepared.render_source != src
+    assert prepared.render_source.read_text(encoding="utf-8").count(r"\OFEmoji{") == 1
+    assert prepared.boundary_assertions["emoji_policy"] == "vendored_image_assets"
+    assert prepared.boundary_assertions["emoji_asset_family"] == "noto_emoji"
+    assert prepared.boundary_assertions["host_emoji_fonts_required"] is False
+    assert prepared.boundary_assertions["emoji_substitution_count"] == 1
+    assert prepared.figure_inventory[-1]["kind"] == "emoji_asset"
+
+
 def test_pandoc_renderer_page_size_defaults_merge_profile_geometry(tmp_path):
     plan = ProjectionPlan(
         profile_id="cam",
