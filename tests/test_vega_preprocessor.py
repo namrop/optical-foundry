@@ -124,3 +124,30 @@ def test_preprocess_vega_blocks_rewrites_fences_and_records_evidence(tmp_path):
     assert result.figure_inventory[0]["theme"]["palette"][0] == "#0A3870"
     assert result.figure_inventory[0]["normalized_spec_sha256"]
     assert Path(result.figure_inventory[0]["path"]).exists()
+
+
+def test_preprocess_vega_blocks_preserves_heading_after_fence(tmp_path):
+    source = tmp_path / "vega_doc.md"
+    source.write_text(
+        "---\ntitle: Vega Doc\n---\n\n"
+        "```vega\n"
+        + json.dumps(_bar_spec(), indent=2)
+        + "\n```\n"
+        "### Key Takeaways\n\n"
+        "Body.\n"
+    )
+
+    def fake_renderer(spec: dict, output_path: Path, render_context: dict) -> None:
+        output_path.write_text("<svg></svg>")
+
+    result = preprocess_vega_blocks(
+        source,
+        profile_id="cam",
+        output_dir=tmp_path / "out",
+        render_id="vega-doc",
+        renderer=fake_renderer,
+        output_format="svg",
+    )
+
+    rewritten = result.rewritten_source.read_text()
+    assert "{#fig:vega-1}\n\n### Key Takeaways" in rewritten

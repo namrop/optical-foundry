@@ -121,7 +121,7 @@ def preprocess_vega_blocks(
                 "renderer": spec_evidence.get("renderer", {}),
             }
         )
-        return f"![Vega chart {index}]({figure_path}){{#fig:vega-{index}}}"
+        return f"![Vega chart {index}]({figure_path}){{#fig:vega-{index}}}" + "\n"
 
     rewritten_text = _VEGA_FENCE_RE.sub(replace, text)
     rewritten_source = rewritten_dir / f"{render_id}.vega.md"
