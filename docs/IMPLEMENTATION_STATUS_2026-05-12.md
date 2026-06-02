@@ -301,3 +301,17 @@ What it needs:
 - explicit policy that emoji correctness is handled by vendored render assets, not by assuming LuaLaTeX host emoji-font fallback.
 
 Tracking label: `of-lualatex-migration-assessment`
+
+## Known bugs
+
+### composite_bundle TOC is broken with duplicate h1 headings from combined_markdown assembly (2026-05-27)
+
+A `composite_bundle` manifest using `render.assembly_strategy: combined_markdown` and `render.include_toc: true` produces a broken table of contents: the Contents page renders a heading and page number but contains no valid entries — only a bare page number. Reproduced with the `tech` profile on `main` (ba79f3b).
+
+**Root cause (confirmed 2026-05-27):** The combined markdown intermediate contains **duplicate `# h1` headings** for each source — one injected by the bundle compiler as a section wrapper (preceded by `\newpage`), and one preserved from the source file's own `# h1`. With 6 blog posts, this produces 12 h1 headings (6 unique titles × 2) plus a trailing "Provenance & Evidence" h1. Pandoc's `--toc --toc-depth 1` cannot construct a valid TOC from this duplicate-heading structure. The evidence confirms `suppress_source_wrapper_headings: False` — the duplication is by design but the TOC machinery fails to handle it.
+
+**Workaround:** Set `render.include_toc: false`. Single-document renders (`markdown_document` / `cli doc`) with TOC work correctly because they have no injected wrapper headings.
+
+**Possible fix:** Setting `suppress_source_wrapper_headings: true` would eliminate the duplicates by suppressing the compiler's injected section headings, leaving only the source's own h1s for the TOC. Alternatively, the compiler could strip source h1s when it knows it's injecting wrapper headings for the same content.
+
+**Tracking label:** `of-combined-markdown-toc`
