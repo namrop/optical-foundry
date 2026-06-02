@@ -1,4 +1,5 @@
 generated/
+.understand-anything/
 __pycache__/
 *.pyc
 *.egg-info/
