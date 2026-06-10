@@ -1,9 +1,10 @@
 ---
-uid: optical-foundry-code-change-status-2026-05-12
-kind: implementation_status
+uid: 019eafdb-1c4c-7c4c-8b24-af1b5d4f8044
+kind: note
+note_role: spec
 status: active
-created: 2026-05-12
-updated: 2026-05-18
+created: "2026-05-12T00:00:00-04:00"
+updated: "2026-05-18T00:00:00-04:00"
 title: "Optical Foundry — Code Change Status"
 summary: "Code-level status for the May 2026 Optical Foundry manifest/rendering changes. This document intentionally excludes packet-specific document content notes."
 tags:
@@ -11,6 +12,8 @@ tags:
   - manifest-system
   - render-pipeline
   - code-status
+validation_profile: standard
+beam_home: 42_optical_foundry/docs
 ---
 
 # Optical Foundry — Code Change Status

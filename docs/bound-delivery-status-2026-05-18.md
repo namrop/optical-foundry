@@ -1,9 +1,10 @@
 ---
-uid: optical-foundry-bound-delivery-status-2026-05-18
-kind: implementation_status
+uid: 019eafdb-1c4c-7c4c-89c4-10c2b9cb73b9
+kind: note
+note_role: spec
 status: active
-created: 2026-05-18
-updated: 2026-05-18
+created: "2026-05-18T00:00:00-04:00"
+updated: "2026-05-18T00:00:00-04:00"
 beam_home: 42_optical_foundry
 title: "Optical Foundry — Bound Delivery, Imposition, and Bindery Preflight Status"
 summary: "Current implemented contract for manifest-owned bound delivery: mirrored margins, outer page numbers, title-verso colophon, running-header marks, manifest-owned imposition, outer/bottom illumination rails, and advisory bindery preflight/overlay proofs."
@@ -13,6 +14,7 @@ tags:
   - bound-pdf
   - imposition
   - bindery-preflight
+validation_profile: standard
 ---
 
 # Optical Foundry — Bound Delivery Status

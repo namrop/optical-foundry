@@ -1,5 +1,5 @@
 ---
-uid: 31ce9bdd-e60a-4ce4-b9e2-49fed73d3606
+uid: 019eafdb-1c4c-7c4c-892e-772108591547
 kind: note
 note_role: mechanism_record
 title: "Vega fence replacement newline bug — engine/vega.py:124"
