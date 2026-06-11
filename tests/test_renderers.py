@@ -228,6 +228,43 @@ def test_pandoc_renderer_page_size_defaults_merge_profile_geometry(tmp_path):
     assert variables["classoption"] == ["11pt", "oneside", "statementpaper"]
 
 
+def test_pandoc_renderer_font_runtime_defaults_preserve_geometry_and_override_yugen_fonts(tmp_path):
+    plan = ProjectionPlan(
+        profile_id="cam",
+        render_id="font-fallback-doc",
+        render_source=GF / "fixtures" / "sources" / "source-001.md",
+        page_size="a4",
+    )
+    resolved = resolve_profile("cam")
+    renderer = PandocRenderer()
+    geometry_defaults = renderer._page_geometry_defaults(plan, resolved, tmp_path)
+
+    defaults, fallbacks = renderer._font_runtime_defaults(
+        resolved.defaults_stack,
+        tmp_path,
+        plan.render_id,
+        geometry_defaults,
+    )
+
+    assert defaults is not None
+    import yaml
+    variables = yaml.safe_load(defaults.read_text())["variables"]
+    assert r"\special{papersize=\the\paperwidth,\the\paperheight}" in variables["header-includes"]
+    header_includes = "\n".join(variables["header-includes"])
+    assert "\\renewcommand\\yugen@setfonts" in header_includes
+    assert "\\setmainfont{DejaVu Serif}" in header_includes
+    assert "\\setsansfont{DejaVu Sans}" in header_includes
+    assert "\\setmonofont{DejaVu Sans Mono}" in header_includes
+    assert {item["role"] for item in fallbacks} >= {
+        "mainfont",
+        "sansfont",
+        "monofont",
+        "yugencommon.mainfont",
+        "yugencommon.sansfont",
+        "yugencommon.monofont",
+    }
+
+
 def test_pandoc_renderer_page_margin_override_replaces_profile_margin(tmp_path):
     plan = ProjectionPlan(
         profile_id="cam",

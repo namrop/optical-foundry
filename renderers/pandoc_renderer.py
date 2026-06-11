@@ -94,6 +94,11 @@ class PandocRenderer(Renderer):
         page_geometry_options = self._page_geometry_options(plan, resolved_profile)
         if page_geometry_defaults is not None:
             cmd += ["--defaults", str(page_geometry_defaults)]
+        font_runtime_defaults, font_runtime_fallbacks = self._font_runtime_defaults(
+            resolved_profile.defaults_stack, out_dir, plan.render_id, page_geometry_defaults
+        )
+        if font_runtime_defaults is not None:
+            cmd += ["--defaults", str(font_runtime_defaults)]
 
         # template — prefer explicit plan override, otherwise resolved profile
         if plan.template:
@@ -228,6 +233,8 @@ class PandocRenderer(Renderer):
                 "tex_engine": xe,
                 "page_geometry_defaults": str(page_geometry_defaults) if page_geometry_defaults else "",
                 "page_geometry_options": page_geometry_options,
+                "font_runtime_defaults": str(font_runtime_defaults) if font_runtime_defaults else "",
+                "font_runtime_fallbacks": font_runtime_fallbacks,
                 "page_margin_options": plan.page_margins if page_geometry_options else [],
                 "delivery": plan.delivery,
                 "render_duration_ms": int(elapsed * 1000),
@@ -688,6 +695,153 @@ class PandocRenderer(Renderer):
             "source_roles": plan.assembly.source_roles,
             "child_profiles": plan.assembly.child_profiles,
         }
+
+    @staticmethod
+    def _font_runtime_defaults(
+        defaults_stack: list[Path],
+        out_dir: Path,
+        render_id: str,
+        base_defaults: Path | None = None,
+    ) -> tuple[Path | None, list[dict[str, str]]]:
+        """Materialize a render-only font fallback overlay for non-macOS hosts.
+
+        Several imported profile defaults name macOS fonts such as Helvetica or
+        Menlo. The profile resolver records those names as declared system
+        fallbacks, but XeTeX/fontspec still needs an actual installed family at
+        render time. On Sol/Linux, use installed Noto families through a final
+        Pandoc defaults overlay instead of mutating the canonical profile tree.
+        """
+        requested = PandocRenderer._collect_font_variables(defaults_stack)
+        if not requested:
+            return None, []
+        available = PandocRenderer._available_font_families()
+        fallback_map = {
+            "Helvetica": "DejaVu Sans",
+            "Avenir Next": "DejaVu Sans",
+            "Dune Rise": "DejaVu Sans",
+            "Menlo": "DejaVu Sans Mono",
+            "Iowan Old Style": "DejaVu Serif",
+            "Times New Roman": "DejaVu Serif",
+            "Apple Color Emoji": "Noto Color Emoji",
+        }
+        variables: dict[str, str] = {}
+        fallbacks: list[dict[str, str]] = []
+        for role, family in requested.items():
+            if family in available:
+                continue
+            fallback = fallback_map.get(family)
+            if fallback and PandocRenderer._font_fallback_allowed(fallback, available):
+                variables[role] = fallback
+                fallbacks.append({"role": role, "requested": family, "applied": fallback})
+
+        header_includes = PandocRenderer._header_includes_from_defaults(base_defaults)
+        yugen_font_roles = {
+            "mainfont": "Times New Roman",
+            "sansfont": "Helvetica",
+            "monofont": "Menlo",
+        }
+        yugen_font_values = {
+            role: fallback_map.get(family, family)
+            for role, family in yugen_font_roles.items()
+            if family not in available and PandocRenderer._font_fallback_allowed(fallback_map.get(family, ""), available)
+        }
+        if yugen_font_values:
+            mainfont = yugen_font_values.get("mainfont", "DejaVu Serif")
+            sansfont = yugen_font_values.get("sansfont", "DejaVu Sans")
+            monofont = yugen_font_values.get("monofont", "DejaVu Sans Mono")
+            header_includes.append(
+                "\\makeatletter\n"
+                "\\@ifundefined{yugen@setfonts}{}{\\renewcommand\\yugen@setfonts{%\n"
+                f"  \\setmainfont{{{mainfont}}}%\n"
+                f"  \\setsansfont{{{sansfont}}}[Scale=MatchLowercase]%\n"
+                f"  \\setmonofont{{{monofont}}}[Scale=MatchLowercase]%\n"
+                "}}\n"
+                "\\makeatother"
+            )
+            for role, family in yugen_font_roles.items():
+                applied = yugen_font_values.get(role)
+                if applied:
+                    fallbacks.append({"role": f"yugencommon.{role}", "requested": family, "applied": applied})
+
+        if not variables and not header_includes:
+            return None, []
+        path = out_dir / f"{render_id}.font_fallbacks.yaml"
+        import yaml
+        payload: dict[str, Any] = {}
+        if variables:
+            payload["variables"] = variables
+        if header_includes:
+            payload.setdefault("variables", {})["header-includes"] = list(dict.fromkeys(header_includes))
+        path.write_text(
+            yaml.safe_dump(payload, sort_keys=False),
+            encoding="utf-8",
+        )
+        return path, fallbacks
+
+    @staticmethod
+    def _collect_font_variables(defaults_stack: list[Path]) -> dict[str, str]:
+        merged: dict[str, str] = {}
+        try:
+            import yaml
+        except Exception:
+            return merged
+        for defaults_file in defaults_stack:
+            try:
+                data = yaml.safe_load(defaults_file.read_text()) or {}
+            except Exception:
+                continue
+            variables = data.get("variables", {}) if isinstance(data, dict) else {}
+            if not isinstance(variables, dict):
+                continue
+            for role in ("mainfont", "sansfont", "monofont"):
+                value = variables.get(role)
+                if isinstance(value, str) and value.strip():
+                    merged[role] = value.strip()
+        return merged
+
+    @staticmethod
+    def _font_fallback_allowed(family: str, available: set[str]) -> bool:
+        if not family:
+            return False
+        # DejaVu families are part of the baseline NixOS/XeTeX surface even
+        # when fontconfig reports only the primary Sans family in `fc-list`.
+        return family in available or family.startswith("DejaVu ")
+
+    @staticmethod
+    def _header_includes_from_defaults(defaults_path: Path | None) -> list[str]:
+        if defaults_path is None or not defaults_path.exists():
+            return []
+        try:
+            import yaml
+            data = yaml.safe_load(defaults_path.read_text()) or {}
+        except Exception:
+            return []
+        variables = data.get("variables", {}) if isinstance(data, dict) else {}
+        header_includes = variables.get("header-includes", []) if isinstance(variables, dict) else []
+        if isinstance(header_includes, str):
+            return [header_includes]
+        if isinstance(header_includes, list):
+            return [str(item) for item in header_includes]
+        return []
+
+    @staticmethod
+    def _available_font_families() -> set[str]:
+        try:
+            result = subprocess.run(
+                ["fc-list", ":", "family"],
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+        except Exception:
+            return set()
+        families: set[str] = set()
+        for line in result.stdout.splitlines():
+            for family in line.split(","):
+                family = family.strip()
+                if family:
+                    families.add(family)
+        return families
 
     @staticmethod
     def _read_defaults_metadata(path: Path) -> dict[str, Any]:
