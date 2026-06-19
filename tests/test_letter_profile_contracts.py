@@ -4,6 +4,7 @@ import pytest
 
 from renderers import document_renderer
 from renderers.document_renderer import DocumentRenderer
+from renderers.pandoc_renderer import PandocRenderer
 
 
 class RecordingPandocRenderer:
@@ -49,3 +50,26 @@ def test_johannah_letter_template_keeps_body_clear_of_header_rule():
     assert "\\vspace*{-" not in template
     assert "$if(body_top_vspace)$" in template
     assert "\\vspace*{$body_top_vspace$}" in template
+
+
+def test_letter_frontmatter_template_variables_are_materialized(tmp_path):
+    source = tmp_path / "letter-frontmatter-vars.md"
+    source.write_text(
+        "---\n"
+        "uid: letter-test\n"
+        "title: Letter Test\n"
+        "artifact_series: \"Letter #3 Example\"\n"
+        "penned_date: \"2025-10-25\"\n"
+        "render_title: true\n"
+        "---\n\n"
+        "Body.\n",
+        encoding="utf-8",
+    )
+
+    defaults = PandocRenderer._frontmatter_variables_defaults(source, tmp_path, "letter-test")
+
+    assert defaults is not None
+    text = defaults.read_text(encoding="utf-8")
+    assert "artifact_series: Letter \\#3 Example" in text
+    assert "penned_date: '2025-10-25'" in text
+    assert "render_title: true" in text

@@ -2,6 +2,7 @@ from pathlib import Path
 
 from engine.profile_resolver import LOCAL_IMPORT, resolve_profile
 from engine.font_resolver import resolve_profile_fonts
+from renderers.pandoc_renderer import PandocRenderer
 
 
 def _by_role(fonts):
@@ -33,6 +34,34 @@ def test_mythic_johannah_header_font_resolves_to_foundry_local_asset():
     assert header["status"] == "foundry_local"
     assert Path(header["resolved_path"]) == LOCAL_IMPORT / "assets" / "fonts" / "mythic_letter" / "MeaCulpa-Regular.ttf"
     assert header["source"] == "defaults:mythic_letter_johannah.yaml"
+
+
+def test_mythic_johannah_body_fonts_resolve_to_foundry_local_assets():
+    resolved = resolve_profile("mythic-letter-johannah")
+
+    fonts = resolve_profile_fonts(resolved)
+    by_role = _by_role(fonts)
+
+    assert by_role["mainfont"]["requested"] == "Iowan Old Style"
+    assert by_role["mainfont"]["requested_file"] == "Iowan Old Style.ttc"
+    assert by_role["mainfont"]["status"] == "foundry_local"
+    assert Path(by_role["mainfont"]["resolved_path"]) == LOCAL_IMPORT / "assets" / "fonts" / "iowan" / "Iowan Old Style.ttc"
+
+    assert by_role["sansfont"]["requested"] == "Helvetica"
+    assert by_role["sansfont"]["requested_file"] == "Helvetica.ttc"
+    assert by_role["sansfont"]["status"] == "foundry_local"
+    assert Path(by_role["sansfont"]["resolved_path"]) == LOCAL_IMPORT / "assets" / "fonts" / "helvetica" / "Helvetica.ttc"
+
+    assert by_role["monofont"]["requested"] == "Menlo"
+    assert by_role["monofont"]["requested_file"] == "Menlo.ttc"
+    assert by_role["monofont"]["status"] == "foundry_local"
+    assert Path(by_role["monofont"]["resolved_path"]) == LOCAL_IMPORT / "assets" / "fonts" / "menlo" / "Menlo.ttc"
+
+
+def test_mythic_johannah_file_backed_fonts_do_not_trigger_body_font_substitution():
+    resolved = resolve_profile("mythic-letter-johannah")
+
+    assert PandocRenderer._collect_font_variables(resolved.defaults_stack) == {}
 
 
 def test_resolved_profile_carries_font_policy_evidence():

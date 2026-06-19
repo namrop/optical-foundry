@@ -781,6 +781,7 @@ class PandocRenderer(Renderer):
     @staticmethod
     def _collect_font_variables(defaults_stack: list[Path]) -> dict[str, str]:
         merged: dict[str, str] = {}
+        file_backed_roles: set[str] = set()
         try:
             import yaml
         except Exception:
@@ -794,8 +795,12 @@ class PandocRenderer(Renderer):
             if not isinstance(variables, dict):
                 continue
             for role in ("mainfont", "sansfont", "monofont"):
+                if variables.get(f"{role}_file"):
+                    file_backed_roles.add(role)
+                    merged.pop(role, None)
+                    continue
                 value = variables.get(role)
-                if isinstance(value, str) and value.strip():
+                if role not in file_backed_roles and isinstance(value, str) and value.strip():
                     merged[role] = value.strip()
         return merged
 
@@ -1228,7 +1233,59 @@ class PandocRenderer(Renderer):
         if not isinstance(frontmatter, dict):
             return None
         variables = frontmatter.get("variables")
-        if not isinstance(variables, dict) or not variables:
+        safe_variable_candidates: dict[str, Any] = {}
+        if isinstance(variables, dict):
+            safe_variable_candidates.update(variables)
+
+        # Imported 40_latex letter profiles historically treated simple source
+        # frontmatter fields such as `artifact_series` and `penned_date` as
+        # template variables. Preserve that source-local override path without
+        # requiring artifact remaster files to mutate shared profile defaults.
+        direct_variable_keys = {
+            "accent_color",
+            "artifact_footer",
+            "artifact_header",
+            "artifact_location",
+            "artifact_mark",
+            "artifact_series",
+            "body_color",
+            "body_top_vspace",
+            "bottom_right_art",
+            "bottom_right_mask",
+            "closing",
+            "conceived_date",
+            "desk_of",
+            "header_art",
+            "header_art_overlay",
+            "header_art_reserved_vspace",
+            "header_art_width",
+            "header_art_xshift",
+            "header_art_yshift",
+            "linestretch",
+            "opening",
+            "ornament_color",
+            "parindent",
+            "parskip",
+            "penned_date",
+            "render_title",
+            "rule_color",
+            "signature_name",
+            "stationery_footer_icon",
+            "stationery_grid",
+            "stationery_grid_icon",
+            "stationery_grid_opacity",
+            "stationery_grid_size",
+            "stationery_grid_step",
+            "stationery_header_center",
+            "stationery_mode",
+            "top_left_art",
+            "top_right_mask",
+        }
+        for key in direct_variable_keys:
+            if key in frontmatter:
+                safe_variable_candidates[key] = frontmatter[key]
+        variables = safe_variable_candidates
+        if not variables:
             return None
         body = text[end + 4:]
         nonempty_body_lines = [line.strip() for line in body.splitlines() if line.strip()]

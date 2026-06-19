@@ -46,7 +46,18 @@ def resolve_fonts_from_defaults(defaults_stack: list[Path]) -> dict[str, Any]:
         variables = _read_variables(defaults_path)
         source = f"defaults:{defaults_path.name}"
         for role in FONT_ROLES:
-            if role in variables:
+            file_key = f"{role}_file"
+            dir_key = f"{role}_dir"
+            if file_key in variables:
+                merged[role] = (
+                    {
+                        "name": variables.get(role, ""),
+                        "dir": variables.get(dir_key, ""),
+                        "file": variables[file_key],
+                    },
+                    source,
+                )
+            elif role in variables:
                 merged[role] = (variables[role], source)
         if "stationery_header_font_file" in variables:
             merged["stationery_header_font"] = (
@@ -77,8 +88,17 @@ def _read_variables(path: Path) -> dict[str, Any]:
 
 
 def _resolve_font_role(role: str, value: Any, source: str) -> dict[str, Any]:
-    if role == "stationery_header_font" and isinstance(value, dict):
-        return _resolve_font_file(role, str(value.get("file", "")), str(value.get("dir", "")), source)
+    if isinstance(value, dict) and "file" in value:
+        requested_name = str(value.get("name", "")) or None
+        if role == "stationery_header_font":
+            requested_name = None
+        return _resolve_font_file(
+            role,
+            str(value.get("file", "")),
+            str(value.get("dir", "")),
+            source,
+            requested_name=requested_name,
+        )
 
     requested = str(value)
     local_file = _find_local_font_by_name(requested)
@@ -89,7 +109,13 @@ def _resolve_font_role(role: str, value: Any, source: str) -> dict[str, Any]:
     return _entry(role, requested, "unresolved", source, None)
 
 
-def _resolve_font_file(role: str, requested_file: str, requested_dir: str, source: str) -> dict[str, Any]:
+def _resolve_font_file(
+    role: str,
+    requested_file: str,
+    requested_dir: str,
+    source: str,
+    requested_name: str | None = None,
+) -> dict[str, Any]:
     candidates: list[Path] = []
     if requested_dir:
         base = Path(requested_dir)
@@ -103,9 +129,15 @@ def _resolve_font_file(role: str, requested_file: str, requested_dir: str, sourc
     for candidate in candidates:
         if candidate.exists():
             status = "foundry_local" if _is_relative_to(candidate, LOCAL_IMPORT) else "legacy_absolute_path"
-            return _entry(role, requested_file, status, source, candidate)
+            entry = _entry(role, requested_name or requested_file, status, source, candidate)
+            if requested_name:
+                entry["requested_file"] = requested_file
+            return entry
 
-    return _entry(role, requested_file, "missing", source, None)
+    entry = _entry(role, requested_name or requested_file, "missing", source, None)
+    if requested_name:
+        entry["requested_file"] = requested_file
+    return entry
 
 
 def _find_local_font_by_name(requested: str) -> Path | None:
