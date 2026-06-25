@@ -62,6 +62,10 @@ def test_codex0_template_suppresses_running_header_and_footer_rules():
     assert "\\renewcommand{\\footrulewidth}{0pt}" in codex_artifact_style
     assert "\\leaders\\hrule" not in codex_artifact_style
     assert "LetterRule" not in codex_artifact_style
+    assert "\\fancyhead[LE]" in codex_artifact_style
+    assert "\\fancyhead[RO]" in codex_artifact_style
+    assert "\\fancyhead[L]" not in codex_artifact_style
+    assert "\\fancyhead[R]" not in codex_artifact_style
 
 
 def test_letter_frontmatter_template_variables_are_materialized(tmp_path):
