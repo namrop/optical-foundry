@@ -52,6 +52,18 @@ def test_johannah_letter_template_keeps_body_clear_of_header_rule():
     assert "\\vspace*{$body_top_vspace$}" in template
 
 
+def test_codex0_template_suppresses_running_header_and_footer_rules():
+    template = Path("profiles/40_latex_import/templates/codex0.tex").read_text()
+    start = template.index("\\fancypagestyle{codexArtifact}")
+    end = template.index("% Pass Pandoc variables", start)
+    codex_artifact_style = template[start:end]
+
+    assert "\\renewcommand{\\headrulewidth}{0pt}" in codex_artifact_style
+    assert "\\renewcommand{\\footrulewidth}{0pt}" in codex_artifact_style
+    assert "\\leaders\\hrule" not in codex_artifact_style
+    assert "LetterRule" not in codex_artifact_style
+
+
 def test_letter_frontmatter_template_variables_are_materialized(tmp_path):
     source = tmp_path / "letter-frontmatter-vars.md"
     source.write_text(
