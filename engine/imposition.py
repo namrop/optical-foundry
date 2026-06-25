@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from pathlib import Path
 import json
 import math
+import os
 import re
 import shutil
 import subprocess
@@ -215,9 +216,10 @@ def impose_pdf(
     tex_path = build_dir / "impose.tex"
     tex_path.write_text(_render_imposition_tex(plan, page_size=page, sheet_size=sheet, input_name=build_input.name))
 
+    xelatex = os.environ.get("XELATEX") or shutil.which("xelatex") or "/Library/TeX/texbin/xelatex"
     proc = subprocess.run(
         [
-            "/Library/TeX/texbin/xelatex",
+            xelatex,
             "-interaction=nonstopmode",
             "-halt-on-error",
             tex_path.name,
