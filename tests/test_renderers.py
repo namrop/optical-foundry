@@ -406,6 +406,51 @@ def test_pandoc_renderer_bound_delivery_illumination_rail_header_include(tmp_pat
     assert variables["of_illumination_rail_width"] == "0.45in"
 
 
+def test_pandoc_renderer_bound_delivery_edge_ornament_key_value_macro(tmp_path):
+    plan = ProjectionPlan(
+        profile_id="mythic",
+        render_id="bound-edge-ornament-doc",
+        render_source=GF / "fixtures" / "sources" / "source-001.md",
+        page_size="half_letter",
+        page_margins=["inner=0.85in", "outer=0.60in", "top=0.65in", "bottom=0.70in"],
+        title="Bound Edge Ornament",
+        delivery={
+            "mode": "bound",
+            "binding": "saddle_stitch",
+            "duplex": True,
+            "illumination": {
+                "enabled": True,
+                "rail": "outer",
+                "width": "0.45in",
+                "reserve_space": True,
+                "placement": "chapter_openers",
+                "assets": [{"id": "vine_gold", "source": "assets/illuminations/vine_gold.png", "pages": "chapter_openers"}],
+            },
+        },
+    )
+    resolved = resolve_profile("mythic")
+
+    defaults = PandocRenderer()._page_geometry_defaults(plan, resolved, tmp_path)
+
+    assert defaults is not None
+    import yaml
+    variables = yaml.safe_load(defaults.read_text())["variables"]
+    header_includes = "\n".join(variables["header-includes"])
+    assert "\\newcommand{\\OFEdgeOrnament}[2][]" in header_includes
+    assert "/ofedgeornament/.is family" in header_includes
+    assert "edge/.store in=\\OFEO@edge" in header_includes
+    assert "mirror/.store in=\\OFEO@mirror" in header_includes
+    assert "\\newlength{\\OFBinderyCriticalSafeInset}" in header_includes
+    assert "\\setlength{\\OFBinderyCriticalSafeInset}{0.25in}" in header_includes
+    assert "current page.north east" in header_includes
+    assert "current page.north west" in header_includes
+    assert "\\OFEO@safeOuterRectoXShift" in header_includes
+    assert "\\OFEO@safeOuterVersoXShift" in header_includes
+    assert "\\reflectbox" in header_includes
+    assert "\\includegraphics[width=\\OFEO@width]{\\detokenize{#1}}" in header_includes
+    assert "\\includegraphics[width=\\OFIlluminationRailWidth]{\\detokenize{#1}}" in header_includes
+
+
 def test_pandoc_renderer_page_size_overlay_is_document_spine_only(tmp_path):
     plan = ProjectionPlan(
         profile_id="letter",

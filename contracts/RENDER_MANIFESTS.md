@@ -127,7 +127,12 @@ supports:
 - `footer_metadata.suppress_repeated`: default true for bound output.
 - `colophon`: currently title-verso colophon insertion.
 - `illumination`: guarded relative render-resource assets for chapter-opener
-  outer rails and optional bottom rails.
+  outer rails and optional bottom rails. Bound illumination also injects a
+  generic `\OFEdgeOrnament[key=value]{asset}` LaTeX primitive for explicit
+  edge/corner ornaments. The first physical-proof behavior anchors outer-edge
+  ornaments to the critical-safe outer rail edge (`0.25in` inside trim), using
+  the same rail width, top margin, and verso/recto page routing as the
+  illumination rail header path.
 - `imposition`: optional manifest-owned `booklet_signature_2up` output with
   `sheet_size`, `signature_size`, and `duplex` controls.
 

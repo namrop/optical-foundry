@@ -1065,6 +1065,7 @@ class PandocRenderer(Renderer):
                     bottom_offset=str(illumination.get("bottom_offset", "0.28in")),
                     inner_margin=str(plan.delivery.get("margins", {}).get("inner", "0.85in")) if isinstance(plan.delivery.get("margins", {}), dict) else "0.85in",
                     outer_margin=str(plan.delivery.get("margins", {}).get("outer", "0.60in")) if isinstance(plan.delivery.get("margins", {}), dict) else "0.60in",
+                    top_margin=str(plan.delivery.get("margins", {}).get("top", "0.65in")) if isinstance(plan.delivery.get("margins", {}), dict) else "0.65in",
                 )
             )
         return includes
@@ -1078,6 +1079,8 @@ class PandocRenderer(Renderer):
         bottom_offset: str = "0.28in",
         inner_margin: str = "0.85in",
         outer_margin: str = "0.60in",
+        top_margin: str = "0.65in",
+        critical_safe_inset: str = "0.25in",
     ) -> str:
         bottom = ""
         if bottom_enabled:
@@ -1085,19 +1088,15 @@ class PandocRenderer(Renderer):
                 "\n\\newlength{\\OFIlluminationBottomRailWidth}\n"
                 "\\newlength{\\OFIlluminationBottomRailHeight}\n"
                 "\\newlength{\\OFIlluminationBottomOffset}\n"
-                "\\newlength{\\OFBoundInnerMargin}\n"
-                "\\newlength{\\OFBoundOuterMargin}\n"
                 "\\setlength{\\OFIlluminationBottomRailWidth}{\\textwidth}\n"
                 f"\\setlength{{\\OFIlluminationBottomRailHeight}}{{{bottom_height}}}\n"
                 f"\\setlength{{\\OFIlluminationBottomOffset}}{{{bottom_offset}}}\n"
-                f"\\setlength{{\\OFBoundInnerMargin}}{{{inner_margin}}}\n"
-                f"\\setlength{{\\OFBoundOuterMargin}}{{{outer_margin}}}\n"
                 "\\newcommand{\\OFBottomRail}[1]{%\n"
                 "  \\begin{tikzpicture}[remember picture,overlay]\n"
                 "    \\ifodd\\value{page}%\n"
-                "      \\node[anchor=south west,inner sep=0pt,xshift=\\OFBoundInnerMargin,yshift=\\OFIlluminationBottomOffset] at (current page.south west) {\\includegraphics[width=\\OFIlluminationBottomRailHeight,height=\\OFIlluminationBottomRailWidth,angle=90]{#1}};%\n"
+                "      \\node[anchor=south west,inner sep=0pt,xshift=\\OFBoundInnerMargin,yshift=\\OFIlluminationBottomOffset] at (current page.south west) {\\includegraphics[width=\\OFIlluminationBottomRailHeight,height=\\OFIlluminationBottomRailWidth,angle=90]{\\detokenize{#1}}};%\n"
                 "    \\else%\n"
-                "      \\node[anchor=south west,inner sep=0pt,xshift=\\OFBoundOuterMargin,yshift=\\OFIlluminationBottomOffset] at (current page.south west) {\\includegraphics[width=\\OFIlluminationBottomRailHeight,height=\\OFIlluminationBottomRailWidth,angle=90]{#1}};%\n"
+                "      \\node[anchor=south west,inner sep=0pt,xshift=\\OFBoundOuterMargin,yshift=\\OFIlluminationBottomOffset] at (current page.south west) {\\includegraphics[width=\\OFIlluminationBottomRailHeight,height=\\OFIlluminationBottomRailWidth,angle=90]{\\detokenize{#1}}};%\n"
                 "    \\fi%\n"
                 "  \\end{tikzpicture}%\n"
                 "}"
@@ -1106,11 +1105,50 @@ class PandocRenderer(Renderer):
             "\\usepackage{graphicx}\n"
             "\\usepackage{tikz}\n"
             "\\newlength{\\OFIlluminationRailWidth}\n"
+            "\\newlength{\\OFIlluminationRailSep}\n"
+            "\\newlength{\\OFBoundInnerMargin}\n"
+            "\\newlength{\\OFBoundOuterMargin}\n"
+            "\\newlength{\\OFBoundTopMargin}\n"
+            "\\newlength{\\OFBinderyCriticalSafeInset}\n"
             f"\\setlength{{\\OFIlluminationRailWidth}}{{{width}}}\n"
+            "\\setlength{\\OFIlluminationRailSep}{0.05in}\n"
+            f"\\setlength{{\\OFBoundInnerMargin}}{{{inner_margin}}}\n"
+            f"\\setlength{{\\OFBoundOuterMargin}}{{{outer_margin}}}\n"
+            f"\\setlength{{\\OFBoundTopMargin}}{{{top_margin}}}\n"
+            f"\\setlength{{\\OFBinderyCriticalSafeInset}}{{{critical_safe_inset}}}\n"
             "\\setlength{\\marginparwidth}{\\OFIlluminationRailWidth}\n"
-            "\\setlength{\\marginparsep}{0.05in}\n"
+            "\\setlength{\\marginparsep}{\\OFIlluminationRailSep}\n"
+            "\\makeatletter\n"
+            "\\newcommand{\\OFEO@edge}{outer}\n"
+            "\\newcommand{\\OFEO@anchor}{top}\n"
+            "\\newcommand{\\OFEO@mirror}{none}\n"
+            "\\newcommand{\\OFEO@width}{\\OFIlluminationRailWidth}\n"
+            "\\newcommand{\\OFEO@yoffset}{0pt}\n"
+            "\\newcommand{\\OFEO@xoffset}{0pt}\n"
+            "\\pgfkeys{/ofedgeornament/.is family,/ofedgeornament,edge/.store in=\\OFEO@edge,anchor/.store in=\\OFEO@anchor,mirror/.store in=\\OFEO@mirror,width/.store in=\\OFEO@width,yoffset/.store in=\\OFEO@yoffset,xoffset/.store in=\\OFEO@xoffset}\n"
+            "\\newcommand{\\OFEO@includegraphics}[1]{\\includegraphics[width=\\OFEO@width]{\\detokenize{#1}}}\n"
+            "\\newcommand{\\OFEO@safeOuterRectoXShift}{\\dimexpr-\\OFBinderyCriticalSafeInset-\\OFEO@xoffset\\relax}\n"
+            "\\newcommand{\\OFEO@safeOuterVersoXShift}{\\dimexpr\\OFBinderyCriticalSafeInset+\\OFEO@xoffset\\relax}\n"
+            "\\newcommand{\\OFEO@topYShift}{\\dimexpr-\\OFBoundTopMargin-\\OFEO@yoffset\\relax}\n"
+            "\\newcommand{\\OFEO@maybeReflect}[1]{%\n"
+            "  \\def\\OFEO@mirrorInward{inward}%\n"
+            "  \\ifx\\OFEO@mirror\\OFEO@mirrorInward\\ifodd\\value{page}#1\\else\\reflectbox{#1}\\fi\\else#1\\fi%\n"
+            "}\n"
+            "\\newcommand{\\OFEdgeOrnament}[2][]{%\n"
+            "  \\begingroup%\n"
+            "  \\pgfkeys{/ofedgeornament,edge=outer,anchor=top,mirror=none,width=\\OFIlluminationRailWidth,yoffset=0pt,xoffset=0pt,#1}%\n"
+            "  \\begin{tikzpicture}[remember picture,overlay]%\n"
+            "    \\ifodd\\value{page}%\n"
+            "      \\node[anchor=north east,inner sep=0pt,xshift=\\OFEO@safeOuterRectoXShift,yshift=\\OFEO@topYShift] at (current page.north east) {\\OFEO@maybeReflect{\\OFEO@includegraphics{#2}}};%\n"
+            "    \\else%\n"
+            "      \\node[anchor=north west,inner sep=0pt,xshift=\\OFEO@safeOuterVersoXShift,yshift=\\OFEO@topYShift] at (current page.north west) {\\OFEO@maybeReflect{\\OFEO@includegraphics{#2}}};%\n"
+            "    \\fi%\n"
+            "  \\end{tikzpicture}%\n"
+            "  \\endgroup%\n"
+            "}\n"
+            "\\makeatother\n"
             "\\newcommand{\\OFOuterRail}[1]{%\n"
-            "  \\marginpar{\\centering\\includegraphics[width=\\OFIlluminationRailWidth]{#1}}%\n"
+            "  \\marginpar{\\centering\\includegraphics[width=\\OFIlluminationRailWidth]{\\detokenize{#1}}}%\n"
             "}"
             f"{bottom}"
         )
