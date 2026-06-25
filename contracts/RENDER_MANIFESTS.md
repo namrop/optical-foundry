@@ -129,10 +129,14 @@ supports:
 - `illumination`: guarded relative render-resource assets for chapter-opener
   outer rails and optional bottom rails. Bound illumination also injects a
   generic `\OFEdgeOrnament[key=value]{asset}` LaTeX primitive for explicit
-  edge/corner ornaments. The first physical-proof behavior anchors outer-edge
-  ornaments to the critical-safe outer rail edge (`0.25in` inside trim), using
-  the same rail width, top margin, and verso/recto page routing as the
-  illumination rail header path.
+  edge/corner ornaments. Default/top-page ornaments anchor to the critical-safe
+  outer rail edge (`0.25in` inside trim), using the same rail width, top margin,
+  and verso/recto page routing as the illumination rail header path.
+  `anchor=paragraph` makes the primitive paragraph-relative at the call site:
+  `wrap=false` keeps the ornament in the outer margin/rail, while `wrap=true`
+  forces text wrap and `wrap=auto` wraps only when `width` exceeds the safe rail
+  width. Text wrap is explicit opt-in so decorative Codex images do not crowd
+  prose by default.
 - `imposition`: optional manifest-owned `booklet_signature_2up` output with
   `sheet_size`, `signature_size`, and `duplex` controls.
 

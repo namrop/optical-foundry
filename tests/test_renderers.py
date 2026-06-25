@@ -440,6 +440,7 @@ def test_pandoc_renderer_bound_delivery_edge_ornament_key_value_macro(tmp_path):
     assert "/ofedgeornament/.is family" in header_includes
     assert "edge/.store in=\\OFEO@edge" in header_includes
     assert "mirror/.store in=\\OFEO@mirror" in header_includes
+    assert "wrap/.store in=\\OFEO@wrap" in header_includes
     assert "\\newlength{\\OFBinderyCriticalSafeInset}" in header_includes
     assert "\\setlength{\\OFBinderyCriticalSafeInset}{0.25in}" in header_includes
     assert "current page.north east" in header_includes
@@ -447,6 +448,11 @@ def test_pandoc_renderer_bound_delivery_edge_ornament_key_value_macro(tmp_path):
     assert "\\OFEO@safeOuterRectoXShift" in header_includes
     assert "\\OFEO@safeOuterVersoXShift" in header_includes
     assert "\\reflectbox" in header_includes
+    assert "\\usepackage{wrapfig}" in header_includes
+    assert "\\newcommand{\\OFEO@placeParagraph}" in header_includes
+    assert "\\begin{wrapfigure}{o}" in header_includes
+    assert "\\ifdim\\OFEO@width>\\OFIlluminationRailWidth" in header_includes
+    assert "anchor=top,mirror=none,width=\\OFIlluminationRailWidth,yoffset=0pt,xoffset=0pt,wrap=false" in header_includes
     assert "\\includegraphics[width=\\OFEO@width]{\\detokenize{#1}}" in header_includes
     assert "\\includegraphics[width=\\OFIlluminationRailWidth]{\\detokenize{#1}}" in header_includes
 
