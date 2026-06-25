@@ -42,6 +42,7 @@ def test_layout_image_wrap_block_rewrites_to_wrapfig_with_header_includes(tmp_pa
     assert result.figure_inventory[0]["placement"] == "wrap"
     assert result.figure_inventory[0]["edge"] == "vignette"
     assert "\\usepackage{wrapfig}" in rewritten
+    assert "\\IfFileExists{wrapfig.sty}" not in rewritten
     assert "\\begin{wrapfigure}{r}{0.34\\textwidth}" in rewritten
     assert "\\OFDecorativeImage{width=\\linewidth}{assets/portrait.png}{vignette}" in rewritten
     assert "\\caption{Moonlit portrait}" in rewritten
@@ -49,6 +50,62 @@ def test_layout_image_wrap_block_rewrites_to_wrapfig_with_header_includes(tmp_pa
     assert f"{{{tmp_path.as_posix()}/}}" in rewritten
     assert result.graphicspath_roots == [f"{tmp_path.as_posix()}/"]
     assert "```of-image" not in rewritten
+
+
+def test_layout_image_wrap_accepts_general_tightening_controls(tmp_path):
+    src = tmp_path / "wrap-tight.md"
+    src.write_text(
+        "```of-image\n"
+        "path: assets/portrait.png\n"
+        "placement: wrap\n"
+        "side: left\n"
+        "width: 0.36\\textwidth\n"
+        "image_width: 0.92\\linewidth\n"
+        "lines: 18\n"
+        "overhang: 0.04in\n"
+        "sep: 0.055in\n"
+        "intextsep: 0pt\n"
+        "raise: -0.2\\baselineskip\n"
+        "trim: 6pt 4pt 7pt 3pt\n"
+        "clip: true\n"
+        "```\n\n"
+        "Text that should wrap around the image.\n"
+    )
+
+    result = preprocess_layout_image_blocks(src, tmp_path, "wrap-tight")
+    rewritten = result.rewritten_source.read_text()
+    entry = result.figure_inventory[0]
+
+    assert "\\setlength{\\OFWrapSavedColumnSep}{\\columnsep}\n\\setlength{\\columnsep}{0.055in}" in rewritten
+    assert "\\setlength{\\OFWrapSavedInTextSep}{\\intextsep}\n\\setlength{\\intextsep}{0pt}" in rewritten
+    assert "\\vspace*{-0.2\\baselineskip}" in rewritten
+    assert "\\begin{wrapfigure}[18]{l}[0.04in]{0.36\\textwidth}" in rewritten
+    assert "\\OFDecorativeImage{width=0.92\\linewidth,trim=6pt 4pt 7pt 3pt,clip}{assets/portrait.png}{}" in rewritten
+    assert "\\end{wrapfigure}\n\\setlength{\\columnsep}{\\OFWrapSavedColumnSep}" in rewritten
+    assert "\\setlength{\\intextsep}{\\OFWrapSavedInTextSep}" in rewritten
+    assert entry["placement"] == "wrap"
+    assert entry["wrapped_lines"] == 18
+    assert entry["overhang"] == "0.04in"
+    assert entry["sep"] == "0.055in"
+    assert entry["intextsep"] == "0pt"
+    assert entry["raise"] == "-0.2\\baselineskip"
+    assert entry["trim"] == "6pt 4pt 7pt 3pt"
+    assert entry["clip"] is True
+
+
+@pytest.mark.parametrize("bad_value", ["0", "-1", "41", "two"])
+def test_layout_image_wrap_rejects_invalid_wrapped_line_counts(tmp_path, bad_value):
+    src = tmp_path / "wrap-bad-lines.md"
+    src.write_text(
+        "```of-image\n"
+        "path: assets/portrait.png\n"
+        "placement: wrap\n"
+        f"lines: {bad_value}\n"
+        "```\n"
+    )
+
+    with pytest.raises(LayoutImageRenderError, match="lines must be an integer from 1 to 40"):
+        preprocess_layout_image_blocks(src, tmp_path, "wrap-bad-lines")
 
 
 def test_layout_image_wrapfig_package_is_vendored_and_resolves_through_profile_env():
@@ -450,6 +507,41 @@ def test_pandoc_renderer_layout_images_are_pdf_latex_gated(tmp_path):
     assert prepared.render_source == src
     assert prepared.figure_inventory == []
     assert prepared.boundary_assertions == {}
+
+
+def test_layout_image_source_header_includes_survive_font_runtime_defaults(tmp_path):
+    src = tmp_path / "layout-image-font-overlay.md"
+    src.write_text(
+        "```of-image\n"
+        "path: assets/portrait.png\n"
+        "placement: wrap\n"
+        "```\n"
+    )
+    plan = ProjectionPlan(
+        profile_id="mythic",
+        render_id="layout-image-font-overlay",
+        render_source=src,
+        output_format="pdf",
+        output_extension=".pdf",
+        figure_inventory=[],
+        boundary_assertions={},
+    )
+    renderer = PandocRenderer()
+    prepared = renderer._prepare_layout_image_source(plan, tmp_path / "render-out")
+    resolved = resolve_profile("mythic")
+
+    defaults_path, _ = renderer._font_runtime_defaults(
+        resolved.defaults_stack,
+        tmp_path / "render-out",
+        prepared.render_id,
+        None,
+        source_header_includes=renderer._source_header_includes(prepared.render_source),
+    )
+
+    assert defaults_path is not None
+    defaults_text = defaults_path.read_text()
+    assert "\\usepackage{wrapfig}" in defaults_text
+    assert "\\usepackage{tikz}" in defaults_text
 
 
 def test_pandoc_renderer_layout_images_support_mythic_pdf_profiles(tmp_path):

@@ -41,7 +41,7 @@ Implemented and exercised code surfaces:
 - CAM/Yugen Civic profile rendering.
 - Title pages, default blank-after-title behavior, and guarded title-page background images.
 - Generated figure preprocessors for Mermaid, Vega, D2, and Graphviz/DOT.
-- Source-level `of-image` and `of-initial` layout blocks, including transparent PNG initial diagnostics.
+- Source-level `of-image` and `of-initial` layout blocks, including general figure-wrap tightening controls and transparent PNG initial diagnostics.
 - Evidence JSON sidecars with profile, boundary, output, source, and figure assertions.
 - Bundle section dividers via top-level `section_dividers:` in bundle-family manifests.
 - Manifest-owned bound delivery: mirrored margins, outer page numbers, title-verso colophon, optional running-header marks, outer/bottom illumination rails, and manifest-owned `booklet_signature_2up` imposition.
@@ -103,6 +103,7 @@ Exact mid-source full-page figure placement is still a source/staged-source conc
 - `docs/bound-delivery-status-2026-05-18.md` — implemented `render.delivery`, illumination rail, imposition, and preflight status.
 - `contracts/EXPANSION.md` — adding new profiles.
 - `docs/PROFILE_AND_PANDOC_REFERENCE.md` — profile/Pandoc operational notes.
+- `docs/guides/figure-wraps.md` — source-level `of-image` wrapping contract and general tightening controls.
 - `docs/guides/illuminated-image-initials.md` — `of-initial` asset/tuning guide.
 - `docs/guides/manuscript-rendering-support-boundaries.md` — Foundry/artifact division for illuminated/bound manuscript rendering.
 

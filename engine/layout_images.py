@@ -40,7 +40,7 @@ class LayoutImagePreprocessResult:
 _BLOCK_RE = re.compile(r"^```of-image\s*\n(?P<body>.*?)^```\s*$", re.MULTILINE | re.DOTALL)
 _INITIAL_BLOCK_RE = re.compile(r"^```of-initial\s*\n(?P<body>.*?)^```\s*\n?", re.MULTILINE | re.DOTALL)
 _SAFE_DIMENSION_RE = re.compile(
-    r"^-?(?:\\(?:linewidth|textwidth|textheight|paperwidth|paperheight)|(?:0(?:\.0+)?|0?\.\d+|[1-9]\d*(?:\.\d+)?)(?:\\(?:linewidth|textwidth|textheight|paperwidth|paperheight)|in|cm|mm|pt|em|ex))$"
+    r"^-?(?:\\(?:linewidth|textwidth|textheight|paperwidth|paperheight|baselineskip)|(?:0(?:\.0+)?|0?\.\d+|[1-9]\d*(?:\.\d+)?)(?:\\(?:linewidth|textwidth|textheight|paperwidth|paperheight|baselineskip)|in|cm|mm|pt|em|ex))$"
 )
 _SAFE_OPACITY_RE = re.compile(r"^(?:0(?:\.\d+)?|1(?:\.0+)?)$")
 _ALLOWED_PLACEMENTS = {"wrap", "absolute", "inline", "block"}
@@ -95,11 +95,13 @@ _LATEX_TEXT_REPLACEMENTS = {
 
 _LAYOUT_IMAGE_HEADER_INCLUDES = [
     r"\usepackage{graphicx}",
-    r"\IfFileExists{wrapfig.sty}{\usepackage{wrapfig}}{\newenvironment{wrapfigure}[2]{\par\begin{figure}[htbp]\centering}{\end{figure}\par}}",
+    r"\usepackage{wrapfig}",
     r"\usepackage{tikz}",
     r"\usetikzlibrary{calc}",
     r"\usepackage{eso-pic}",
     r"\providecommand{\OFDecorativeImage}[3]{\begingroup\def\OFEdgeMode{#3}\begin{tikzpicture}\node[inner sep=0pt,outer sep=0pt] (ofimg) {\includegraphics[#1]{#2}};\ifx\OFEdgeMode\empty\else\begin{scope}\clip (ofimg.south west) rectangle (ofimg.north east);\draw[white,line width=10pt,opacity=0.55] (ofimg.south west) rectangle (ofimg.north east);\draw[white,line width=22pt,opacity=0.22] (ofimg.south west) rectangle (ofimg.north east);\end{scope}\fi\end{tikzpicture}\endgroup}",
+    r"\newlength{\OFWrapSavedColumnSep}",
+    r"\newlength{\OFWrapSavedInTextSep}",
 ]
 _IMAGE_INITIAL_HEADER_INCLUDES = [
     r"\usepackage{yugenillumination}",
@@ -193,6 +195,19 @@ def _parse_block_yaml(raw: str, idx: int) -> dict[str, Any]:
     image_width = _safe_dimension(data.get("image_width"), default="\\linewidth" if placement == "wrap" else width)
     if width.startswith("-") or image_width.startswith("-"):
         raise LayoutImageRenderError(f"of-image[{idx}] width values must be positive dimensions")
+    wrapped_lines = _safe_optional_int(
+        data.get("lines", data.get("wrapped_lines")),
+        idx=idx,
+        label="lines",
+        minimum=1,
+        maximum=40,
+    )
+    overhang = _safe_optional_dimension(data.get("overhang"), idx=idx, label="overhang")
+    sep = _safe_optional_dimension(data.get("sep", data.get("columnsep")), idx=idx, label="sep")
+    intextsep = _safe_optional_dimension(data.get("intextsep", data.get("in_text_sep")), idx=idx, label="intextsep")
+    raise_amount = _safe_optional_dimension(data.get("raise", data.get("vertical_raise")), idx=idx, label="raise")
+    trim = _safe_trim(data.get("trim"), idx=idx)
+    clip = _safe_bool(data.get("clip"), default=False, idx=idx, label="clip")
     x_offset = _safe_dimension(data.get("x", data.get("x_offset")), default="0in")
     y_offset = _safe_dimension(data.get("y", data.get("y_offset")), default="0in")
     anchor = str(data.get("anchor", "north east")).strip().lower().replace("_", " ").replace("-", " ")
@@ -219,6 +234,13 @@ def _parse_block_yaml(raw: str, idx: int) -> dict[str, Any]:
         "align_code": _ALLOWED_ALIGN[align],
         "width": width,
         "image_width": image_width,
+        "wrapped_lines": wrapped_lines,
+        "overhang": overhang,
+        "sep": sep,
+        "intextsep": intextsep,
+        "raise": raise_amount,
+        "trim": trim,
+        "clip": clip,
         "x": x_offset,
         "y": y_offset,
         "anchor": anchor,
@@ -310,6 +332,54 @@ def _safe_dimension(value: Any, default: str) -> str:
     return text
 
 
+def _safe_optional_dimension(value: Any, *, idx: int, label: str) -> str | None:
+    if value is None or value == "":
+        return None
+    try:
+        return _safe_dimension(value, default="0in")
+    except LayoutImageRenderError as exc:
+        raise LayoutImageRenderError(f"of-image[{idx}] unsafe {label} dimension: {value}") from exc
+
+
+def _safe_optional_int(value: Any, *, idx: int, label: str, minimum: int, maximum: int) -> int | None:
+    if value is None or value == "":
+        return None
+    try:
+        number = int(value)
+    except (TypeError, ValueError) as exc:
+        raise LayoutImageRenderError(f"of-image[{idx}] {label} must be an integer from {minimum} to {maximum}") from exc
+    if number < minimum or number > maximum:
+        raise LayoutImageRenderError(f"of-image[{idx}] {label} must be an integer from {minimum} to {maximum}")
+    return number
+
+
+def _safe_bool(value: Any, *, default: bool, idx: int, label: str) -> bool:
+    if value is None or value == "":
+        return default
+    if isinstance(value, bool):
+        return value
+    text = str(value).strip().lower()
+    if text in {"true", "yes", "1", "on"}:
+        return True
+    if text in {"false", "no", "0", "off"}:
+        return False
+    raise LayoutImageRenderError(f"of-image[{idx}] {label} must be true or false")
+
+
+def _safe_trim(value: Any, *, idx: int) -> str | None:
+    if value is None or value == "":
+        return None
+    if isinstance(value, (list, tuple)):
+        parts = [str(part).strip() for part in value]
+    else:
+        parts = str(value).strip().split()
+    if len(parts) != 4:
+        raise LayoutImageRenderError(f"of-image[{idx}] trim must contain four safe dimensions")
+    for part in parts:
+        _safe_dimension(part, default="0pt")
+    return " ".join(parts)
+
+
 def _latex_escape_text(value: str) -> str:
     return "".join(_LATEX_TEXT_REPLACEMENTS.get(ch, ch) for ch in value)
 
@@ -356,14 +426,33 @@ def _graphicspath_include(roots: list[str]) -> str:
 def _render_layout_image_latex(cfg: dict[str, Any]) -> str:
     placement = cfg["placement"]
     if placement == "wrap":
+        begin = "\\begin{wrapfigure}"
+        if cfg.get("wrapped_lines") is not None:
+            begin += f"[{cfg['wrapped_lines']}]"
+        begin += f"{{{cfg['align_code']}}}"
+        if cfg.get("overhang") is not None:
+            begin += f"[{cfg['overhang']}]"
+        begin += f"{{{cfg['width']}}}"
+        image_options = [f"width={cfg['image_width']}"]
+        if cfg.get("trim"):
+            image_options.append(f"trim={cfg['trim']}")
+        if cfg.get("clip"):
+            image_options.append("clip")
         lines = [
-            f"\\begin{{wrapfigure}}{{{cfg['align_code']}}}{{{cfg['width']}}}",
+            *(["\\setlength{\\OFWrapSavedColumnSep}{\\columnsep}", f"\\setlength{{\\columnsep}}{{{cfg['sep']}}}"] if cfg.get("sep") else []),
+            *(["\\setlength{\\OFWrapSavedInTextSep}{\\intextsep}", f"\\setlength{{\\intextsep}}{{{cfg['intextsep']}}}"] if cfg.get("intextsep") else []),
+            *([f"\\vspace*{{{cfg['raise']}}}"] if cfg.get("raise") else []),
+            begin,
             "\\centering",
-            f"\\OFDecorativeImage{{width={cfg['image_width']}}}{{{cfg['path']}}}{{{cfg['edge']}}}",
+            f"\\OFDecorativeImage{{{','.join(image_options)}}}{{{cfg['path']}}}{{{cfg['edge']}}}",
         ]
         if cfg["caption"]:
             lines.append(f"\\caption{{{_latex_escape_text(cfg['caption'])}}}")
         lines.append("\\end{wrapfigure}")
+        if cfg.get("sep"):
+            lines.append("\\setlength{\\columnsep}{\\OFWrapSavedColumnSep}")
+        if cfg.get("intextsep"):
+            lines.append("\\setlength{\\intextsep}{\\OFWrapSavedInTextSep}")
         return "\n".join(lines)
 
     if placement == "absolute":
@@ -409,6 +498,14 @@ def _inventory_entry(cfg: dict[str, Any], idx: int) -> dict[str, Any]:
         "align": cfg["align"],
         "width": cfg["width"],
         "edge": cfg["edge"] or "none",
+        "image_width": cfg.get("image_width"),
+        "wrapped_lines": cfg.get("wrapped_lines"),
+        "overhang": cfg.get("overhang"),
+        "sep": cfg.get("sep"),
+        "intextsep": cfg.get("intextsep"),
+        "raise": cfg.get("raise"),
+        "trim": cfg.get("trim"),
+        "clip": cfg.get("clip", False),
     }
 
 

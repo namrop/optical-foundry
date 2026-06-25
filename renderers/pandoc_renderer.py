@@ -95,7 +95,11 @@ class PandocRenderer(Renderer):
         if page_geometry_defaults is not None:
             cmd += ["--defaults", str(page_geometry_defaults)]
         font_runtime_defaults, font_runtime_fallbacks = self._font_runtime_defaults(
-            resolved_profile.defaults_stack, out_dir, plan.render_id, page_geometry_defaults
+            resolved_profile.defaults_stack,
+            out_dir,
+            plan.render_id,
+            page_geometry_defaults,
+            source_header_includes=self._source_header_includes(cmd_source),
         )
         if font_runtime_defaults is not None:
             cmd += ["--defaults", str(font_runtime_defaults)]
@@ -702,6 +706,7 @@ class PandocRenderer(Renderer):
         out_dir: Path,
         render_id: str,
         base_defaults: Path | None = None,
+        source_header_includes: list[str] | None = None,
     ) -> tuple[Path | None, list[dict[str, str]]]:
         """Materialize a render-only font fallback overlay for non-macOS hosts.
 
@@ -734,7 +739,7 @@ class PandocRenderer(Renderer):
                 variables[role] = fallback
                 fallbacks.append({"role": role, "requested": family, "applied": fallback})
 
-        header_includes = PandocRenderer._header_includes_from_defaults(base_defaults)
+        header_includes = [*(source_header_includes or []), *PandocRenderer._header_includes_from_defaults(base_defaults)]
         yugen_font_roles = {
             "mainfont": "Times New Roman",
             "sansfont": "Helvetica",
