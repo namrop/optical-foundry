@@ -460,12 +460,12 @@ def test_non_document_spine_evidence_reports_no_applied_page_margin(tmp_path):
     assert height == pytest.approx(792.0, abs=1.0)
 
 
-def test_pandoc_renderer_page_size_defaults_for_codex0_preserve_mythic_density(tmp_path):
+def test_pandoc_renderer_page_size_defaults_for_codex0_preserve_half_letter_book_geometry(tmp_path):
     plan = ProjectionPlan(
         profile_id="codex0",
-        render_id="codex0-default-a5-doc",
+        render_id="codex0-default-half-letter-doc",
         render_source=GF / "fixtures" / "sources" / "source-001.md",
-        page_size="a5",
+        page_size="half_letter",
     )
     resolved = resolve_profile("codex0")
 
@@ -475,9 +475,9 @@ def test_pandoc_renderer_page_size_defaults_for_codex0_preserve_mythic_density(t
     import yaml
     data = yaml.safe_load(defaults.read_text())
     variables = data["variables"]
-    assert variables["geometry"][:1] == ["a5paper"]
-    assert "margin=1in" in variables["geometry"]
-    assert variables["classoption"] == ["11pt", "oneside", "a5paper"]
+    assert variables["geometry"][:2] == ["paperwidth=5.5in", "paperheight=8.5in"]
+    assert "margin=0.72in" in variables["geometry"]
+    assert variables["classoption"] == ["11pt", "oneside", "statementpaper"]
 
 
 def test_pandoc_renderer_page_size_defaults_preserve_source_header_includes(tmp_path):

@@ -302,8 +302,8 @@ def test_markdown_document_uses_profile_default_page_size_when_render_omits_it()
     assert compiler.validate(manifest) == []
     plan = compiler.compile(manifest)
 
-    assert plan.page_size == "a5"
-    assert plan.boundary_assertions["page_size"] == "a5"
+    assert plan.page_size == "half_letter"
+    assert plan.boundary_assertions["page_size"] == "half_letter"
     assert plan.boundary_assertions["page_size_source"] == "profile_defaults"
 
 
@@ -630,7 +630,7 @@ def test_composite_bundle_render_page_margin_accepts_safe_dimension():
     assert plan.boundary_assertions["page_margins_source"] == "manifest.render"
 
 
-def test_cam_stack_uses_codex0_profile_default_a5_page_size():
+def test_cam_stack_uses_codex0_profile_default_half_letter_page_size():
     compiler = CAMStackCompiler()
     manifest = {
         "kind": "cam_stack", "schema_version": "bundle_manifest_v1",
@@ -644,8 +644,8 @@ def test_cam_stack_uses_codex0_profile_default_a5_page_size():
     assert compiler.validate(manifest) == []
     plan = compiler.compile(manifest)
 
-    assert plan.page_size == "a5"
-    assert plan.boundary_assertions["page_size"] == "a5"
+    assert plan.page_size == "half_letter"
+    assert plan.boundary_assertions["page_size"] == "half_letter"
     assert plan.boundary_assertions["page_size_source"] == "profile_defaults"
 
 

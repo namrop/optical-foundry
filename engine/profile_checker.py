@@ -29,6 +29,7 @@ PROFILE_TEMPLATE_MAP: dict[str, str] = {
     "cam": "cam.tex",
     "mythic": "mythic.tex",
     "codex0": "codex0.tex",
+    "codex0-a5": "codex0_a5.tex",
     "mythic-letter": "personal_letter.tex",
     "mythic-letter-johannah": "mythic_letter_johannah.tex",
     "letter": "personal_letter.tex",
@@ -56,6 +57,7 @@ PROFILE_IDS = [
     "cam",
     "mythic",
     "codex0",
+    "codex0-a5",
     "mythic-letter",
     "mythic-letter-johannah",
     "letter",
@@ -77,7 +79,7 @@ PROFILE_IDS = [
 
 # Templates whose local Foundry-owned copies expose bundle-compatible features.
 KNOWN_TEMPLATES = {
-    "base.tex", "cam.tex", "codex0.tex", "convergence.tex",
+    "base.tex", "cam.tex", "codex0.tex", "codex0_a5.tex", "convergence.tex",
     "elian_packet.tex", "elian_poster.tex",
     "generic_report.tex", "keeper.tex",
     "label_sheet.tex", "mythic.tex",
@@ -98,7 +100,7 @@ TEMPLATE_CORRECTIONS: dict[str, str] = {
 # Profiles with TOC guard ($if(toc)$) in their effective template.
 TOC_GUARD_PROFILES = {
     "generic-report", "risk", "tech", "creative", "yugen-civic", "cam",
-    "mythic", "codex0", "letter", "mythic-letter", "mythic-letter-johannah",
+    "mythic", "codex0", "codex0-a5", "letter", "mythic-letter", "mythic-letter-johannah",
     "convergence", "keeper", "life",
     "yugen-brand", "yugen-brand-elevated", "prometheus-packet",
 }
@@ -106,7 +108,7 @@ TOC_GUARD_PROFILES = {
 # Profiles whose effective template defines \tightlist.
 TIGHTLIST_PROFILES = {
     "generic-report", "risk", "tech", "creative", "yugen-civic", "cam",
-    "mythic", "codex0", "letter", "mythic-letter", "mythic-letter-johannah",
+    "mythic", "codex0", "codex0-a5", "letter", "mythic-letter", "mythic-letter-johannah",
     "convergence", "keeper", "life",
     "yugen-brand", "yugen-brand-elevated", "prometheus-packet",
     "elian-packet", "resume", "labels-avery-5164", "labels-avery-15264",
@@ -116,7 +118,7 @@ TIGHTLIST_PROFILES = {
 # Profiles whose effective template defines \longtable.
 LONGTABLE_PROFILES = {
     "generic-report", "risk", "tech", "creative", "yugen-civic", "cam",
-    "mythic", "codex0", "letter", "mythic-letter", "mythic-letter-johannah",
+    "mythic", "codex0", "codex0-a5", "letter", "mythic-letter", "mythic-letter-johannah",
     "convergence", "keeper", "life",
     "yugen-brand", "yugen-brand-elevated", "prometheus-packet",
     "elian-packet",
@@ -127,7 +129,7 @@ LONGTABLE_PROFILES = {
 # Profiles fully compatible with composite_bundle rendering.
 BUNDLE_OK = {
     "generic-report", "risk", "tech", "creative", "yugen-civic", "cam",
-    "mythic", "codex0", "letter", "mythic-letter", "mythic-letter-johannah",
+    "mythic", "codex0", "codex0-a5", "letter", "mythic-letter", "mythic-letter-johannah",
     "convergence", "keeper", "life",
     "yugen-brand", "yugen-brand-elevated",
 }

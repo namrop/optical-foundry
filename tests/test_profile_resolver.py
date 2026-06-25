@@ -53,22 +53,28 @@ def test_mythic_letter_is_stationery_art_not_document_spine():
     assert resolved.defaults_stack[-1].name == "mythic_letter.yaml"
 
 
-def test_codex0_a5_resolves_as_mythic_derived_document_spine_profile():
+def test_codex0_resolves_as_half_letter_johannah_mythic_book_profile():
     resolved = resolve_profile("codex0")
     assert resolved.profile_id == "codex0"
     assert resolved.canonical_profile_id == "codex0"
     assert resolved.profile_family == "document_spine"
-    assert [p.name for p in resolved.defaults_stack] == ["document_spine.yaml", "yugenbase.yaml", "codex0.yaml"]
+    assert [p.name for p in resolved.defaults_stack] == [
+        "document_spine.yaml",
+        "personal_letter.yaml",
+        "mythic_letter_johannah.yaml",
+        "codex0.yaml",
+    ]
     assert resolved.template_path.name == "codex0.tex"
     assert resolved.boundary["defaults_source"] == "local"
     assert resolved.boundary["template_source"] == "local"
 
 
-def test_codex0_a5_alias_resolves_to_codex0_profile():
+def test_codex0_a5_variant_preserves_compact_a5_profile():
     resolved = resolve_profile("codex0-a5")
     assert resolved.profile_id == "codex0-a5"
-    assert resolved.canonical_profile_id == "codex0"
-    assert [p.name for p in resolved.defaults_stack][-1] == "codex0.yaml"
+    assert resolved.canonical_profile_id == "codex0-a5"
+    assert [p.name for p in resolved.defaults_stack] == ["document_spine.yaml", "yugenbase.yaml", "codex0_a5.yaml"]
+    assert resolved.template_path.name == "codex0_a5.tex"
 
 
 def test_packet_review_is_not_a_profile_family():
