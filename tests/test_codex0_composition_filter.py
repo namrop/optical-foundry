@@ -196,13 +196,13 @@ A rail echo accompanies.
     )
 
     assert "breath_01__B06__B06_single_star_breath" in latex
-    assert "\\CodexBreakOrnament[0.44\\linewidth][0.08em]" in latex
+    assert "\\CodexBreakOrnament[0.44\\linewidth][1\\baselineskip]" in latex
     assert "breath_02__B09__B09_thread_pulse" in latex
-    assert "tailpiece_01__B01__B01_leaf_curl" in latex
-    assert "hinge_candidate_01__FH04__FH04_pressed_petals" in latex
-    assert "\\CodexBreakOrnament[0.44\\linewidth][0.16em]" in latex
+    assert "tailpiece_03__T01__T01_closing_vine_knot" in latex
+    assert "breath_04__T05__T05_threaded_coda" in latex
+    assert "\\CodexBreakOrnament[0.44\\linewidth][2\\baselineskip]" in latex
     assert "seal_01__SM01__SM01_seal_mark" in latex
-    assert "\\CodexBreakOrnament[0.44\\linewidth][0.32em]" in latex
+    assert "\\CodexBreakOrnament[0.44\\linewidth][4\\baselineskip]" in latex
     assert "\\CodexRailCompanion[0.50in]" in latex
     assert "rail_01__RE01__RE01_outer_rail_echo" in latex
 
@@ -257,9 +257,9 @@ def test_codex0_profile_wires_filter_and_defaults_only_to_codex0():
     codex_defaults = yaml.safe_load((PROFILE_ROOT / "defaults" / "codex0.yaml").read_text())
     assert codex_defaults["filters"] == ["filters/codex0_composition.lua"]
     assert codex_defaults["variables"]["codex_hinge_gap_before"] == "0.90em"
-    assert codex_defaults["variables"]["codex_breath_ornament_gap"] == "0.08em"
-    assert codex_defaults["variables"]["codex_hinge_ornament_gap"] == "0.16em"
-    assert codex_defaults["variables"]["codex_threshold_ornament_gap"] == "0.32em"
+    assert codex_defaults["variables"]["codex_breath_ornament_gap"] == "1\\baselineskip"
+    assert codex_defaults["variables"]["codex_hinge_ornament_gap"] == "2\\baselineskip"
+    assert codex_defaults["variables"]["codex_threshold_ornament_gap"] == "4\\baselineskip"
     assert codex_defaults["variables"]["codex_quote_gap_after"] == "0.85em"
     assert codex_defaults["variables"]["codex_ornament_width"] == "0.44\\linewidth"
 
