@@ -244,6 +244,8 @@ DOCUMENT_VARIABLE_ALLOWLIST = {
     "chart_surface",
     "chart_text",
     "chart_muted",
+    "codex_edition",
+    "codex_strip_editorial_callouts",
 }
 
 RUNNING_TEXT_KEY_ALIASES = {

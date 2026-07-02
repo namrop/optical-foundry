@@ -18,6 +18,12 @@ from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
+from engine.codex_editions import (
+    CodexEditionRenderError,
+    edition_from_source_frontmatter,
+    preprocess_codex_edition_blocks,
+    source_contains_codex_edition_markers,
+)
 from engine.d2 import D2RenderError, preprocess_d2_blocks
 from engine.graphviz import GraphvizRenderError, preprocess_graphviz_blocks
 from engine.imposition import ImpositionError, impose_pdf
@@ -60,13 +66,15 @@ class PandocRenderer(Renderer):
 
         # --- build pandoc command ---
         try:
+            resolved_profile = resolve_profile(plan.profile_id)
+            plan = self._prepare_codex_edition_source(plan, out_dir, resolved_profile)
             plan = self._prepare_layout_image_source(plan, out_dir)
             plan = self._prepare_mermaid_source(plan, out_dir)
             plan = self._prepare_vega_source(plan, out_dir)
             plan = self._prepare_d2_source(plan, out_dir)
             plan = self._prepare_graphviz_source(plan, out_dir)
             plan = self._prepare_emoji_substitution_source(plan, out_dir)
-        except (LayoutImageRenderError, MermaidRenderError, VegaRenderError, D2RenderError, GraphvizRenderError) as exc:
+        except (CodexEditionRenderError, LayoutImageRenderError, MermaidRenderError, VegaRenderError, D2RenderError, GraphvizRenderError) as exc:
             elapsed = time.monotonic() - start
             return self._evidence_error(
                 plan, out_dir / f"{plan.render_id}{plan.output_extension}", evidence_file, elapsed, str(exc), ["source-preprocessor"]
@@ -77,7 +85,6 @@ class PandocRenderer(Renderer):
         # profile defaults/template/resource environment: single-object profile
         # resolution is centralized in engine.profile_resolver. Manifest-family
         # assembly decisions remain outside this renderer.
-        resolved_profile = resolve_profile(plan.profile_id)
         cmd_source = self._stationery_normalized_source(
             render_source, out_dir, plan.render_id, resolved_profile.profile_family
         )
@@ -313,6 +320,60 @@ class PandocRenderer(Renderer):
             "padded_pages": result.padded_pages,
             "blank_count": result.blank_count,
         }
+
+    def _prepare_codex_edition_source(
+        self,
+        plan: ProjectionPlan,
+        out_dir: Path,
+        resolved_profile: ResolvedProfile,
+    ) -> ProjectionPlan:
+        """Select source-visible Codex 0 edition variants before other preprocessors.
+
+        The culler is intentionally fail-closed: if `cx0:` edition sentinels are
+        present under a non-Codex profile, rendering fails rather than leaking all
+        editions into a reader proof. Sources without sentinels are unchanged.
+        """
+
+        if not plan.render_source.exists():
+            return plan
+
+        has_markers = source_contains_codex_edition_markers(plan.render_source)
+        edition, strip_callouts = edition_from_source_frontmatter(plan.render_source)
+        has_codex_controls = has_markers or bool(edition) or strip_callouts
+        if has_codex_controls and resolved_profile.canonical_profile_id != "codex0":
+            raise CodexEditionRenderError(
+                f"Codex edition controls require profile codex0; got {resolved_profile.canonical_profile_id}"
+            )
+
+        if not has_markers and not strip_callouts:
+            return plan
+
+        result = preprocess_codex_edition_blocks(
+            plan.render_source,
+            out_dir,
+            plan.render_id,
+            edition,
+            strip_editorial_callouts=strip_callouts,
+        )
+        if not result.changed:
+            return plan
+
+        boundary = dict(plan.boundary_assertions)
+        boundary.update(
+            {
+                "codex_edition_preprocessor_enabled": True,
+                "codex_edition_profile_scope": resolved_profile.canonical_profile_id,
+                "codex_edition": result.edition,
+                "codex_edition_variant_count": result.variant_count,
+                "codex_edition_selected_count": result.selected_count,
+                "codex_edition_fallback_count": result.fallback_count,
+                "codex_edition_selected_variant_ids": result.selected_variant_ids,
+                "codex_edition_fallback_variant_ids": result.fallback_variant_ids,
+                "codex_editorial_callouts_stripped": result.editorial_callouts_stripped,
+                "codex_edition_render_mode": "pre_pandoc_comment_sentinel_culler",
+            }
+        )
+        return replace(plan, render_source=result.rewritten_source, boundary_assertions=boundary)
 
     def _prepare_emoji_substitution_source(
         self,
