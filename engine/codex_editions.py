@@ -35,6 +35,7 @@ class CodexEditionPreprocessResult:
     selected_count: int = 0
     fallback_count: int = 0
     editorial_callouts_stripped: int = 0
+    editorial_callouts_formatted: int = 0
     selected_variant_ids: list[str] = field(default_factory=list)
     fallback_variant_ids: list[str] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
@@ -44,6 +45,7 @@ _MARKER_RE = re.compile(r"<!--\s*cx0:(?P<kind>variant|edition|endvariant)\b(?P<a
 _ATTR_RE = re.compile(r"(?P<key>[A-Za-z_][A-Za-z0-9_-]*)=(?P<quote>[\"'])(?P<value>.*?)(?P=quote)")
 _SAFE_TOKEN_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.:-]*$")
 _CALLOUT_START_RE = re.compile(r"^>\s*\[!(?P<kind>[A-Za-z0-9_-]+)\]")
+_CALLOUT_START_WITH_TITLE_RE = re.compile(r"^>\s*\[!(?P<kind>[A-Za-z0-9_-]+)\][+-]?\s*(?P<title>.*?)\s*$")
 _FRONTMATTER_RE = re.compile(r"\A---\s*\n(?P<body>.*?)(?:\n---\s*\n|\n\.\.\.\s*\n)", re.DOTALL)
 
 
@@ -54,6 +56,15 @@ def source_contains_codex_edition_markers(source: Path) -> bool:
         return False
     text = source.read_text(encoding="utf-8", errors="ignore")
     return "cx0:" in text and _MARKER_RE.search(text) is not None
+
+
+def source_contains_codex_editorial_callouts(source: Path) -> bool:
+    """Return true if a source contains Obsidian-style editorial callouts."""
+
+    if not source.exists():
+        return False
+    text = source.read_text(encoding="utf-8", errors="ignore")
+    return any(_CALLOUT_START_RE.match(line) for line in text.splitlines())
 
 
 def edition_from_source_frontmatter(source: Path) -> tuple[str, bool]:
@@ -90,6 +101,7 @@ def preprocess_codex_edition_blocks(
     edition: str,
     *,
     strip_editorial_callouts: bool = False,
+    format_editorial_callouts: bool = False,
 ) -> CodexEditionPreprocessResult:
     """Select a Codex 0 edition from inline comment-sentinel variant blocks.
 
@@ -117,6 +129,18 @@ def preprocess_codex_edition_blocks(
                     edition=edition,
                     editorial_callouts_stripped=stripped_count,
                 )
+        elif format_editorial_callouts:
+            formatted_text, formatted_count = _format_editorial_callouts(text)
+            if formatted_count:
+                output_dir.mkdir(parents=True, exist_ok=True)
+                out_path = output_dir / f"{render_id}.codex_edition.md"
+                out_path.write_text(formatted_text, encoding="utf-8")
+                return CodexEditionPreprocessResult(
+                    changed=True,
+                    rewritten_source=out_path,
+                    edition=edition,
+                    editorial_callouts_formatted=formatted_count,
+                )
         return CodexEditionPreprocessResult(changed=False, rewritten_source=source, edition=edition)
 
     edition = str(edition or "").strip()
@@ -128,8 +152,13 @@ def preprocess_codex_edition_blocks(
     rewritten, metadata = _select_variants(text, edition)
     if strip_editorial_callouts:
         rewritten, stripped_count = _strip_editorial_callouts(rewritten)
+        formatted_count = 0
+    elif format_editorial_callouts:
+        rewritten, formatted_count = _format_editorial_callouts(rewritten)
+        stripped_count = 0
     else:
         stripped_count = 0
+        formatted_count = 0
 
     if _MARKER_RE.search(rewritten):
         raise CodexEditionRenderError("Codex edition preprocessing left cx0 sentinels in generated source")
@@ -145,6 +174,7 @@ def preprocess_codex_edition_blocks(
         selected_count=metadata["selected_count"],
         fallback_count=metadata["fallback_count"],
         editorial_callouts_stripped=stripped_count,
+        editorial_callouts_formatted=formatted_count,
         selected_variant_ids=metadata["selected_variant_ids"],
         fallback_variant_ids=metadata["fallback_variant_ids"],
     )
@@ -306,3 +336,48 @@ def _strip_editorial_callouts(text: str) -> tuple[str, int]:
         out.append(lines[i])
         i += 1
     return "".join(out), stripped
+
+
+def _format_editorial_callouts(text: str) -> tuple[str, int]:
+    """Rewrite Obsidian-style callouts to Codex editorial-note fenced divs.
+
+    This is source-level rather than a Lua-only transform because Pandoc folds
+    adjacent blockquote lines into paragraphs, losing the title/body line break
+    that Obsidian callouts rely on.
+    """
+
+    lines = text.splitlines(keepends=True)
+    out: list[str] = []
+    formatted = 0
+    i = 0
+    while i < len(lines):
+        start = _CALLOUT_START_WITH_TITLE_RE.match(lines[i])
+        if not start:
+            out.append(lines[i])
+            i += 1
+            continue
+
+        formatted += 1
+        kind = start.group("kind")
+        title = start.group("title").strip()
+        body: list[str] = []
+        i += 1
+        while i < len(lines) and (lines[i].startswith(">") or lines[i].strip() == ""):
+            line = lines[i]
+            if line.startswith(">"):
+                body.append(re.sub(r"^> ?", "", line, count=1))
+            else:
+                body.append(line)
+            i += 1
+
+        out.append("\n" if out and out[-1].strip() else "")
+        out.append(f'::: {{.codex-editorial-note kind="{_markdown_attr_escape(kind)}" title="{_markdown_attr_escape(title)}"}}\n')
+        out.extend(body)
+        if body and body[-1].strip():
+            out.append("\n")
+        out.append(":::\n\n")
+    return "".join(out), formatted
+
+
+def _markdown_attr_escape(value: str) -> str:
+    return value.replace("\\", "\\\\").replace('"', r'\"')

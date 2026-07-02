@@ -81,7 +81,16 @@ Ordinary Optical Foundry renders without `cx0:` sentinels and without Codex edit
 
 ## Editorial callouts
 
-Editorial language belongs in callouts, not edition prose. When `codex_strip_editorial_callouts: true`, Obsidian-style blockquote callouts beginning with `> [!kind]` are stripped from the generated render source. Ordinary blockquotes are preserved.
+Editorial language belongs in callouts, not edition prose. In Codex 0, Obsidian-style blockquote callouts are treated as draft/editorial surfaces:
+
+```markdown
+> [!note] Revision lane
+> This is for Lux / editorial handling, not final reader prose.
+>
+> Markdown remains available inside the note.
+```
+
+For draft/operator proofs, Codex 0 rewrites these source callouts before Pandoc into `.codex-editorial-note` blocks and the profile filter typesets them as visible editorial notes. For reader-facing proofs, set `codex_strip_editorial_callouts: true`; then any blockquote beginning with `> [!kind]` is stripped from the generated render source. Ordinary blockquotes are preserved.
 
 ## Image and generated-figure guidance
 
@@ -101,4 +110,5 @@ Successful renders record edition behavior in the evidence sidecar under keys in
 - `codex_edition_selected_variant_ids`
 - `codex_edition_fallback_variant_ids`
 - `codex_editorial_callouts_stripped`
+- `codex_editorial_callouts_formatted`
 - `codex_edition_render_mode`

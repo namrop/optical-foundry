@@ -165,6 +165,28 @@ Quoted text.
     assert "\\CodexQuoteAttribution{A\\_B \\& C\\%}{Work \\{Draft\\}}{2026\\#1}" in latex
 
 
+def test_codex_filter_lowers_editorial_note_divs(tmp_path):
+    latex = _pandoc_latex(
+        tmp_path,
+        """
+::: {.codex-editorial-note kind="note" title="Revision lane"}
+This is for Lux, not reader prose.
+
+Preserve **Markdown** inside the note.
+:::
+
+> This is an ordinary blockquote.
+""",
+    )
+
+    assert "\\begin{CodexEditorialNote}{note}{Revision lane}" in latex
+    assert "This is for Lux" in latex
+    assert "\\textbf{Markdown}" in latex
+    assert "\\end{CodexEditorialNote}" in latex
+    assert "\\begin{quote}" in latex
+    assert "This is an ordinary blockquote" in latex
+
+
 def test_codex_filter_uses_reclassified_default_asset_pools(tmp_path):
     latex = _pandoc_latex(
         tmp_path,
@@ -279,5 +301,6 @@ def test_codex0_template_exposes_composition_macros_and_environments():
     assert "\\newenvironment{CodexHingeBreak}" in template
     assert "\\newenvironment{CodexQuoteBlock}" in template
     assert "\\NewDocumentCommand{\\CodexQuoteAttribution}" in template
+    assert "\\newenvironment{CodexEditorialNote}" in template
     assert "\\newenvironment{CodexWitness}" in template
     assert "\\providecommand{\\CodexSignal}" in template

@@ -23,6 +23,7 @@ from engine.codex_editions import (
     edition_from_source_frontmatter,
     preprocess_codex_edition_blocks,
     source_contains_codex_edition_markers,
+    source_contains_codex_editorial_callouts,
 )
 from engine.d2 import D2RenderError, preprocess_d2_blocks
 from engine.graphviz import GraphvizRenderError, preprocess_graphviz_blocks
@@ -338,6 +339,7 @@ class PandocRenderer(Renderer):
             return plan
 
         has_markers = source_contains_codex_edition_markers(plan.render_source)
+        has_callouts = source_contains_codex_editorial_callouts(plan.render_source)
         edition, strip_callouts = edition_from_source_frontmatter(plan.render_source)
         has_codex_controls = has_markers or bool(edition) or strip_callouts
         if has_codex_controls and resolved_profile.canonical_profile_id != "codex0":
@@ -345,7 +347,11 @@ class PandocRenderer(Renderer):
                 f"Codex edition controls require profile codex0; got {resolved_profile.canonical_profile_id}"
             )
 
-        if not has_markers and not strip_callouts:
+        if resolved_profile.canonical_profile_id != "codex0":
+            return plan
+
+        format_callouts = has_callouts and not strip_callouts
+        if not has_markers and not strip_callouts and not format_callouts:
             return plan
 
         result = preprocess_codex_edition_blocks(
@@ -354,6 +360,7 @@ class PandocRenderer(Renderer):
             plan.render_id,
             edition,
             strip_editorial_callouts=strip_callouts,
+            format_editorial_callouts=format_callouts,
         )
         if not result.changed:
             return plan
@@ -370,6 +377,7 @@ class PandocRenderer(Renderer):
                 "codex_edition_selected_variant_ids": result.selected_variant_ids,
                 "codex_edition_fallback_variant_ids": result.fallback_variant_ids,
                 "codex_editorial_callouts_stripped": result.editorial_callouts_stripped,
+                "codex_editorial_callouts_formatted": result.editorial_callouts_formatted,
                 "codex_edition_render_mode": "pre_pandoc_comment_sentinel_culler",
             }
         )

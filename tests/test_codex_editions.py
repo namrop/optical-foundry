@@ -117,6 +117,35 @@ def test_codex_edition_preprocessor_strips_editorial_callouts_after_selection(tm
     assert result.editorial_callouts_stripped == 1
 
 
+def test_codex_edition_preprocessor_formats_editorial_callouts_when_not_stripping(tmp_path):
+    src = tmp_path / "visible-callouts.md"
+    src.write_text(
+        "Prose before.\n\n"
+        "> [!note] Revision lane\n"
+        "> This is for Lux, not reader prose.\n"
+        ">\n"
+        "> Preserve **Markdown** inside the note.\n\n"
+        "Prose after.\n"
+    )
+
+    result = preprocess_codex_edition_blocks(
+        src,
+        tmp_path,
+        "visible-callouts",
+        "",
+        format_editorial_callouts=True,
+    )
+    rewritten = result.rewritten_source.read_text()
+
+    assert result.changed is True
+    assert result.editorial_callouts_formatted == 1
+    assert "> [!note]" not in rewritten
+    assert '::: {.codex-editorial-note kind="note" title="Revision lane"}' in rewritten
+    assert "This is for Lux" in rewritten
+    assert "Preserve **Markdown**" in rewritten
+    assert "Prose after." in rewritten
+
+
 def test_codex_edition_frontmatter_reads_top_level_and_variables(tmp_path):
     src = tmp_path / "frontmatter.md"
     src.write_text(
@@ -158,6 +187,24 @@ def test_pandoc_renderer_codex_prepass_runs_before_layout_images(tmp_path):
     assert prepared.boundary_assertions["codex_edition"] == "reader"
 
 
+def test_pandoc_renderer_codex_prepass_formats_visible_editorial_callouts(tmp_path):
+    src = tmp_path / "draft-callout.md"
+    src.write_text(
+        "Draft prose.\n\n"
+        "> [!note] Lux note\n"
+        "> Move this later.\n"
+    )
+    plan = ProjectionPlan(profile_id="codex0", render_id="draft-callout", render_source=src)
+
+    prepared = PandocRenderer()._prepare_codex_edition_source(plan, tmp_path, resolve_profile("codex0"))
+    rewritten = prepared.render_source.read_text()
+
+    assert '::: {.codex-editorial-note kind="note" title="Lux note"}' in rewritten
+    assert "> [!note]" not in rewritten
+    assert prepared.boundary_assertions["codex_editorial_callouts_formatted"] == 1
+    assert prepared.boundary_assertions["codex_editorial_callouts_stripped"] == 0
+
+
 def test_pandoc_renderer_fails_closed_for_cx0_markers_under_non_codex_profile(tmp_path):
     src = tmp_path / "wrong-profile.md"
     src.write_text(
@@ -173,6 +220,17 @@ def test_pandoc_renderer_fails_closed_for_cx0_markers_under_non_codex_profile(tm
 
     with pytest.raises(CodexEditionRenderError, match="require profile codex0"):
         PandocRenderer()._prepare_codex_edition_source(plan, tmp_path, resolve_profile("keeper"))
+
+
+def test_pandoc_renderer_leaves_other_profiles_with_plain_callouts_unchanged(tmp_path):
+    src = tmp_path / "ordinary-callout.md"
+    src.write_text("---\ntitle: Ordinary\n---\n\n> [!note] Plain Obsidian note.\n")
+    plan = ProjectionPlan(profile_id="keeper", render_id="ordinary-callout", render_source=src)
+
+    prepared = PandocRenderer()._prepare_codex_edition_source(plan, tmp_path, resolve_profile("keeper"))
+
+    assert prepared.render_source == src
+    assert prepared.boundary_assertions == {}
 
 
 def test_pandoc_renderer_leaves_other_renders_without_markers_unchanged(tmp_path):
