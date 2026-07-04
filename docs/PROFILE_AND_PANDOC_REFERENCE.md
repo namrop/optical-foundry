@@ -1,3 +1,21 @@
+---
+uid: 019f2e1d-4887-7887-8975-add12526e48c
+kind: note
+note_role: spec
+status: active
+created: "2026-05-24T00:00:00-04:00"
+updated: "2026-07-04T13:05:00-04:00"
+title: "Optical Foundry — Profile and Pandoc Reference Wiring"
+summary: "Reference for Optical Foundry profile/template/defaults wiring, the profile capability checker, placeholder-asset posture, and the reliable mechanism for controlling paragraph indentation (parindent default + per-block \\noindent override + the ragged2e/\\justifying gotcha)."
+tags:
+  - optical-foundry
+  - profiles
+  - pandoc
+  - render-pipeline
+  - indentation
+validation_profile: standard
+beam_home: 42_optical_foundry/docs
+---
 # Optical Foundry — Profile and Pandoc Reference Wiring
 
 ## Ownership boundary (2026-05-06)
@@ -172,6 +190,78 @@ behavior in Optical Foundry:
 
 This makes the current limitation honest and testable without pretending a full
 grid engine exists.
+
+## Paragraph indentation control (parindent) — the reliable mechanism
+
+Indentation is a recurring source of confusion. This section is the standard.
+When Luis says "the indentation is wrong," this is almost always what he means and
+how to fix it.
+
+### The model
+
+LaTeX indents the **first line of each paragraph only**, by the length `\parindent`.
+A paragraph is a block of text bounded by blank lines. Everything inside one paragraph
+— including lines you broke with two trailing spaces in markdown (which become `\\`) —
+is the **same** paragraph. So a litany like:
+
+```
+I believe the river is cold.··
+I believe the bridge will hold.··
+I believe the ferry runs on Sundays.
+```
+
+(where `··` = two trailing spaces = `\\`) is ONE paragraph. If `\parindent` is nonzero,
+only line 1 gets the indent and lines 2–3 sit flush — the "first line indented, rest
+flush" raggedness. That is the single most common indentation complaint.
+
+### The standard: set a document-wide default, override per block
+
+1. **Document-wide default — the `parindent` variable.** Set it once per letter/profile:
+   - in the profile defaults YAML (`profiles/40_latex_import/defaults/<profile>.yaml`), or
+   - in the source file's frontmatter `variables:` block (overrides the profile default).
+
+   `parindent: "0pt"` → flush paragraphs (recommended default for letters).
+   `parindent: "17pt"` (or `1.5em`) → classic first-line-indented paragraphs.
+
+   This is the "what should this whole document do" lever. Prefer setting it here rather
+   than fighting it per block.
+
+2. **Per-block override — inline raw LaTeX.** For any single block that must differ from
+   the document default, prefix its **first line** with:
+
+   ```
+   `\noindent{}`{=latex}First line of the block…··
+   ```
+
+   `\noindent` forces that one paragraph's first line flush regardless of the document
+   default. This is the reliable "*this block* should not have the indent" tool, it
+   travels with the text, and it has zero blast radius on other files/profiles. (There is
+   no clean inline way to *add* indent to a single otherwise-flush block; if a block needs
+   indent, prefer `\hspace*{<len>}` at the line start, or reconsider the document default.)
+
+### The gotcha: ragged2e + \justifying can override parindent
+
+Several letter templates (e.g. `mythic_letter_johannah.tex`) do `\usepackage{ragged2e}`
+early, then call `\justifying` just before `$body$`. `\justifying` re-imposes the
+`\parindent` that was in effect **when ragged2e loaded**, which can silently clobber a
+later `\setlength{\parindent}{$parindent$}`. Symptom: the `parindent` variable "does
+nothing."
+
+- If the `parindent` variable is being ignored document-wide, this ordering is the
+  suspect. The robust template fix is to set `\parindent` (and, if needed, re-issue it)
+  **after** `\justifying`, so the variable is authoritative.
+- Changing a shared template flips **every** document on that profile, so treat it as a
+  deliberate, confirmed change — not a per-letter fix.
+- The per-block `\noindent{}` override works regardless of this bug and is the safe
+  immediate fix for a single document.
+
+### Quick diagnosis
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| First line of a `\\`-litany indented, rest flush | nonzero `parindent` + multi-line paragraph | `\noindent{}` on the block's first line, or set `parindent: "0pt"` document-wide |
+| Whole document indented when you wanted flush | `parindent` nonzero (or ignored due to ragged2e) | set `parindent: "0pt"`; if ignored, check the `\justifying` ordering |
+| `parindent` variable seems to do nothing | ragged2e `\justifying` clobber | set `\parindent` after `\justifying` in the template (shared-template change) |
 
 ## Elian placeholder asset posture
 
