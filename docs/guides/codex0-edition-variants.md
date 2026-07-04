@@ -5,7 +5,7 @@ note_role: spec
 validation_profile: standard
 status: draft
 created: 2026-07-02T18:42:18-04:00
-updated: 2026-07-02T18:42:18-04:00
+updated: 2026-07-04T21:05:00-04:00
 beam_home: 42_optical_foundry/docs/guides
 title: "Codex 0 Edition Variants"
 summary: "Guide for Codex 0 source-visible edition variants selected by a pre-Pandoc comment-sentinel culler before figure/source preprocessors run."
@@ -21,30 +21,49 @@ tags:
 
 Codex 0 may keep edition-specific paragraph rewrites side-by-side in the manuscript source. This is a Codex 0 profile-scoped mechanism, not a general Foundry document primitive yet.
 
+## Model (2026-07-04)
+
+The prose between the `cx0:variant` open marker and the first `cx0:edition` marker is the **archival base**. It renders for every edition unless a tagged override replaces it. Each `cx0:edition` marker names one or more editions (comma-separated — a block may belong to several at once) and, for those editions only, swaps in at that place for the archival base.
+
+- **Replacement:** a non-empty archival base + a tagged override → the tagged editions get the override, everyone else gets the base.
+- **Addition:** an empty archival base + a tagged override → the prose is present only in its tagged editions and absent everywhere else.
+- **Fallback:** any edition without a matching override inherits the archival (raw) base.
+
 ## Source syntax
 
 Use HTML comment sentinels around normal Markdown prose:
 
 ```markdown
-<!-- cx0:variant id="how-you-arrived-010" fallback="johannah" -->
-
-<!-- cx0:edition johannah -->
+<!-- cx0:variant id="how-you-arrived-010" -->
 The harbor bell rang twice before the ferry left the pier.
 
-<!-- cx0:edition reader -->
+<!-- cx0:edition witness,reader -->
 A bell rang somewhere over the water: not loud, not near, but enough to turn every head on the deck.
 
 <!-- cx0:endvariant -->
 ```
 
+Here the archival and johannah editions render the raw base; the witness and reader editions render the veiled override.
+
 Supported markers:
 
-- `<!-- cx0:variant id="..." fallback="..." -->`
-- `<!-- cx0:edition johannah -->`
-- `<!-- cx0:edition edition="johannah" -->`
-- `<!-- cx0:endvariant -->`
+- `<!-- cx0:variant id="..." -->` (optional `guard="..."`, see Safety behavior)
+- `<!-- cx0:edition witness -->` or `<!-- cx0:edition witness,reader -->`
+- `<!-- cx0:edition edition="witness" -->` / `<!-- cx0:edition editions="witness,reader" -->`
+- `<!-- cx0:endvariant -->` or the XML-style `<!-- /cx0:variant -->`
+
+The `fallback="..."` attribute is deprecated and ignored (it emits a warning): the archival base is now the universal fallback.
 
 The selected branch remains ordinary Markdown after preprocessing. Inactive branches are removed before Pandoc and before the existing `of-image`, Mermaid, Vega, D2, Graphviz, and emoji source preprocessors run.
+
+## Edition lanes
+
+- **archival** — everything raw; the base truth surface.
+- **johannah** — pataphor where beauty is the point, raw where load-bearing.
+- **witness** — more pataphorical hedging than johannah.
+- **reader** — most veiled.
+
+Because the archival base is the universal fallback, editions inherit the raw base for any region left un-overridden. This is fail-**open** for exposure: forgetting to veil a region leaks raw prose into wider editions. Use `guard` (below) on sensitive regions.
 
 ## Selecting an edition
 
@@ -69,13 +88,24 @@ These keys are intentionally namespaced to Codex 0.
 
 ## Safety behavior
 
-The preprocessor is fail-closed:
+The preprocessor still fails hard on structural problems:
 
 - if a source contains `cx0:` edition sentinels and no `codex_edition` is selected, render fails;
-- if the selected edition is absent and no valid fallback is present, render fails;
-- if variant markers are malformed, nested, duplicated, or unclosed, render fails;
+- if variant markers are malformed, nested, duplicated (duplicate edition labels), or unclosed, render fails;
 - if `cx0:` edition controls are present under a non-`codex0` profile, render fails rather than leaking all branches;
 - generated render sources must contain no remaining `cx0:` markers.
+
+Exposure is fail-**open** by default: an edition without a matching override inherits the raw archival base rather than failing. To restore fail-closed exposure for a sensitive region, guard it. A guarded edition must carry an explicit override and may not inherit the raw base:
+
+```markdown
+<!-- cx0:variant id="the-reckoning" guard="witness,reader" -->
+Raw archival prose.
+<!-- cx0:edition witness -->
+Veiled witness prose.
+<!-- cx0:endvariant -->
+```
+
+Here rendering the reader edition fails hard (guarded, no override), the witness edition renders its override, and the archival edition renders the raw base.
 
 Ordinary Optical Foundry renders without `cx0:` sentinels and without Codex edition controls are unchanged.
 

@@ -1,18 +1,45 @@
 """Preprocess Codex 0 inline edition variants before Pandoc.
 
 Codex 0 keeps edition-specific prose side-by-side in the Markdown source using
-HTML comment sentinels so the manuscript remains readable/editable as prose:
+HTML comment sentinels so the manuscript remains readable/editable as prose.
 
-    <!-- cx0:variant id="how-you-arrived-010" fallback="johannah" -->
-    <!-- cx0:edition johannah -->
-    Literal/private prose.
-    <!-- cx0:edition reader -->
-    Wider-reader prose.
+Model (2026-07-04): the body before the first `cx0:edition` marker is the
+**archival base** — it is used for every edition unless a tagged override
+replaces it. Each `cx0:edition` marker carries one or more comma-separated
+edition labels (a block may belong to several editions at once) and, for those
+editions, swaps in at that place for the archival base. If the archival base is
+empty, a tagged block is an **addition** (present only in its tagged editions),
+not a replacement.
+
+    <!-- cx0:variant id="how-you-arrived-010" -->
+    Archival/raw prose (all editions unless overridden).
+    <!-- cx0:edition witness,reader -->
+    Veiled prose swapped in for the witness and reader editions.
     <!-- cx0:endvariant -->
+
+The region closes with either `<!-- cx0:endvariant -->` or `<!-- /cx0:variant -->`.
 
 This preprocessor selects one edition before the existing Optical Foundry source
 preprocessors run. That ordering keeps inactive `of-image`, Mermaid, Vega, D2,
 and Graphviz blocks out of downstream preprocessors.
+
+Note: the archival base is the universal fallback, so an edition with no matching
+override inherits the raw base. Regions that must be veiled for a wider edition
+therefore require an explicit override for that edition; a missing override does
+not fail the render, it inherits the raw base.
+
+To restore fail-closed exposure for a sensitive region, mark the variant with a
+`guard` attribute listing the editions that must not inherit the raw base:
+
+    <!-- cx0:variant id="the-reckoning" guard="witness,reader" -->
+    Raw archival prose.
+    <!-- cx0:edition witness -->
+    Veiled witness prose.
+    <!-- cx0:endvariant -->
+
+Here rendering the reader edition fails hard (it has no override and is guarded),
+while the witness edition renders its override and the archival edition renders
+the raw base.
 """
 from __future__ import annotations
 
@@ -41,7 +68,7 @@ class CodexEditionPreprocessResult:
     warnings: list[str] = field(default_factory=list)
 
 
-_MARKER_RE = re.compile(r"<!--\s*cx0:(?P<kind>variant|edition|endvariant)\b(?P<attrs>.*?)-->", re.IGNORECASE | re.DOTALL)
+_MARKER_RE = re.compile(r"<!--\s*(?P<close>/)?cx0:(?P<kind>variant|edition|endvariant)\b(?P<attrs>.*?)-->", re.IGNORECASE | re.DOTALL)
 _ATTR_RE = re.compile(r"(?P<key>[A-Za-z_][A-Za-z0-9_-]*)=(?P<quote>[\"'])(?P<value>.*?)(?P=quote)")
 _SAFE_TOKEN_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.:-]*$")
 _CALLOUT_START_RE = re.compile(r"^>\s*\[!(?P<kind>[A-Za-z0-9_-]+)\]")
@@ -177,7 +204,25 @@ def preprocess_codex_edition_blocks(
         editorial_callouts_formatted=formatted_count,
         selected_variant_ids=metadata["selected_variant_ids"],
         fallback_variant_ids=metadata["fallback_variant_ids"],
+        warnings=metadata.get("warnings", []),
     )
+
+
+def _marker_role(match: re.Match[str]) -> str:
+    """Classify a cx0 marker as 'open', 'edition', or 'close'.
+
+    Opens: `<!-- cx0:variant ... -->`. Closes: `<!-- cx0:endvariant -->` or the
+    XML-style `<!-- /cx0:variant -->`. Editions: `<!-- cx0:edition ... -->`.
+    """
+
+    kind = match.group("kind").lower()
+    if match.group("close"):
+        return "close"
+    if kind == "endvariant":
+        return "close"
+    if kind == "variant":
+        return "open"
+    return "edition"
 
 
 def _select_variants(text: str, edition: str) -> tuple[str, dict[str, Any]]:
@@ -188,17 +233,19 @@ def _select_variants(text: str, edition: str) -> tuple[str, dict[str, Any]]:
     fallback_count = 0
     selected_variant_ids: list[str] = []
     fallback_variant_ids: list[str] = []
+    warnings: list[str] = []
 
     while True:
         match = _MARKER_RE.search(text, pos)
         if not match:
             out.append(text[pos:])
             break
-        kind = match.group("kind").lower()
-        if kind != "variant":
+        role = _marker_role(match)
+        if role != "open":
+            kind = match.group("kind").lower()
             raise CodexEditionRenderError(f"cx0:{kind} marker outside cx0:variant block")
         out.append(text[pos:match.start()])
-        block, selected, used_fallback = _parse_variant_block(text, match, edition)
+        block, selected, used_fallback, block_warnings = _parse_variant_block(text, match, edition)
         out.append(block)
         variant_count += 1
         selected_count += 1
@@ -207,6 +254,7 @@ def _select_variants(text: str, edition: str) -> tuple[str, dict[str, Any]]:
         if used_fallback:
             fallback_count += 1
             fallback_variant_ids.append(variant_id)
+        warnings.extend(block_warnings)
         pos = selected["end_pos"]
 
     return "".join(out), {
@@ -215,69 +263,103 @@ def _select_variants(text: str, edition: str) -> tuple[str, dict[str, Any]]:
         "fallback_count": fallback_count,
         "selected_variant_ids": selected_variant_ids,
         "fallback_variant_ids": fallback_variant_ids,
+        "warnings": warnings,
     }
 
 
-def _parse_variant_block(text: str, start: re.Match[str], edition: str) -> tuple[str, dict[str, Any], bool]:
+def _parse_variant_block(
+    text: str, start: re.Match[str], edition: str
+) -> tuple[str, dict[str, Any], bool, list[str]]:
     attrs = _parse_attrs(start.group("attrs"))
     variant_id = attrs.get("id") or attrs.get("name") or f"variant@{start.start()}"
-    fallback = attrs.get("fallback", "")
     if not _safe_token(variant_id):
         raise CodexEditionRenderError(f"cx0:variant has unsafe id: {variant_id!r}")
-    if fallback and not _safe_token(fallback):
-        raise CodexEditionRenderError(f"cx0:variant {variant_id} has unsafe fallback: {fallback!r}")
 
+    warnings: list[str] = []
+    if "fallback" in attrs:
+        warnings.append(
+            f"cx0:variant {variant_id}: the 'fallback' attribute is deprecated and ignored; "
+            "the archival base (text before the first cx0:edition) is now the universal fallback"
+        )
+
+    # guard="witness,reader" restores fail-closed exposure for sensitive
+    # regions: the listed editions MUST carry an explicit override and are not
+    # allowed to inherit the raw archival base.
+    guard = _guard_labels(attrs.get("guard", ""), variant_id)
+
+    # Text between the open marker and the first cx0:edition marker is the
+    # archival base — used for every edition unless a tagged override wins.
+    base_start = start.end()
+    base_body: str | None = None
     entries: list[dict[str, Any]] = []
-    cursor = start.end()
+    seen_labels: set[str] = set()
     current: dict[str, Any] | None = None
+    cursor = start.end()
 
     while True:
         marker = _MARKER_RE.search(text, cursor)
         if marker is None:
-            raise CodexEditionRenderError(f"cx0:variant {variant_id} is missing cx0:endvariant")
-        kind = marker.group("kind").lower()
-        if kind == "variant":
+            raise CodexEditionRenderError(
+                f"cx0:variant {variant_id} is missing its close marker (cx0:endvariant or /cx0:variant)"
+            )
+        role = _marker_role(marker)
+        if role == "open":
             raise CodexEditionRenderError(f"nested cx0:variant is not supported inside {variant_id}")
-        if kind == "edition":
-            if current is not None:
+        if role == "edition":
+            if current is None:
+                base_body = text[base_start:marker.start()]
+            else:
                 current["body"] = text[current["body_start"]:marker.start()]
                 entries.append(current)
-            label = _edition_label(marker.group("attrs"), variant_id)
-            if any(entry["edition"] == label for entry in entries):
-                raise CodexEditionRenderError(f"duplicate cx0:edition {label!r} in variant {variant_id}")
-            current = {"edition": label, "body_start": marker.end()}
+            labels = _edition_labels(marker.group("attrs"), variant_id)
+            for label in labels:
+                if label in seen_labels:
+                    raise CodexEditionRenderError(f"duplicate cx0:edition {label!r} in variant {variant_id}")
+                seen_labels.add(label)
+            current = {"labels": set(labels), "body_start": marker.end()}
             cursor = marker.end()
             continue
-        if kind == "endvariant":
-            if current is not None:
-                current["body"] = text[current["body_start"]:marker.start()]
-                entries.append(current)
-            if not entries:
-                raise CodexEditionRenderError(f"cx0:variant {variant_id} has no cx0:edition branches")
-            labels = [entry["edition"] for entry in entries]
-            selected_label = edition if edition in labels else fallback
-            used_fallback = False
-            if selected_label and selected_label not in labels:
-                raise CodexEditionRenderError(
-                    f"cx0:variant {variant_id} has no branch for edition {edition!r} and fallback {fallback!r} is missing"
-                )
-            if not selected_label:
-                raise CodexEditionRenderError(
-                    f"cx0:variant {variant_id} has no branch for edition {edition!r} and no fallback"
-                )
-            if selected_label != edition:
-                used_fallback = True
-            body = next(entry["body"] for entry in entries if entry["edition"] == selected_label)
-            return _trim_selected_body(body), {
-                "variant_id": variant_id,
-                "edition": selected_label,
-                "end_pos": marker.end(),
-            }, used_fallback
+        # role == "close"
+        if current is None:
+            base_body = text[base_start:marker.start()]
+        else:
+            current["body"] = text[current["body_start"]:marker.start()]
+            entries.append(current)
+        break
+
+    if base_body is None:
+        base_body = ""
+
+    selected_body: str | None = None
+    for entry in entries:
+        if edition in entry["labels"]:
+            selected_body = entry["body"]
+            break
+    used_fallback = False
+    if selected_body is None:
+        # No tagged override for this edition: inherit the archival base. When
+        # overrides exist for other editions, treat this as a fallback for
+        # metadata/telemetry so callers can see how many regions inherited raw.
+        if edition in guard:
+            raise CodexEditionRenderError(
+                f"cx0:variant {variant_id} guards edition {edition!r}: it must have an explicit "
+                "cx0:edition override and may not inherit the raw archival base"
+            )
+        selected_body = base_body
+        used_fallback = bool(entries)
+
+    return _trim_selected_body(selected_body), {
+        "variant_id": variant_id,
+        "end_pos": marker.end(),
+    }, used_fallback, warnings
 
 
 def _trim_selected_body(body: str) -> str:
     # Keep prose readable in source while preventing marker-adjacent blank-line
-    # accumulation in generated render sources.
+    # accumulation in generated render sources. An empty selection (an addition
+    # not present in this edition) collapses to nothing.
+    if not body.strip():
+        return ""
     return "\n" + body.strip("\n") + "\n"
 
 
@@ -288,18 +370,34 @@ def _parse_attrs(raw: str) -> dict[str, str]:
     return attrs
 
 
-def _edition_label(raw: str, variant_id: str) -> str:
+def _edition_labels(raw: str, variant_id: str) -> list[str]:
     attrs = _parse_attrs(raw)
-    if "edition" in attrs:
-        label = attrs["edition"]
+    if "editions" in attrs:
+        label_str = attrs["editions"]
+    elif "edition" in attrs:
+        label_str = attrs["edition"]
     elif attrs:
         # Unknown attributes without an explicit edition are probably a typo.
-        raise CodexEditionRenderError(f"cx0:edition in variant {variant_id} must specify edition=... or a bare label")
+        raise CodexEditionRenderError(
+            f"cx0:edition in variant {variant_id} must specify editions=..., edition=..., or bare labels"
+        )
     else:
-        label = raw.strip()
-    if not _safe_token(label):
-        raise CodexEditionRenderError(f"cx0:edition in variant {variant_id} has unsafe label: {label!r}")
-    return label
+        label_str = raw.strip()
+    labels = [label.strip() for label in label_str.split(",") if label.strip()]
+    if not labels:
+        raise CodexEditionRenderError(f"cx0:edition in variant {variant_id} has no edition labels")
+    for label in labels:
+        if not _safe_token(label):
+            raise CodexEditionRenderError(f"cx0:edition in variant {variant_id} has unsafe label: {label!r}")
+    return labels
+
+
+def _guard_labels(raw: str, variant_id: str) -> set[str]:
+    labels = [label.strip() for label in raw.split(",") if label.strip()]
+    for label in labels:
+        if not _safe_token(label):
+            raise CodexEditionRenderError(f"cx0:variant {variant_id} has unsafe guard label: {label!r}")
+    return set(labels)
 
 
 def _safe_token(value: str) -> bool:

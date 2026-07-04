@@ -16,7 +16,7 @@ from engine.projection_plan import ProjectionPlan  # noqa: E402
 from renderers.pandoc_renderer import PandocRenderer  # noqa: E402
 
 
-def test_codex_edition_preprocessor_selects_requested_branch_and_strips_markers(tmp_path):
+def test_codex_edition_preprocessor_selects_tagged_override_over_base(tmp_path):
     src = tmp_path / "variant.md"
     src.write_text(
         "---\n"
@@ -24,9 +24,8 @@ def test_codex_edition_preprocessor_selects_requested_branch_and_strips_markers(
         "codex_edition: reader\n"
         "---\n\n"
         "Before.\n\n"
-        "<!-- cx0:variant id=\"how-you-arrived-010\" fallback=\"johannah\" -->\n"
-        "<!-- cx0:edition johannah -->\n"
-        "Johannah prose with **Markdown**.\n"
+        "<!-- cx0:variant id=\"how-you-arrived-010\" -->\n"
+        "Archival prose with **Markdown**.\n"
         "<!-- cx0:edition reader -->\n"
         "Reader prose with *Markdown*.\n"
         "<!-- cx0:endvariant -->\n\n"
@@ -43,38 +42,149 @@ def test_codex_edition_preprocessor_selects_requested_branch_and_strips_markers(
     assert result.fallback_count == 0
     assert result.selected_variant_ids == ["how-you-arrived-010"]
     assert "Reader prose with *Markdown*." in rewritten
-    assert "Johannah prose" not in rewritten
+    assert "Archival prose" not in rewritten
     assert "cx0:" not in rewritten
 
 
-def test_codex_edition_preprocessor_uses_declared_fallback(tmp_path):
-    src = tmp_path / "fallback.md"
+def test_codex_edition_preprocessor_inherits_archival_base_when_untagged(tmp_path):
+    src = tmp_path / "base.md"
     src.write_text(
-        "<!-- cx0:variant id=\"v1\" fallback=\"johannah\" -->\n"
-        "<!-- cx0:edition johannah -->\n"
-        "Fallback prose.\n"
+        "<!-- cx0:variant id=\"v1\" -->\n"
+        "Archival base prose.\n"
+        "<!-- cx0:edition reader -->\n"
+        "Reader prose.\n"
         "<!-- cx0:endvariant -->\n"
     )
 
-    result = preprocess_codex_edition_blocks(src, tmp_path, "fallback", "family")
+    result = preprocess_codex_edition_blocks(src, tmp_path, "base", "archival")
     rewritten = result.rewritten_source.read_text()
 
-    assert "Fallback prose." in rewritten
+    assert "Archival base prose." in rewritten
+    assert "Reader prose." not in rewritten
     assert result.fallback_count == 1
     assert result.fallback_variant_ids == ["v1"]
 
 
-def test_codex_edition_preprocessor_fails_without_selected_edition(tmp_path):
-    src = tmp_path / "missing-edition.md"
+def test_codex_edition_preprocessor_addition_is_empty_for_untagged_edition(tmp_path):
+    src = tmp_path / "addition.md"
+    src.write_text(
+        "Before.\n\n"
+        "<!-- cx0:variant id=\"v1\" -->\n"
+        "<!-- cx0:edition johannah -->\n"
+        "Johannah-only addition.\n"
+        "<!-- cx0:endvariant -->\n\n"
+        "After.\n"
+    )
+
+    result = preprocess_codex_edition_blocks(src, tmp_path, "addition", "reader")
+    rewritten = result.rewritten_source.read_text()
+
+    assert "Johannah-only addition." not in rewritten
+    assert "Before." in rewritten
+    assert "After." in rewritten
+    assert "cx0:" not in rewritten
+
+
+def test_codex_edition_preprocessor_addition_present_for_tagged_edition(tmp_path):
+    src = tmp_path / "addition2.md"
     src.write_text(
         "<!-- cx0:variant id=\"v1\" -->\n"
         "<!-- cx0:edition johannah -->\n"
-        "Private prose.\n"
+        "Johannah-only addition.\n"
         "<!-- cx0:endvariant -->\n"
     )
 
-    with pytest.raises(CodexEditionRenderError, match="no branch for edition"):
-        preprocess_codex_edition_blocks(src, tmp_path, "missing-edition", "reader")
+    result = preprocess_codex_edition_blocks(src, tmp_path, "addition2", "johannah")
+    rewritten = result.rewritten_source.read_text()
+
+    assert "Johannah-only addition." in rewritten
+
+
+def test_codex_edition_preprocessor_multi_tag_override(tmp_path):
+    src = tmp_path / "multi.md"
+    src.write_text(
+        "<!-- cx0:variant id=\"v1\" -->\n"
+        "Raw base.\n"
+        "<!-- cx0:edition witness,reader -->\n"
+        "Veiled prose.\n"
+        "<!-- cx0:endvariant -->\n"
+    )
+
+    for edition in ("witness", "reader"):
+        result = preprocess_codex_edition_blocks(src, tmp_path, f"multi-{edition}", edition)
+        rewritten = result.rewritten_source.read_text()
+        assert "Veiled prose." in rewritten
+        assert "Raw base." not in rewritten
+
+    archival = preprocess_codex_edition_blocks(src, tmp_path, "multi-archival", "archival")
+    assert "Raw base." in archival.rewritten_source.read_text()
+
+
+def test_codex_edition_preprocessor_supports_xml_style_close(tmp_path):
+    src = tmp_path / "xmlclose.md"
+    src.write_text(
+        "<!-- cx0:variant id=\"v1\" -->\n"
+        "Raw base.\n"
+        "<!-- cx0:edition reader -->\n"
+        "Reader prose.\n"
+        "<!-- /cx0:variant -->\n"
+    )
+
+    result = preprocess_codex_edition_blocks(src, tmp_path, "xmlclose", "reader")
+    rewritten = result.rewritten_source.read_text()
+
+    assert "Reader prose." in rewritten
+    assert "cx0:" not in rewritten
+
+
+def test_codex_edition_preprocessor_deprecates_fallback_attr(tmp_path):
+    src = tmp_path / "deprecated.md"
+    src.write_text(
+        "<!-- cx0:variant id=\"v1\" fallback=\"johannah\" -->\n"
+        "Raw base.\n"
+        "<!-- cx0:edition reader -->\n"
+        "Reader prose.\n"
+        "<!-- cx0:endvariant -->\n"
+    )
+
+    result = preprocess_codex_edition_blocks(src, tmp_path, "deprecated", "archival")
+    rewritten = result.rewritten_source.read_text()
+
+    assert "Raw base." in rewritten
+    assert any("deprecated" in w for w in result.warnings)
+
+
+def test_codex_edition_preprocessor_guard_fails_when_edition_inherits_base(tmp_path):
+    src = tmp_path / "guard.md"
+    src.write_text(
+        "<!-- cx0:variant id=\"the-reckoning\" guard=\"witness,reader\" -->\n"
+        "Raw archival prose.\n"
+        "<!-- cx0:edition witness -->\n"
+        "Veiled witness prose.\n"
+        "<!-- cx0:endvariant -->\n"
+    )
+
+    with pytest.raises(CodexEditionRenderError, match="guards edition 'reader'"):
+        preprocess_codex_edition_blocks(src, tmp_path, "guard-reader", "reader")
+
+
+def test_codex_edition_preprocessor_guard_allows_override_and_base(tmp_path):
+    src = tmp_path / "guard-ok.md"
+    src.write_text(
+        "<!-- cx0:variant id=\"the-reckoning\" guard=\"witness,reader\" -->\n"
+        "Raw archival prose.\n"
+        "<!-- cx0:edition witness -->\n"
+        "Veiled witness prose.\n"
+        "<!-- cx0:edition reader -->\n"
+        "Most veiled reader prose.\n"
+        "<!-- cx0:endvariant -->\n"
+    )
+
+    witness = preprocess_codex_edition_blocks(src, tmp_path, "guard-witness", "witness")
+    assert "Veiled witness prose." in witness.rewritten_source.read_text()
+
+    archival = preprocess_codex_edition_blocks(src, tmp_path, "guard-archival", "archival")
+    assert "Raw archival prose." in archival.rewritten_source.read_text()
 
 
 def test_codex_edition_preprocessor_fails_if_markers_present_without_render_edition(tmp_path):

@@ -366,6 +366,7 @@ class PandocRenderer(Renderer):
             return plan
 
         boundary = dict(plan.boundary_assertions)
+        warnings = [*boundary.get("warnings", []), *result.warnings]
         boundary.update(
             {
                 "codex_edition_preprocessor_enabled": True,
@@ -381,6 +382,8 @@ class PandocRenderer(Renderer):
                 "codex_edition_render_mode": "pre_pandoc_comment_sentinel_culler",
             }
         )
+        if warnings:
+            boundary["warnings"] = warnings
         return replace(plan, render_source=result.rewritten_source, boundary_assertions=boundary)
 
     def _prepare_emoji_substitution_source(
