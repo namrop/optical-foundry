@@ -1,0 +1,40 @@
+kind: codex_bundle
+schema_version: bundle_manifest_v1
+bundle_id: codex0-v5-parindent-probe-2026-07-05
+bundle_name: "Codex 0 v5 — Paragraph Indentation Probe"
+profile: codex0
+presentation:
+  title: "Codex 0 v5 — Paragraph Indentation Probe"
+  subtitle: "Two representative passages for the item 7 paragraph-model call"
+  authors:
+    - Optical Foundry
+  date: "2026-07-05"
+  abstract: |
+    Renders two representative v5 passages under whichever codex0 profile
+    parindent/parskip posture is active at render time. Used to compare
+    baseline (parindent 1.2em / parskip 3pt) against flush (parindent 0pt /
+    parskip 0.6em) on-page. Not a manuscript render — a probe artifact.
+sources:
+  - uid: probe-src-what-i-am-vowing
+    path: /path/to/canon/21_letters_and_creative/book/codex0_v5/parts/08_the_vow_the_life/chapters/01_what_i_am_vowing/passages/01_what_i_am_vowing.md
+    role: primary_anchor
+    title: "What I Am Vowing"
+    order: 1
+    include_frontmatter: none
+    suppress_frontmatter: true
+  - uid: probe-src-circle-that-would-not-stay-closed
+    path: /path/to/canon/21_letters_and_creative/book/codex0_v5/parts/09_the_world_beyond_the_home/chapters/01_the_circle_that_would_not_stay_closed/passages/01_the_circle_that_would_not_stay_closed.md
+    role: supporting_anchor
+    title: "The Circle That Would Not Stay Closed"
+    order: 2
+    include_frontmatter: none
+    suppress_frontmatter: true
+render:
+  include_toc: false
+  preserve_source_provenance: false
+  text_integrity_check: true
+  visual_page_samples: true
+  page_sample_format: png
+validation:
+  require_all_source_paths: true
+  require_unique_uids: true
