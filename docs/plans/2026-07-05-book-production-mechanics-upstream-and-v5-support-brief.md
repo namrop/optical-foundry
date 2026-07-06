@@ -5,7 +5,7 @@ note_role: handoff
 validation_profile: standard
 status: draft
 created: 2026-07-05T19:30:00-04:00
-updated: 2026-07-05T19:30:00-04:00
+updated: 2026-07-06T03:00:00-04:00
 beam_home: 42_optical_foundry
 title: "Session Brief — Book-Production Mechanics Upstream + v5 Support"
 summary: "Starting brief for a Foundry work session that generalizes hand-bound book production beyond Codex 0 and adds the mechanics v5 needs: a spine→codex_bundle bridge, signature-aware plate placement, a per-sheet stock/furnish map so dividers and plates can be printed on cardstock, divider page-tagging, edition selection wired into render, breath/split rendering, and reliable book-level paragraph indentation (the recurring parindent / \\\\-litany raggedness fixed upstream instead of per-block). Grounds each ask in existing Foundry surfaces (render.delivery.imposition, section_dividers[], of-image plates, PROFILE_AND_PANDOC_REFERENCE parindent standard, evidence sidecars) so this extends rather than reinvents."
@@ -102,6 +102,42 @@ Whichever path, the deliverable is: a book renders with correct, consistent inde
 
 The hybrid path (parindent=0 inside Codex composition envs) remains available if v5 later routes litanies through composition classes, but is not needed today.
 
+### 8. Back-matter apparatus (endnotes wiring first)
+
+Whole-book renders now have real front matter (title page + colophon on the title verso + TOC), but back matter is still just whatever the assembled body ends up emitting after the last passage. The v5 tree has an authored back-matter directory at `21_letters_and_creative/book/codex0_v5/backmatter/`:
+
+- `00_backmatter_scaffold.md`
+- `01_notes_endnotes_placeholder.md`
+- `02_glossary_placeholder.md`
+- `03_index_placeholder.md`
+- `04_appendices_witnesses_placeholder.md`
+- `05_how_this_book_was_made_full.md`
+- `06_source_uid_register_placeholder.md`
+- `99_final_threshold_question_physical_sidecar.md`
+
+Item 8 is the surface that lets the bridge wire these into the render. Two coupled sub-items:
+
+**8a. Endnotes wiring (highest priority, self-contained spec landed).** See `docs/plans/handoff_codex0_endnotes_wiring_2026-07-06.md`. Authors reference notes as inline pandoc footnotes (`[^id]` … `[^id]: …`) in passage markdown; today the codex0 profile renders them as bottom-of-page footnotes. Luis wants them to collect into a single back-matter Notes section, auto-numbered in reading order, with **no manifest edit and no per-note bookkeeping**. Atrium side is already in place — `backmatter/01_notes_endnotes_placeholder.md` carries a guarded `\ifdefined\theendnotes\begingroup\renewcommand{\notesname}{}\theendnotes\endgroup\fi` print sink that stays inert until the OF preamble defines `\theendnotes`. OF-side patch is minimal: in `profiles/40_latex_import/templates/codex0.tex` (or as `header-includes` in `codex0.yaml`),
+
+```latex
+\usepackage{endnotes}
+\let\footnote\endnote
+```
+
+Notes: manifest-level `header-includes` cannot ride through — the `_guard_manifest_variables` allowlist intentionally rejects list-valued / LaTeX-control-token variables — so the preamble must live in the profile/template. Codex0 renders under lualatex (verify `endnotes` works there — it does). Composition filter (`filters/codex0_composition.lua`) interaction should be verified via a Part IX ch.2 probe (that passage has 6 real `[^18b-*]` footnotes, the fastest live check). The remap is global, so any `\footnote` in future frontmatter also becomes an endnote. `\theendnotes` placement stays Atrium-owned (inside `01_notes_endnotes_placeholder.md`) — do NOT put `\theendnotes` in the template.
+
+**8b. Backmatter-source wiring in the bridge.** The current spine→bundle bridge only reads `spine[].chapters[].passages[]`; it has no notion of backmatter. To include the backmatter files above (including the endnotes sink), the bridge needs one of:
+- a `--backmatter-dir <path>` CLI flag that reads all `.md` files from a dir in sorted filename order and appends them as `sources[]` with `role: appendix`;
+- or a `--backmatter <path>` flag (repeatable) for explicit file selection;
+- eventually, a first-class `backmatter:` array in `codex0_spine_manifest_v0` so backmatter is spine-authoritative like the body.
+
+MVP is the CLI flag; spine-schema promotion is a follow-up. Backmatter sources render after the body and before the auto-emitted provenance block. Numbering strategy stays `section_dividers` — backmatter files have their own `# Notes` / `# Glossary` etc. H1 headings.
+
+**Acceptance (8a):** probe-render Part IX ch.2 (or the full book) via the codex0 bundle manifest with `--backmatter-dir` including at least `01_notes_endnotes_placeholder.md`, and confirm:
+1. the six `[^18b-*]` footnotes no longer print at the bottom of their pages,
+2. they appear as a numbered list in the back-matter Notes section under the single `# Notes` heading, in reading order,
+3. hyperref links (if active) work forward from body to notes and back.
+
 ## v5-specific consumers to keep in view
 
 - **Part X (`10_witnesses_and_plates`)** is the plate chain: literal images of two-way artifacts in chronological order, minimal exposition (dateline + one-line caption), order authority `21_letters_and_creative/book/codex0/timelines/codex0_letters_and_two_way_artifacts_timeline_2026-07-01.md`. It is the primary stress test for items 2–4. Some artifacts also render as inline plates in their home chapters (a card, a set of synthesis pages) — same-artifact repetition to reconcile at wiring.
@@ -110,10 +146,11 @@ The hybrid path (parindent=0 inside Codex composition envs) remains available if
 
 ## Suggested starting sequence
 
-1. Item 1 (spine→codex_bundle bridge) — get a real Foundry render of v5 and a profile-accurate page count; this validates the pipeline end-to-end. Item 7 (indentation) is a natural companion here: the first full render is where the `\\`-litany raggedness will show up everywhere, so settle the paragraph model at the same time.
-2. Item 4 + 3 (divider tagging → stock/furnish map) on the 11 part dividers — smallest real cardstock case.
-3. Item 2 (signature-aware plate placement) with Part X as the proving ground.
-4. Items 5–6 fold in as the render matures toward an actual recipient edition.
+1. Item 1 (spine→codex_bundle bridge) — get a real Foundry render of v5 and a profile-accurate page count; this validates the pipeline end-to-end. Item 7 (indentation) is a natural companion here: the first full render is where the `\\`-litany raggedness will show up everywhere, so settle the paragraph model at the same time. **(Landed 2026-07-05; item 5 wiring, item 7 paragraph model, and three front-matter fixes shipped.)**
+2. Item 8 (back-matter apparatus) — endnotes wiring + bridge backmatter-source hook. Small, self-contained, unlocks reader-facing whole-book renders that include Notes / How This Book Was Made / etc.
+3. Item 4 + 3 (divider tagging → stock/furnish map) on the 11 part dividers — smallest real cardstock case.
+4. Item 2 (signature-aware plate placement) with Part X as the proving ground.
+5. Item 6 folds in as the render matures toward an actual recipient edition.
 
 ## Open design questions
 
@@ -126,5 +163,6 @@ The hybrid path (parindent=0 inside Codex composition envs) remains available if
 ## Notes
 
 - `42_optical_foundry` is a git submodule (`gitdir: ../.git/modules/42_optical_foundry`); commits here are submodule commits, separate from the canon repo. No active validation hook in the submodule, but match the docs' Atrium frontmatter convention.
-- The v4 pandoc probe (throwaway, uncommitted, `/tmp`) landed ~322 flowing / ~370 passage-broken pages at half-letter 11pt; realistic finished ~400pp with front matter, dividers, plates, and the real `codex0_handbound` illumination margins. The first Foundry render should replace this number.
+- The v4 pandoc probe (throwaway, uncommitted, `/tmp`) landed ~322 flowing / ~370 passage-broken pages at half-letter 11pt; realistic finished ~400pp with front matter, dividers, plates, and the real `codex0_handbound` illumination margins. **The first Foundry v4 render (2026-07-05) landed at 450 pages: title page, colophon on title verso, TOC, 108 body passages with 21 johannah-edition variants selected, 48 LER callouts stripped, zero warnings.**
 - v4 is tagged `codex0-v4-complete-2026-07-05` for a pinned source snapshot if a v4 render is ever wanted.
+- **2026-07-06: v5 is complete and is now the primary render target.** V4 remains as a pinned baseline. Future renders should point the bridge at `21_letters_and_creative/book/codex0_v5/manifests/codex0-v5-spine-working-*.yaml`.
