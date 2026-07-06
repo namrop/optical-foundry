@@ -27,6 +27,13 @@ from engine.codex_editions import (
 )
 from engine.d2 import D2RenderError, preprocess_d2_blocks
 from engine.graphviz import GraphvizRenderError, preprocess_graphviz_blocks
+from engine.furnish import (
+    build_page_to_stock,
+    compute_furnish,
+    extract_divider_page_map,
+    write_furnish_json,
+    write_furnish_text,
+)
 from engine.imposition import ImpositionError, impose_pdf
 from engine.bindery_preflight import generate_bindery_preflight
 from engine.emoji_substitution import preprocess_emoji_substitutions
@@ -306,7 +313,8 @@ class PandocRenderer(Renderer):
                 "error": str(exc),
                 "layout": str(imposition.get("layout", "booklet_signature_2up")),
             }
-        return {
+        furnish_summary = self._emit_furnish_map(plan, output_pdf, Path(result.mapping_json))
+        payload: dict[str, Any] = {
             "status": "ok",
             "layout": str(imposition.get("layout", "booklet_signature_2up")),
             "input_pdf": str(output_pdf),
@@ -320,6 +328,50 @@ class PandocRenderer(Renderer):
             "output_pages": result.output_pages,
             "padded_pages": result.padded_pages,
             "blank_count": result.blank_count,
+        }
+        if furnish_summary is not None:
+            payload["furnish"] = furnish_summary
+        return payload
+
+    def _emit_furnish_map(
+        self, plan: ProjectionPlan, output_pdf: Path, imposition_mapping_path: Path,
+    ) -> dict[str, Any] | None:
+        """Compute + write .furnish.json + .furnish.txt next to the imposition mapping.
+
+        Extracts `[[OFDIV:<uid>]]` marker pages from the rendered PDF, joins to
+        the divider inventory in boundary_assertions, walks the imposition
+        mapping, and emits the furnish sidecars. Returns a small summary for
+        the render evidence; returns None if there's no divider inventory or
+        the imposition mapping is unreadable.
+        """
+        boundary = plan.boundary_assertions or {}
+        divider_inventory = boundary.get("section_dividers") or []
+        if not divider_inventory:
+            return None
+        try:
+            mapping = json.loads(imposition_mapping_path.read_text())
+        except (OSError, json.JSONDecodeError):
+            return None
+        page_map = extract_divider_page_map(output_pdf)
+        total_pages = int(mapping.get("padded_pages", 0) or 0)
+        page_to_stock = build_page_to_stock(total_pages, page_map, divider_inventory)
+        furnish = compute_furnish(
+            mapping,
+            page_to_stock,
+            input_pdf=output_pdf,
+            imposition_mapping_path=imposition_mapping_path,
+            divider_page_map=page_map,
+        )
+        furnish_json = imposition_mapping_path.with_suffix(".furnish.json")
+        furnish_txt = imposition_mapping_path.with_suffix(".furnish.txt")
+        write_furnish_json(furnish, furnish_json)
+        write_furnish_text(furnish, furnish_txt)
+        return {
+            "furnish_json": str(furnish_json),
+            "furnish_txt": str(furnish_txt),
+            "divider_page_map_count": len(page_map),
+            "stock_summary": dict(furnish.stock_summary),
+            "warning_count": len(furnish.warnings),
         }
 
     def _prepare_codex_edition_source(

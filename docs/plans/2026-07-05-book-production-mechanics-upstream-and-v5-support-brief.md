@@ -147,9 +147,9 @@ MVP is the CLI flag; spine-schema promotion is a follow-up. Backmatter sources r
 ## Suggested starting sequence
 
 1. Item 1 (spine→codex_bundle bridge) — get a real Foundry render of v5 and a profile-accurate page count; this validates the pipeline end-to-end. Item 7 (indentation) is a natural companion here: the first full render is where the `\\`-litany raggedness will show up everywhere, so settle the paragraph model at the same time. **(Landed 2026-07-05; item 5 wiring, item 7 paragraph model, and three front-matter fixes shipped.)**
-2. Item 8 (back-matter apparatus) — endnotes wiring + bridge backmatter-source hook. Small, self-contained, unlocks reader-facing whole-book renders that include Notes / How This Book Was Made / etc.
-3. Item 4 + 3 (divider tagging → stock/furnish map) on the 11 part dividers — smallest real cardstock case.
-4. Item 2 (signature-aware plate placement) with Part X as the proving ground.
+2. Item 8 (back-matter apparatus) — endnotes wiring + bridge backmatter-source hook. Small, self-contained, unlocks reader-facing whole-book renders that include Notes / How This Book Was Made / etc. **(Landed 2026-07-06.)**
+3. Item 4 + 3 (divider tagging → stock/furnish map) on the 11 part dividers — smallest real cardstock case. **(Landed 2026-07-06: `section_dividers[].stock` + `print_image` propagate to evidence, bridge exposes `--part-divider-stock` / `--chapter-divider-stock`, `engine/furnish.py` computes per-sheet-side stock via `[[OFDIV:<uid>]]` marker extraction against `.imposition.json`, and the renderer writes `.furnish.json` + `.furnish.txt` next to the imposed PDF. First v5 cardstock render lands 11 part dividers on 22 sheet-sides of 244 total; each cardstock sheet-side is flagged mixed because saddle-stitch imposition pairs each cardstock leaf with a text-stock leaf — expected, and now visible to the print shop / hand-binder.)**
+4. Item 2 (signature-aware plate placement) with Part X as the proving ground. Item 3's marker + furnish infrastructure is the input.
 5. Item 6 folds in as the render matures toward an actual recipient edition.
 
 ## Open design questions

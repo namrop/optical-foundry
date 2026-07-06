@@ -323,6 +323,8 @@ def _frontmatter_to_markdown(frontmatter: dict[str, Any], body: str) -> str:
     return f"---\n{fm_yaml}\n---{separator}{body}"
 
 
+SUPPORTED_DIVIDER_STOCKS = {"text", "cardstock", "specialty"}
+
 DOCUMENT_MATTER_ROLE_ALIASES = {
     "document_source": "document_source",
     "document": "document_source",
@@ -519,6 +521,9 @@ def _section_divider_inventory_entry(
 ) -> dict[str, Any]:
     before_uid, before_order = _resolved_section_divider_target(divider, sources_by_uid, sources_by_order)
     source_cfg = divider.get("source") if isinstance(divider.get("source"), dict) else None
+    stock = str(divider.get("stock", "") or "").strip().lower() or "text"
+    if stock not in SUPPORTED_DIVIDER_STOCKS:
+        stock = "text"
     entry = {
         "uid": divider.get("uid", ""),
         "before_source_uid": before_uid,
@@ -527,6 +532,8 @@ def _section_divider_inventory_entry(
         "force_right_page": divider.get("force_right_page", True) is not False,
         "blank_after": divider.get("blank_after", False) is True,
         "background_image": str(divider.get("background_image", "") or ""),
+        "stock": stock,
+        "print_image": str(divider.get("print_image", "") or ""),
     }
     entry.update(_section_divider_profile_fields(divider))
     running_text_entry = _running_text_inventory_entry(divider.get("uid", ""), divider)
@@ -539,6 +546,24 @@ def _section_divider_inventory_entry(
 
 def _section_divider_start_lines(divider: dict[str, Any]) -> list[str]:
     lines = ["\\OFEnsureRightPage" if divider.get("force_right_page", True) is not False else "\\clearpage"]
+    # Invisible-in-body furnish marker. Post-render, engine/furnish.py extracts
+    # `[[OFDIV:<uid>]]` strings via pdftotext to know which PDF page each
+    # divider lands on; combined with the divider's stock tag this drives the
+    # per-sheet furnish map. Emitted verbatim (no \OFDividerFurnishLabel macro)
+    # so profiles that don't ship the macro still work.
+    uid = str(divider.get("uid", "") or "").strip()
+    if uid:
+        # Invisible furnish marker. Post-render, engine/furnish.py extracts
+        # `[[OFDIV:<uid>]]` via pdftotext to know which PDF page each divider
+        # lands on. Uses `\begingroup ... \endgroup` explicitly rather than
+        # `{...}` because pandoc's raw_tex extension strips the outer literal
+        # braces when reading the line as raw LaTeX, which would leak
+        # \fontsize{1}{1} into the rest of the document. \detokenize{} keeps
+        # underscores + other TeX-special chars in the uid from tripping text
+        # mode ("Missing $ inserted").
+        lines.append(
+            f"\\begingroup\\fontsize{{1}}{{1}}\\selectfont\\hbox{{\\detokenize{{[[OFDIV:{uid}]]}}}}\\endgroup"
+        )
     background_image = divider.get("background_image")
     if background_image:
         lines.append(f"\\OFSectionDividerBackground{{{background_image}}}")
@@ -1192,6 +1217,7 @@ class CompositeBundleCompiler(ManifestCompiler):
             numbersections=render_cfg.get("numbersections", True),
             page_size=page_size,
             page_margins=page_margins,
+            delivery=_delivery_cfg,
             assembly=assembly,
             source_inventory=[
                 {

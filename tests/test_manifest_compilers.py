@@ -630,6 +630,36 @@ def test_composite_bundle_accepts_manifest_variables_and_writes_frontmatter():
     assert "not_allowlisted" not in fm
 
 
+def test_composite_bundle_records_divider_stock_and_print_image():
+    """section_dividers[].stock and .print_image reach the section_dividers
+    evidence inventory. Unknown/absent stock values default to `text`.
+    """
+    compiler = CompositeBundleCompiler()
+    manifest = {
+        "kind": "composite_bundle", "schema_version": "bundle_manifest_v1",
+        "bundle_id": "stock-bundle", "profile": "cam",
+        "sources": [
+            {"uid": "s1", "path": str(SRC / "source-001.md"), "role": "primary_anchor", "order": 1},
+            {"uid": "s2", "path": str(SRC / "source-002.md"), "role": "supporting_anchor", "order": 2},
+            {"uid": "s3", "path": str(SRC / "source-003.md"), "role": "supporting_anchor", "order": 3},
+        ],
+        "section_dividers": [
+            {"uid": "d-card", "before_source_uid": "s1", "title": "Part I", "stock": "cardstock",
+             "print_image": "assets/dividers/part_i_bg.png"},
+            {"uid": "d-text", "before_source_uid": "s2", "title": "Chapter A"},  # defaults to text
+            {"uid": "d-unknown", "before_source_uid": "s3", "title": "Section B", "stock": "papyrus"},
+        ],
+    }
+    plan = compiler.compile(manifest)
+    inv = {entry["uid"]: entry for entry in plan.boundary_assertions["section_dividers"]}
+    assert inv["d-card"]["stock"] == "cardstock"
+    assert inv["d-card"]["print_image"] == "assets/dividers/part_i_bg.png"
+    assert inv["d-text"]["stock"] == "text"
+    assert inv["d-text"]["print_image"] == ""
+    # Unknown stock silently normalizes to text.
+    assert inv["d-unknown"]["stock"] == "text"
+
+
 def test_composite_bundle_emits_bound_colophon_at_body_start():
     """A bound bundle with delivery.colophon.enabled + placement=title_verso
     prepends the colophon raw-LaTeX block to the assembled body. When include_toc
@@ -1037,6 +1067,8 @@ def test_composite_bundle_inserts_source_backed_section_divider_before_source_or
             "force_right_page": True,
             "blank_after": False,
             "background_image": "",
+            "stock": "text",
+            "print_image": "",
             "source_path": str(SRC / "source-003.md"),
         }
     ]

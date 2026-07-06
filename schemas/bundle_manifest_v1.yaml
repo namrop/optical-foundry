@@ -200,6 +200,25 @@ properties:
         background_image:
           type: string
           description: Relative PNG/JPG/PDF background image for the divider page.
+        stock:
+          type: string
+          enum: [text, cardstock, specialty]
+          default: text
+          description: >
+            Physical print stock the divider is intended to land on. `text` is the
+            default text-block stock; `cardstock` marks the divider for a heavier
+            stock (e.g. part-opener cards); `specialty` is a catch-all for other
+            named stocks. Consumed by the furnish map (see docs/plans/2026-07-05
+            book-production brief §3) so imposition can flag which physical
+            sheets need alternate stock loaded on the printer.
+        print_image:
+          type: string
+          description: >
+            Optional relative PNG/JPG/PDF path to print on this divider's stock
+            (typically used when stock != text and the divider is a plate rather
+            than a title/epigraph page). Independent of `background_image`:
+            print_image is the divider content, background_image is decorative
+            behind divider content. Both may be set.
         force_right_page:
           type: boolean
           default: true
