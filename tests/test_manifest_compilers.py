@@ -630,6 +630,79 @@ def test_composite_bundle_accepts_manifest_variables_and_writes_frontmatter():
     assert "not_allowlisted" not in fm
 
 
+def test_composite_bundle_emits_bound_colophon_at_body_start():
+    """A bound bundle with delivery.colophon.enabled + placement=title_verso
+    prepends the colophon raw-LaTeX block to the assembled body. When include_toc
+    is on, `\\tableofcontents` is emitted immediately after the colophon and the
+    template-side TOC is disabled (ProjectionPlan.toc=False) so the final
+    output order is: template title → body[colophon → TOC → content].
+    A title-verso colophon fills the verso, so titlepage_blank_after is dropped.
+    """
+    compiler = CompositeBundleCompiler()
+    manifest = {
+        "kind": "composite_bundle", "schema_version": "bundle_manifest_v1",
+        "bundle_id": "colophon-bundle", "profile": "cam",
+        "presentation": {
+            "title": "Test Bundle",
+            "title_page": {"enabled": True, "blank_after": True},
+        },
+        "sources": [
+            {"uid": "fixture-src-001", "path": str(SRC / "source-001.md"), "role": "primary_anchor", "order": 1},
+        ],
+        "render": {
+            "include_toc": True,
+            "delivery": {
+                "mode": "bound",
+                "colophon": {"enabled": True, "placement": "title_verso"},
+            },
+        },
+    }
+    plan = compiler.compile(manifest)
+    assert plan.boundary_assertions["delivery_colophon_emitted"] is True
+    # Template-side TOC is disabled because we emit \tableofcontents in body.
+    assert plan.toc is False
+
+    body = plan.render_source.read_text()
+    fm_end = body.find("\n---\n", 4)
+    body_after_fm = body[fm_end + len("\n---\n"):]
+    # Colophon LaTeX block appears at the very start of body.
+    assert body_after_fm.lstrip().startswith("```{=latex}")
+    assert "\\OFBoundColophon" in body_after_fm
+    assert "Production Colophon" in body_after_fm
+    # \tableofcontents follows the colophon block in body.
+    colophon_end = body_after_fm.find("```\n", body_after_fm.find("```{=latex}") + 1)
+    assert colophon_end > 0
+    after_colophon = body_after_fm[colophon_end:]
+    assert "\\tableofcontents" in after_colophon[:200], (
+        f"\\tableofcontents must appear right after the colophon block; got: {after_colophon[:200]!r}"
+    )
+    # Title-verso colophon fills the verso — the intentional blank must be off.
+    fm = body[4:fm_end]
+    assert "titlepage_blank_after: true" not in fm.lower()
+
+
+def test_composite_bundle_colophon_disabled_leaves_variable_absent():
+    """No colophon variable is emitted when the delivery config doesn't ask for it."""
+    compiler = CompositeBundleCompiler()
+    manifest = {
+        "kind": "composite_bundle", "schema_version": "bundle_manifest_v1",
+        "bundle_id": "no-colophon-bundle", "profile": "cam",
+        "sources": [
+            {"uid": "fixture-src-001", "path": str(SRC / "source-001.md"), "role": "primary_anchor", "order": 1},
+        ],
+        "render": {
+            "delivery": {
+                "mode": "bound",
+                "colophon": {"enabled": False},
+            },
+        },
+    }
+    plan = compiler.compile(manifest)
+    assert plan.boundary_assertions["delivery_colophon_emitted"] is False
+    body = plan.render_source.read_text()
+    assert "OFBoundColophon" not in body
+
+
 def test_composite_bundle_render_page_size_accepts_half_letter_alias():
     compiler = CompositeBundleCompiler()
     manifest = {

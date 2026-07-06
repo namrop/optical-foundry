@@ -8,6 +8,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from engine.codex_editions import (  # noqa: E402
     CodexEditionRenderError,
+    _normalize_thematic_breaks,
+    _strip_editorial_callouts,
     edition_from_source_frontmatter,
     preprocess_codex_edition_blocks,
 )
@@ -352,3 +354,55 @@ def test_pandoc_renderer_leaves_other_renders_without_markers_unchanged(tmp_path
 
     assert prepared.render_source == src
     assert prepared.boundary_assertions == {}
+
+
+def test_normalize_thematic_breaks_rewrites_dashes_to_stars():
+    """Standalone `---` lines become `* * *` so Pandoc's yaml_metadata_block
+    extension does not mistake them for the start of a YAML metadata block.
+    """
+    text = "Some prose.\n\n---\n\nMore prose.\n"
+    result = _normalize_thematic_breaks(text)
+    assert "---" not in result
+    assert "* * *" in result
+
+
+def test_normalize_thematic_breaks_preserves_leading_frontmatter():
+    """The top-level YAML frontmatter block must not be rewritten — its opening
+    `---` and closing `---` are metadata sentinels, not thematic breaks.
+    """
+    text = "---\ntitle: Test\ncodex_edition: johannah\n---\n\nBody prose.\n\n---\n\nAfter thematic break.\n"
+    result = _normalize_thematic_breaks(text)
+    assert result.startswith("---\ntitle: Test")
+    assert "\n---\n\nBody prose." in result  # frontmatter close preserved
+    assert "* * *" in result  # body thematic break normalized
+    assert result.count("---") == 2  # only the frontmatter delimiters remain
+
+
+def test_normalize_thematic_breaks_leaves_fenced_code_alone():
+    """A `---` inside a fenced code block is code content, not a thematic break."""
+    text = "Before.\n\n```\n---\nyaml: sample\n---\n```\n\n---\n\nAfter.\n"
+    result = _normalize_thematic_breaks(text)
+    # The `---` inside the code fence stays; the `---` outside becomes `* * *`.
+    assert "---\nyaml: sample\n---" in result
+    assert "* * *" in result
+
+
+def test_strip_editorial_callouts_normalizes_adjacent_thematic_breaks(tmp_path):
+    """The concrete regression this guards: an editorial callout adjacent to a
+    `---` thematic break, when stripped, would leave a bare `---` that Pandoc
+    parsed as the start of a YAML metadata block and failed rendering. The
+    stripper now normalizes such `---` to `* * *`.
+    """
+    text = (
+        "Opening paragraph.\n\n"
+        "> [!note] LER: an editorial correction here.\n"
+        "> Continues in blockquote.\n\n"
+        "---\n\n"
+        "**Following section** with prose.\n"
+    )
+    stripped, count = _strip_editorial_callouts(text)
+    assert count == 1
+    assert "LER:" not in stripped
+    assert "---" not in stripped  # thematic break normalized away
+    assert "* * *" in stripped
+    assert "**Following section**" in stripped

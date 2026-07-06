@@ -1121,7 +1121,45 @@ class CompositeBundleCompiler(ManifestCompiler):
                 for fig in figures:
                     lines.append(f"- {fig.get('caption', fig.get('path', 'unknown'))}: `{fig.get('path', '?')}`")
 
+        # Bundle-family title-verso colophon. Emit the colophon fenced-LaTeX
+        # block at the very start of the assembled body and, when a TOC is
+        # requested, emit `\tableofcontents` immediately after so the running
+        # order is: template title → body[colophon → TOC → content]. Pandoc's
+        # own --toc (via ProjectionPlan.toc / template `$if(toc)$`) is turned
+        # off in that case so the TOC isn't rendered twice. The colophon fills
+        # the title verso, so titlepage_blank_after is dropped (an intentional
+        # blank there would push the colophon off the verso).
+        delivery_colophon_emitted = False
+        _delivery_cfg = render_cfg.get("delivery", {}) if isinstance(render_cfg, dict) else {}
+        _colophon_cfg = _delivery_cfg.get("colophon", {}) if isinstance(_delivery_cfg.get("colophon"), dict) else {}
+        _colophon_active = (
+            _delivery_cfg.get("mode") == "bound"
+            and _colophon_cfg.get("enabled")
+            and _colophon_cfg.get("placement", "title_verso") == "title_verso"
+        )
+        _bundle_toc_via_body = False
+        prelude_lines: list[str] = []
+        if _colophon_active:
+            prelude_lines.append(bound_colophon_block(
+                title=str(title) if title is not None else "",
+                author=", ".join(authors) if authors else "",
+                date=str(date) if date is not None else "",
+                render_id=str(bundle_id),
+                delivery=_delivery_cfg,
+            ))
+            prelude_lines.append("")
+            if render_cfg.get("include_toc", True):
+                prelude_lines.append("```{=latex}")
+                prelude_lines.append("\\tableofcontents")
+                prelude_lines.append("\\clearpage")
+                prelude_lines.append("```")
+                prelude_lines.append("")
+                _bundle_toc_via_body = True
+            delivery_colophon_emitted = True
+
         assembled_content = "\n".join(lines)
+        if prelude_lines:
+            assembled_content = "\n".join(prelude_lines) + "\n" + assembled_content
         # Merge title-page variables and bundle-level manifest variables into a
         # single frontmatter block. Both surfaces write to top-level keys AND
         # under `variables:` so downstream readers (edition_from_source_frontmatter,
@@ -1130,6 +1168,8 @@ class CompositeBundleCompiler(ManifestCompiler):
             **accepted_title_page_variables,
             **accepted_manifest_variables,
         }
+        if _colophon_active:
+            merged_frontmatter_variables.pop("titlepage_blank_after", None)
         if merged_frontmatter_variables:
             frontmatter = {
                 **merged_frontmatter_variables,
@@ -1147,7 +1187,7 @@ class CompositeBundleCompiler(ManifestCompiler):
             subtitle=subtitle,
             author=", ".join(authors),
             date=date,
-            toc=render_cfg.get("include_toc", True),
+            toc=(False if _bundle_toc_via_body else render_cfg.get("include_toc", True)),
             toc_depth=render_cfg.get("toc_depth", 3),
             numbersections=render_cfg.get("numbersections", True),
             page_size=page_size,
@@ -1183,6 +1223,7 @@ class CompositeBundleCompiler(ManifestCompiler):
                 "rejected_title_page_variables": rejected_title_page_variables,
                 "accepted_manifest_variables": sorted(accepted_manifest_variables.keys()),
                 "rejected_manifest_variables": rejected_manifest_variables,
+                "delivery_colophon_emitted": delivery_colophon_emitted,
                 "section_divider_numbering": section_divider_numbering,
                 "section_dividers_enabled": bool(section_divider_inventory),
                 "section_divider_count": len(section_divider_inventory),

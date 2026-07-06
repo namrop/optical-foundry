@@ -418,6 +418,12 @@ def _strip_editorial_callouts(text: str) -> tuple[str, int]:
     This is intentionally broad for reader-facing Codex proofing: any blockquote
     beginning `> [!kind]` and its immediately following blockquote lines are
     removed. Ordinary non-callout blockquotes are preserved.
+
+    Also normalizes surviving `---` thematic-break lines to `* * *`. Removing a
+    callout can leave a bare `---` on a line adjacent to blank lines, and
+    Pandoc's yaml_metadata_block extension will then parse that `---` as the
+    start of a YAML metadata block and fail on the next line. `* * *` is an
+    equivalent Markdown thematic break with no YAML ambiguity.
     """
 
     lines = text.splitlines(keepends=True)
@@ -433,7 +439,67 @@ def _strip_editorial_callouts(text: str) -> tuple[str, int]:
             continue
         out.append(lines[i])
         i += 1
-    return "".join(out), stripped
+    result = "".join(out)
+    result = _normalize_thematic_breaks(result)
+    return result, stripped
+
+
+def _normalize_thematic_breaks(text: str) -> str:
+    """Rewrite standalone `---` thematic-break lines to `* * *`.
+
+    Pandoc's yaml_metadata_block extension treats a line of exactly `---`
+    (preceded by a blank line, terminated by `---` or `...`) as the start of a
+    YAML metadata block. Body-level thematic breaks that use `---` therefore
+    collide with the extension in assembled intermediates. `* * *` renders as
+    the same thematic break in Pandoc output but is never a YAML sentinel.
+
+    Preserves fenced code blocks (``` and ~~~ fenced regions) verbatim and
+    skips a leading YAML frontmatter block if present so top-level manifest
+    metadata is left alone.
+    """
+    out_lines: list[str] = []
+    lines = text.splitlines()
+    idx = 0
+    total = len(lines)
+
+    # Preserve a leading YAML frontmatter block (from the caller's own metadata
+    # injection) — that opening `---` and its closing `---` are not thematic
+    # breaks and must not be touched.
+    if total > 0 and lines[0].strip() == "---":
+        out_lines.append(lines[0])
+        idx = 1
+        while idx < total:
+            out_lines.append(lines[idx])
+            if lines[idx].strip() in ("---", "..."):
+                idx += 1
+                break
+            idx += 1
+
+    in_fence: str | None = None
+    while idx < total:
+        line = lines[idx]
+        stripped_line = line.strip()
+        if in_fence is None:
+            if stripped_line.startswith("```"):
+                in_fence = "```"
+                out_lines.append(line)
+                idx += 1
+                continue
+            if stripped_line.startswith("~~~"):
+                in_fence = "~~~"
+                out_lines.append(line)
+                idx += 1
+                continue
+            if stripped_line == "---":
+                out_lines.append("* * *")
+                idx += 1
+                continue
+        else:
+            if stripped_line.startswith(in_fence):
+                in_fence = None
+        out_lines.append(line)
+        idx += 1
+    return "\n".join(out_lines) + ("\n" if text.endswith("\n") else "")
 
 
 def _format_editorial_callouts(text: str) -> tuple[str, int]:

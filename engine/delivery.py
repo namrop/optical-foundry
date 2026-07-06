@@ -211,11 +211,16 @@ def delivery_boundary(delivery: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def bound_colophon_block(*, title: str, author: str, date: str, render_id: str, delivery: dict[str, Any]) -> str:
-    """Return raw LaTeX for a simple title-verso colophon page."""
+def _bound_colophon_latex_only(*, title: str, author: str, date: str, render_id: str, delivery: dict[str, Any]) -> str:
+    """Return the raw LaTeX body of a title-verso colophon, without markdown fences.
 
+    Callers that need the LaTeX for a Pandoc template variable (e.g. a bundle
+    render whose template renders the colophon before its TOC block) should use
+    this function directly. Callers that need to inject the colophon into the
+    Markdown body (e.g. markdown_document renders) should use
+    :func:`bound_colophon_block` which wraps this in a ``{=latex}`` fence.
+    """
     lines = [
-        "```{=latex}",
         "\\thispagestyle{empty}",
         "\\providecommand{\\OFBoundColophon}{}",
         "\\OFBoundColophon",
@@ -233,9 +238,23 @@ def bound_colophon_block(*, title: str, author: str, date: str, render_id: str, 
         "\\vspace*{\\fill}",
         "\\endgroup",
         "\\clearpage",
-        "```",
     ]
     return "\n".join(line for line in lines if line)
+
+
+def bound_colophon_block(*, title: str, author: str, date: str, render_id: str, delivery: dict[str, Any]) -> str:
+    """Return raw LaTeX for a simple title-verso colophon page, wrapped in a Markdown raw-LaTeX fence."""
+    inner = _bound_colophon_latex_only(
+        title=title, author=author, date=date, render_id=render_id, delivery=delivery
+    )
+    return "```{=latex}\n" + inner + "\n```"
+
+
+def bound_colophon_latex(*, title: str, author: str, date: str, render_id: str, delivery: dict[str, Any]) -> str:
+    """Public alias for :func:`_bound_colophon_latex_only` — no Markdown fence."""
+    return _bound_colophon_latex_only(
+        title=title, author=author, date=date, render_id=render_id, delivery=delivery
+    )
 
 
 def insert_title_verso_colophon(body: str, colophon_block: str) -> tuple[str, bool]:
