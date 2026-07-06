@@ -925,6 +925,14 @@ class CompositeBundleCompiler(ManifestCompiler):
         title_page_variables = _title_page_variables_from_presentation(pres)
         accepted_title_page_variables, rejected_title_page_variables = _guard_manifest_variables(title_page_variables)
 
+        # Bundle-level `variables:` (allowlisted). Enables Codex 0 editions
+        # (`codex_edition`, `codex_strip_editorial_callouts`) and other document
+        # variables to flow through a bundle render the same way they do for
+        # markdown_document manifests. Guarded through _guard_manifest_variables
+        # so only allowlisted keys reach the assembled intermediate.
+        raw_manifest_variables = manifest.get("variables", {}) if isinstance(manifest.get("variables", {}), dict) else {}
+        accepted_manifest_variables, rejected_manifest_variables = _guard_manifest_variables(raw_manifest_variables)
+
         sources = manifest.get("sources", [])
         figures = manifest.get("figures", [])
         section_dividers = manifest.get("section_dividers", [])
@@ -1114,10 +1122,18 @@ class CompositeBundleCompiler(ManifestCompiler):
                     lines.append(f"- {fig.get('caption', fig.get('path', 'unknown'))}: `{fig.get('path', '?')}`")
 
         assembled_content = "\n".join(lines)
-        if accepted_title_page_variables:
+        # Merge title-page variables and bundle-level manifest variables into a
+        # single frontmatter block. Both surfaces write to top-level keys AND
+        # under `variables:` so downstream readers (edition_from_source_frontmatter,
+        # Pandoc template variables) find them regardless of nesting preference.
+        merged_frontmatter_variables: dict[str, Any] = {
+            **accepted_title_page_variables,
+            **accepted_manifest_variables,
+        }
+        if merged_frontmatter_variables:
             frontmatter = {
-                **accepted_title_page_variables,
-                "variables": dict(accepted_title_page_variables),
+                **merged_frontmatter_variables,
+                "variables": dict(merged_frontmatter_variables),
             }
             assembled_content = _frontmatter_to_markdown(frontmatter, assembled_content)
         render_source = _write_temp_markdown(f"bundle_{bundle_id}", assembled_content)
@@ -1165,6 +1181,8 @@ class CompositeBundleCompiler(ManifestCompiler):
                 "page_margins_source": page_margins_source,
                 "accepted_title_page_variables": sorted(accepted_title_page_variables.keys()),
                 "rejected_title_page_variables": rejected_title_page_variables,
+                "accepted_manifest_variables": sorted(accepted_manifest_variables.keys()),
+                "rejected_manifest_variables": rejected_manifest_variables,
                 "section_divider_numbering": section_divider_numbering,
                 "section_dividers_enabled": bool(section_divider_inventory),
                 "section_divider_count": len(section_divider_inventory),

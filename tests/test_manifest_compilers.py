@@ -592,6 +592,44 @@ def test_composite_bundle_compile_produces_plan():
     assert plan.render_source.exists()
 
 
+def test_composite_bundle_accepts_manifest_variables_and_writes_frontmatter():
+    """Bundle-level manifest.variables must reach the assembled intermediate.
+
+    This is the item 5 wiring path — Codex 0 editions (codex_edition) are set
+    at bundle level and read by the codex edition preprocessor from the
+    assembled render source's YAML frontmatter. Non-allowlisted keys must be
+    rejected and reported.
+    """
+    compiler = CompositeBundleCompiler()
+    manifest = {
+        "kind": "composite_bundle", "schema_version": "bundle_manifest_v1",
+        "bundle_id": "variables-bundle", "profile": "cam",
+        "variables": {
+            "codex_edition": "johannah",
+            "codex_strip_editorial_callouts": True,
+            "not_allowlisted": "rejected",
+        },
+        "sources": [
+            {"uid": "fixture-src-001", "path": str(SRC / "source-001.md"), "role": "primary_anchor", "order": 1},
+        ],
+    }
+    plan = compiler.compile(manifest)
+    assert "codex_edition" in plan.boundary_assertions["accepted_manifest_variables"]
+    assert "codex_strip_editorial_callouts" in plan.boundary_assertions["accepted_manifest_variables"]
+    assert "not_allowlisted" in plan.boundary_assertions["rejected_manifest_variables"]
+
+    # Assembled intermediate must carry codex_edition in both top-level and
+    # under variables: so the codex edition preprocessor picks it up.
+    body = plan.render_source.read_text()
+    assert body.startswith("---")
+    fm_end = body.find("\n---\n", 4)
+    assert fm_end > 0
+    fm = body[4:fm_end]
+    assert "codex_edition: johannah" in fm
+    assert "codex_strip_editorial_callouts: true" in fm
+    assert "not_allowlisted" not in fm
+
+
 def test_composite_bundle_render_page_size_accepts_half_letter_alias():
     compiler = CompositeBundleCompiler()
     manifest = {
