@@ -156,6 +156,15 @@ MVP is the CLI flag; spine-schema promotion is a follow-up. Backmatter sources r
 - `<!-- cx0:rail -->` — outer-margin companion, via `\CodexRailCompanion` (recto/verso-aware under bound delivery, `\marginpar` fallback otherwise), pulling from the rail pool (RE01, RE03, RE04, RE06, RE08, RE09, B04, B08);
 - `<!-- cx0:landing -->` — pure vertical spacing, no ornament per the grammar.
 
+Each marker also accepts an optional `asset="ID"` attribute to pin a specific asset from the pool (matching the `.codex-*` div grammar's override syntax), and `asset="none"` to suppress the ornament while keeping the pause/spacing envelope:
+
+```markdown
+<!-- cx0:breath -->                  <!-- pool default, cycles -->
+<!-- cx0:breath asset="B09" -->      <!-- pinned to B09 -->
+<!-- cx0:breath asset="none" -->     <!-- suppressed, spacing only -->
+<!-- cx0:rail asset="RE04" -->       <!-- pinned rail companion -->
+```
+
 The vocabulary is extensible — one entry per new marker type in `inline_ornament_by_marker`. Verified end-to-end on v5 Swan Song passage (6 authored `<!-- cx0:breath -->` markers now render as B06/B09/T10/FH04/B01/B02 breath ornaments in reading order).
 
 ## Open design questions
