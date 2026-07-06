@@ -153,6 +153,33 @@ def _demote_headings(body: str, levels: int = 2) -> str:
     return re.sub(r"^(#{1,6})( .*)$", _demote, body, flags=re.MULTILINE)
 
 
+_CX0_MARKER_RE = re.compile(r"^\s*<!--\s*cx0:([\w-]+).*?-->\s*$")
+
+# cx0 markers that render a visible passage-level separator. A body opening with
+# one of these already carries its own break, so the compiler must not stack an
+# injected passage separator on top. Register/edition-selection markers
+# (`cx0:variant`, `cx0:edition`, `cx0:endvariant`) are invisible control markers
+# — they do NOT count as an authored separator, so a passage opening with one
+# still receives its injected boundary mark.
+_CX0_ORNAMENT_MARKERS = frozenset(
+    {"breath", "hinge", "major-hinge", "tailpiece", "threshold", "landing", "rule"}
+)
+
+
+def _body_opens_with_cx0_marker(body: str) -> bool:
+    """True if the first non-blank line of a source body is an authored cx0
+    ornament separator (e.g. `<!-- cx0:breath -->`). Used to avoid stacking a
+    compiler-inserted passage separator on top of an author's explicit one.
+    Invisible control markers (cx0:variant/edition) do not count."""
+    for line in body.lstrip().splitlines():
+        stripped = line.strip()
+        if not stripped:
+            continue
+        m = _CX0_MARKER_RE.match(stripped)
+        return bool(m and m.group(1) in _CX0_ORNAMENT_MARKERS)
+    return False
+
+
 def _write_temp_markdown(prefix: str, content: str) -> Path:
     """Write assembled Markdown to a named temp file and return its path."""
     fd, path = tempfile.mkstemp(suffix=".md", prefix=f"of_{prefix}_")
@@ -1154,7 +1181,20 @@ class CompositeBundleCompiler(ManifestCompiler):
             raw_text = src_path.read_text()
             fm, body = _split_frontmatter_and_body(raw_text)
 
-            lines.append("\\newpage")
+            # Per-source page break. A source may opt out (page_break_before:
+            # false) to flow continuously after the previous source — e.g. a
+            # chapter's continuation passages that breathe via a separator
+            # ornament instead of each starting a new page (Item 10). When the
+            # break is suppressed, emit the requested passage separator unless
+            # the body already opens with an authored cx0 ornament marker (the
+            # author's explicit marker wins, so we don't double the ornament).
+            if src.get("page_break_before", True):
+                lines.append("\\newpage")
+            else:
+                separator = src.get("passage_separator")
+                if separator and not _body_opens_with_cx0_marker(body):
+                    lines.append(f"<!-- cx0:{separator} -->")
+                    lines.append("")
             lines.extend(_running_text_override_lines(src))
             opener_cfg = src.get("chapter_opener")
             if isinstance(opener_cfg, dict):

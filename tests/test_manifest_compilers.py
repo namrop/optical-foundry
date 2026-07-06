@@ -4,7 +4,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from engine.manifest_compiler import CompositeBundleCompiler, CAMStackCompiler, CodexBundleCompiler, LabelRunCompiler, StickerSheetCompiler, ForgePacketReviewCompiler, MarkdownDocumentCompiler
-from engine.manifest_compiler import _inline_chapter_opener_lines
+from engine.manifest_compiler import _inline_chapter_opener_lines, _body_opens_with_cx0_marker
 from engine.projection_plan import ProjectionPlan
 
 GF = Path(__file__).resolve().parents[1]
@@ -1326,6 +1326,98 @@ def test_codex_bundle_compile_uses_bundle_semantics_with_codex_kind():
     assert plan.assembly.assembly_kind == "codex_bundle"
     assert plan.assembly.manifest_subtype == "codex_bundle"
     assert plan.boundary_assertions["manifest_subtype"] == "codex_bundle"
+
+
+def _codex_bundle_two_passages(tmp_path, *, second_body="Continuation passage.\n", second_extra=None):
+    p1 = tmp_path / "p1.md"
+    p1.write_text("First passage.\n")
+    p2 = tmp_path / "p2.md"
+    p2.write_text(second_body)
+    second = {
+        "uid": "src-p2", "path": str(p2), "role": "supporting_anchor", "order": 2,
+        "suppress_frontmatter": True, "include_frontmatter": "none",
+    }
+    if second_extra:
+        second.update(second_extra)
+    return {
+        "kind": "codex_bundle", "schema_version": "bundle_manifest_v1",
+        "bundle_id": "codex-boundary-smoke", "profile": "codex0",
+        "sources": [
+            {"uid": "src-p1", "path": str(p1), "role": "primary_anchor", "order": 1,
+             "suppress_frontmatter": True, "include_frontmatter": "none"},
+            second,
+        ],
+    }
+
+
+def _passage_body(assembled: str) -> str:
+    # Strip the compiler's provenance/evidence appendix (it carries its own
+    # \newpage) so page-break counts reflect only the passage flow.
+    marker = "# Provenance"
+    idx = assembled.find(marker)
+    if idx == -1:
+        return assembled
+    body = assembled[:idx].rstrip()
+    if body.endswith("\\newpage"):
+        body = body[: -len("\\newpage")]
+    return body
+
+
+def test_codex_bundle_passage_break_before_false_emits_hinge_separator(tmp_path):
+    manifest = _codex_bundle_two_passages(
+        tmp_path,
+        second_extra={"page_break_before": False, "passage_separator": "hinge"},
+    )
+    assembled = CodexBundleCompiler().compile(manifest).render_source.read_text()
+    # The continuation passage flows via a hinge marker instead of a page break.
+    assert "<!-- cx0:hinge -->" in assembled
+    # Only the first passage keeps its \newpage; the second does not add one.
+    assert _passage_body(assembled).count("\\newpage") == 1
+    assert "Continuation passage." in assembled
+
+
+def test_codex_bundle_page_break_before_true_keeps_newpage(tmp_path):
+    manifest = _codex_bundle_two_passages(tmp_path)  # no page_break_before → default True
+    assembled = CodexBundleCompiler().compile(manifest).render_source.read_text()
+    assert "<!-- cx0:hinge -->" not in assembled
+    assert _passage_body(assembled).count("\\newpage") == 2
+
+
+def test_codex_bundle_authored_leading_marker_suppresses_injected_separator(tmp_path):
+    manifest = _codex_bundle_two_passages(
+        tmp_path,
+        second_body="<!-- cx0:breath -->\n\nContinuation passage.\n",
+        second_extra={"page_break_before": False, "passage_separator": "hinge"},
+    )
+    assembled = CodexBundleCompiler().compile(manifest).render_source.read_text()
+    # Author's explicit breath wins; compiler does not stack a hinge on top.
+    assert "<!-- cx0:hinge -->" not in assembled
+    assert "<!-- cx0:breath -->" in assembled
+    assert _passage_body(assembled).count("\\newpage") == 1
+
+
+def test_codex_bundle_variant_opening_passage_still_gets_injected_separator(tmp_path):
+    manifest = _codex_bundle_two_passages(
+        tmp_path,
+        second_body='<!-- cx0:variant id="luis" -->\n\nContinuation passage.\n',
+        second_extra={"page_break_before": False, "passage_separator": "hinge"},
+    )
+    assembled = CodexBundleCompiler().compile(manifest).render_source.read_text()
+    # The variant marker is invisible control logic, not an authored separator,
+    # so the boundary hinge is still injected.
+    assert "<!-- cx0:hinge -->" in assembled
+    assert '<!-- cx0:variant id="luis" -->' in assembled
+
+
+def test_body_opens_with_cx0_marker():
+    assert _body_opens_with_cx0_marker("<!-- cx0:breath -->\n\nText.")
+    assert _body_opens_with_cx0_marker("\n\n  <!-- cx0:hinge asset=\"FH12\" -->\nText.")
+    assert not _body_opens_with_cx0_marker("Just prose.\n\n<!-- cx0:breath -->")
+    assert not _body_opens_with_cx0_marker("")
+    # Invisible register/edition control markers are NOT authored separators —
+    # a passage opening with one still gets its injected boundary mark.
+    assert not _body_opens_with_cx0_marker('<!-- cx0:variant id="luis" -->\n\nText.')
+    assert not _body_opens_with_cx0_marker("<!-- cx0:edition -->\n\nText.")
 
 
 def test_composite_bundle_compile_bad_manifest_raises():

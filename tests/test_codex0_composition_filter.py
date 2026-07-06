@@ -66,7 +66,7 @@ Then something turns.
     )
 
     assert "\\begin{CodexHingeBreak}{10}{0.90em}{1.00em}" in latex
-    assert "\\CodexBreakOrnament[0.40\\linewidth][0.25em]{assets/custom-hinge.png}" in latex
+    assert "\\CodexBreakOrnament[width=0.40\\linewidth][0.25em]{assets/custom-hinge.png}" in latex
     assert "\\CodexRailCompanion[0.42in]{assets/rail.png}" in latex
     assert "\\CodexEdgeCompanion[0.42in][anchor=paragraph,wrap=true,width=0.42in]{assets/edge.png}" in latex
 
@@ -217,14 +217,20 @@ A rail echo accompanies.
 """,
     )
 
-    assert "breath_01__B06__B06_single_star_breath" in latex
-    assert "\\CodexBreakOrnament[0.44\\linewidth][1\\baselineskip]" in latex
+    # Breath pool is Luis's 2026-07-06 curated cull; order is his intended
+    # weight sequence starting at legacy B09 → 2026-07-06 breath-09. Cursor
+    # cycling walks the pool in declared order; height-driven sizing normalizes
+    # rendered vertical footprint across mixed-provenance candidates.
     assert "breath_02__B09__B09_thread_pulse" in latex
+    assert "breath-09__B09__alpha_tight" in latex
+    assert "\\CodexBreakOrnament[height=1.7em][1\\baselineskip]" in latex
     assert "tailpiece_03__T01__T01_closing_vine_knot" in latex
     assert "breath_04__T05__T05_threaded_coda" in latex
-    assert "\\CodexBreakOrnament[0.44\\linewidth][2\\baselineskip]" in latex
+    # Hinge is also height-driven (passage-separator weight, tunable vs breath).
+    assert "\\CodexBreakOrnament[height=2.9em][2\\baselineskip]" in latex
     assert "seal_01__SM01__SM01_seal_mark" in latex
-    assert "\\CodexBreakOrnament[0.44\\linewidth][4\\baselineskip]" in latex
+    # Threshold stays width-driven.
+    assert "\\CodexBreakOrnament[width=0.44\\linewidth][4\\baselineskip]" in latex
     assert "\\CodexRailCompanion[0.50in]" in latex
     assert "rail_01__RE01__RE01_outer_rail_echo" in latex
 
@@ -304,3 +310,32 @@ def test_codex0_template_exposes_composition_macros_and_environments():
     assert "\\newenvironment{CodexEditorialNote}" in template
     assert "\\newenvironment{CodexWitness}" in template
     assert "\\providecommand{\\CodexSignal}" in template
+
+
+def test_codex_inline_rule_marker_lowers_to_centered_horizontal_rule(tmp_path):
+    latex = _pandoc_latex(
+        tmp_path,
+        """
+First passage.
+
+<!-- cx0:rule -->
+
+Continuation passage.
+""",
+    )
+
+    # Interim passage separator (Item 10): a plain centered typographic rule,
+    # no ornament asset.
+    assert "\\centering\\rule{0.22\\linewidth}{0.4pt}" in latex
+    assert "CodexBreakOrnament" not in latex
+
+
+def test_codex_inline_rule_marker_honors_width_and_thickness_overrides(tmp_path):
+    latex = _pandoc_latex(
+        tmp_path,
+        """
+<!-- cx0:rule width="0.4\\linewidth" thickness="0.8pt" -->
+""",
+    )
+
+    assert "\\rule{0.4\\linewidth}{0.8pt}" in latex
