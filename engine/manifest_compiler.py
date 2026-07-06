@@ -946,6 +946,17 @@ class CompositeBundleCompiler(ManifestCompiler):
         page_margins, page_margins_source = page_margins_from_mapping(
             render_cfg if isinstance(render_cfg, dict) else {}, scope="manifest.render"
         )
+        # Delivery-based margin fallback: mirrors MarkdownDocumentCompiler so
+        # a bundle manifest can express book margins via render.delivery.margins
+        # (the standard bound-delivery inner/outer/top/bottom surface) instead
+        # of duplicating them at render.margins. Only fires when render.margins
+        # was not set explicitly and delivery is bound.
+        _bundle_delivery = normalize_delivery(render_cfg, scope="render.delivery") if isinstance(render_cfg, dict) else {}
+        if page_margins_source == "default" and _bundle_delivery.get("mode") == "bound":
+            _bundle_delivery_margins = delivery_page_margins(_bundle_delivery)
+            if _bundle_delivery_margins:
+                page_margins = _bundle_delivery_margins
+                page_margins_source = "manifest.render.delivery"
         gen_cfg = manifest.get("generated", {})
         title_page_variables = _title_page_variables_from_presentation(pres)
         accepted_title_page_variables, rejected_title_page_variables = _guard_manifest_variables(title_page_variables)
