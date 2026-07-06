@@ -671,6 +671,80 @@ def _render_section_divider(divider: dict[str, Any], numbering_strategy: str = "
     return _render_generic_section_divider(divider, numbering_strategy=numbering_strategy)
 
 
+_CHAPTER_OPENER_FALLBACK_DEFS = [
+    "\\providecommand{\\OFChapterOpener}[1]{{\\par\\bigskip\\begingroup\\centering\\Large #1\\par\\endgroup\\medskip}}",
+    "\\providecommand{\\OFChapterOpenerEpigraph}[2]{{\\par\\bigskip\\begingroup\\centering\\Large #1\\par\\smallskip\\small\\itshape #2\\par\\endgroup\\medskip}}",
+    # Fallbacks so a non-codex0 profile can still render a codex-quote epigraph
+    # beneath the opener heading. codex0 defines richer versions; these only
+    # apply if the profile left them undefined. The attribution fallback mirrors
+    # codex0's empty-author handling (emdash+author when author present, else
+    # italic source), so source/date survive even without an author.
+    "\\providecommand{\\CodexQuoteAttribution}[3]{{\\par\\smallskip{\\raggedleft\\small"
+    "\\if\\relax\\detokenize{#1}\\relax\\if\\relax\\detokenize{#2}\\relax\\else\\emph{#2}\\fi"
+    "\\else\\textemdash{} #1\\if\\relax\\detokenize{#2}\\relax\\else, \\emph{#2}\\fi\\fi"
+    "\\if\\relax\\detokenize{#3}\\relax\\else\\ (#3)\\fi\\par}}}",
+    "\\ifdefined\\CodexQuoteBlock\\else\\newenvironment{CodexQuoteBlock}[3]{\\par\\medskip\\begin{quote}\\itshape}{\\end{quote}\\par\\medskip}\\fi",
+]
+
+
+def _inline_chapter_opener_epigraph_lines(epigraph: dict[str, Any]) -> list[str]:
+    """Lower a structured opener epigraph through the codex quote mechanism.
+
+    The epigraph line is pulled from the corpus of letters (one per chapter) and
+    rendered as a `CodexQuoteBlock` — the same italic quote env that fenced
+    `.codex-quote` divs lower to — with optional `\\CodexQuoteAttribution`. This
+    keeps the epigraph in the codex quote grammar rather than a bespoke macro.
+    """
+    text = str(epigraph.get("text") or "").strip()
+    if not text:
+        return []
+    author = _latex_escape_text(str(epigraph.get("author") or "").strip())
+    source = _latex_escape_text(str(epigraph.get("source") or "").strip())
+    date = _latex_escape_text(str(epigraph.get("date") or "").strip())
+    lines = [
+        "\\begin{CodexQuoteBlock}{4}{0.35em}{0.9em}",
+        _latex_escape_text(text),
+    ]
+    if author or source or date:
+        lines.append(f"\\CodexQuoteAttribution{{{author}}}{{{source}}}{{{date}}}")
+    lines.append("\\end{CodexQuoteBlock}")
+    return lines
+
+
+def _inline_chapter_opener_lines(opener: dict[str, Any]) -> list[str]:
+    """Render a chapter's inline opener at the top of its first passage page.
+
+    Replaces the former full-page chapter divider (Item 9, 2026-07-06). Emits a
+    visible heading (and optional epigraph) plus TOC / running-header plumbing,
+    but no page break of its own — the first passage's own `\\newpage` already
+    opens the chapter on a fresh page, so the opener simply headlines it.
+
+    The epigraph may be a mapping (`{text, author?, source?, date?}`, rendered
+    via the codex quote mechanism beneath the heading) or a plain string
+    (rendered via the profile-styled `\\OFChapterOpenerEpigraph` macro). The
+    `\\OFChapterOpener` macros are profile-styled (codex0 overrides them); the
+    fallback definitions emitted once upstream keep any profile safe.
+    """
+    title = str(opener.get("title") or "").strip()
+    if not title:
+        return []
+    escaped = _latex_escape_text(title)
+    lines = [
+        "\\phantomsection",
+        f"\\addcontentsline{{toc}}{{section}}{{{escaped}}}",
+        f"\\markboth{{{escaped}}}{{{escaped}}}",
+    ]
+    epigraph = opener.get("epigraph")
+    if isinstance(epigraph, dict):
+        lines.append(f"\\OFChapterOpener{{{escaped}}}")
+        lines.extend(_inline_chapter_opener_epigraph_lines(epigraph))
+    elif isinstance(epigraph, str) and epigraph.strip():
+        lines.append(f"\\OFChapterOpenerEpigraph{{{escaped}}}{{{_latex_escape_text(epigraph.strip())}}}")
+    else:
+        lines.append(f"\\OFChapterOpener{{{escaped}}}")
+    return lines
+
+
 def _title_page_variables_from_presentation(presentation: dict[str, Any]) -> dict[str, Any]:
     """Return canonical Pandoc variables for a bundle title-page surface."""
     title_page = presentation.get("title_page", {}) if isinstance(presentation, dict) else {}
@@ -1043,6 +1117,9 @@ class CompositeBundleCompiler(ManifestCompiler):
         frontmatter_seen = False
         mainmatter_started = False
         appendices_started = False
+        if any(isinstance(s.get("chapter_opener"), dict) for s in sorted_sources):
+            lines.extend(_CHAPTER_OPENER_FALLBACK_DEFS)
+            lines.append("")
         for src in sorted_sources:
             uid = src["uid"]
             src_role = src.get("role", "primary_anchor")
@@ -1079,6 +1156,12 @@ class CompositeBundleCompiler(ManifestCompiler):
 
             lines.append("\\newpage")
             lines.extend(_running_text_override_lines(src))
+            opener_cfg = src.get("chapter_opener")
+            if isinstance(opener_cfg, dict):
+                opener_lines = _inline_chapter_opener_lines(opener_cfg)
+                if opener_lines:
+                    lines.extend(opener_lines)
+                    lines.append("")
             if not suppress_source_wrapper_headings:
                 lines.append(f"# {src_title}")
 

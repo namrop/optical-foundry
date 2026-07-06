@@ -4,6 +4,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from engine.manifest_compiler import CompositeBundleCompiler, CAMStackCompiler, CodexBundleCompiler, LabelRunCompiler, StickerSheetCompiler, ForgePacketReviewCompiler, MarkdownDocumentCompiler
+from engine.manifest_compiler import _inline_chapter_opener_lines
 from engine.projection_plan import ProjectionPlan
 
 GF = Path(__file__).resolve().parents[1]
@@ -1031,6 +1032,38 @@ def test_composite_bundle_validates_running_header_footer_overrides():
 
     assert any("source[0] running_text.division contains unsafe LaTeX control text" in e for e in errors)
     assert any("section_divider[0] running_text.footer must be a scalar string" in e for e in errors)
+
+
+def test_inline_chapter_opener_bare_heading():
+    lines = _inline_chapter_opener_lines({"title": "Alpha One"})
+    assert "\\OFChapterOpener{Alpha One}" in lines
+    assert not any("CodexQuoteBlock" in ln for ln in lines)
+    assert any(ln.startswith("\\addcontentsline") for ln in lines)
+
+
+def test_inline_chapter_opener_dict_epigraph_uses_codex_quote():
+    lines = _inline_chapter_opener_lines({
+        "title": "Alpha One",
+        "epigraph": {
+            "text": "You are the room I keep returning to.",
+            "source": "Letter, first winter",
+            "date": "2019",
+        },
+    })
+    body = "\n".join(lines)
+    # Heading first, then the codex quote env with attribution.
+    assert "\\OFChapterOpener{Alpha One}" in body
+    assert "\\begin{CodexQuoteBlock}{4}{0.35em}{0.9em}" in body
+    assert "You are the room I keep returning to." in body
+    assert "\\CodexQuoteAttribution{}{Letter, first winter}{2019}" in body
+    assert "\\end{CodexQuoteBlock}" in body
+
+
+def test_inline_chapter_opener_string_epigraph_uses_macro():
+    lines = _inline_chapter_opener_lines({"title": "Alpha One", "epigraph": "a short line"})
+    body = "\n".join(lines)
+    assert "\\OFChapterOpenerEpigraph{Alpha One}{a short line}" in body
+    assert "CodexQuoteBlock" not in body
 
 
 def test_composite_bundle_inserts_source_backed_section_divider_before_source_order():
