@@ -5,10 +5,10 @@ note_role: handoff
 validation_profile: standard
 status: draft
 created: 2026-07-05T19:30:00-04:00
-updated: 2026-07-06T03:00:00-04:00
+updated: 2026-07-06T20:00:00-04:00
 beam_home: 42_optical_foundry
 title: "Session Brief — Book-Production Mechanics Upstream + v5 Support"
-summary: "Starting brief for a Foundry work session that generalizes hand-bound book production beyond Codex 0 and adds the mechanics v5 needs: a spine→codex_bundle bridge, signature-aware plate placement, a per-sheet stock/furnish map so dividers and plates can be printed on cardstock, divider page-tagging, edition selection wired into render, breath/split rendering, and reliable book-level paragraph indentation (the recurring parindent / \\\\-litany raggedness fixed upstream instead of per-block). Grounds each ask in existing Foundry surfaces (render.delivery.imposition, section_dividers[], of-image plates, PROFILE_AND_PANDOC_REFERENCE parindent standard, evidence sidecars) so this extends rather than reinvents."
+summary: "Starting brief for a Foundry work session that generalizes hand-bound book production beyond Codex 0 and adds the mechanics v5 needs: a spine→codex_bundle bridge, signature-aware plate placement, a per-sheet stock/furnish map so dividers and plates can be printed on cardstock, divider page-tagging, edition selection wired into render, breath/split rendering, and reliable book-level paragraph indentation (the recurring parindent / \\\\-litany raggedness fixed upstream instead of per-block). Grounds each ask in existing Foundry surfaces (render.delivery.imposition, section_dividers[], of-image plates, PROFILE_AND_PANDOC_REFERENCE parindent standard, evidence sidecars) so this extends rather than reinvents. Item 9 (added 2026-07-06) fixes the bridge default that currently emits a full-page divider at every chapter: chapters should open with an inline heading + optional small epigraph, with dividers reserved for part boundaries."
 tags:
   - optical-foundry
   - render-manifest
@@ -138,6 +138,24 @@ MVP is the CLI flag; spine-schema promotion is a follow-up. Backmatter sources r
 2. they appear as a numbered list in the back-matter Notes section under the single `# Notes` heading, in reading order,
 3. hyperref links (if active) work forward from body to notes and back.
 
+### 9. Chapter dividers off by default + inline chapter openings (fixes "a divider at every chapter")
+
+**Defect (found 2026-07-06).** The spine→bundle bridge (`21_letters_and_creative/book/codex0_v5/tooling/spine_to_bundle_manifest.py`) defaults `--chapter-dividers` to **`always`** (argparse, ~line 494). With that default it emits a `-chapter-divider` section_divider for *every* chapter, each `force_right_page: True` (emission at ~lines 325–347, labeled "the epigraph surface"). The 2026-07-06 whole-book bundle (`manifests/generated/codex0-v5-whole-book-2026-07-06.codex-bundle.yaml`) therefore carries **67 section_dividers** — ~11 part dividers plus one full-page divider per chapter. This contradicts item 1's own requirement ("chapter dividers as-needed (not every one)") and the spine `render_policy` (`chapter_dividers: ... do not render every chapter divider by default`). Symptom Luis sees: a divider page opening every chapter, and chapter epigraphs each eating a whole recto.
+
+**Desired model (Luis, 2026-07-06).** Dividers belong at *part* boundaries only. A chapter opens with a chapter heading plus an *optional, small* epigraph that sits at the top of the chapter's first page and shares that page with the body — it does **not** take a whole page. Chapters may still begin on a fresh page (normal book behavior), but that is a chapter *opener*, not a divider.
+
+**Two coupled changes:**
+1. **Default away from `always`.** Change the bridge default to `when-file-exists` (emit a chapter surface only when a chapter `00_divider.md` is deliberately authored) or `off`. This alone makes section_dividers part-boundary-only. One-line, reversible.
+2. **Render the chapter opening inline, not as a divider page.** Even when a chapter carries an epigraph, it must render as a chapter opener (title + small epigraph, in-flow), not a `force_right_page` section_divider that consumes a recto.
+
+**Coupling tradeoff to resolve (do not skip).** The codex0 bundle sets `numbering_strategy: section_dividers`, which forces `suppress_source_wrapper_headings=True` (`engine/manifest_compiler.py` ~line 997) — so **chapter titles currently ride on the chapter-divider pages**. If the default merely flips to `off`/`when-file-exists`, chapters that lose their divider also lose their visible title. So the correct fix is *convert* the chapter opening from divider-page → inline chapter heading + optional epigraph, not just *delete* chapter dividers. Options:
+- emit the chapter opener as a per-chapter source-wrapper heading (un-suppressed for the chapter's first passage) with any epigraph as an in-flow block beneath it; or
+- add a dedicated inline chapter-opener surface (title + optional epigraph block, no `force_right_page`, no `\clearpage`) that the bridge attaches to the chapter's first passage.
+
+Also note the bundle compiler emits an unconditional `\newpage` before every source (`engine/manifest_compiler.py` ~line 1080); that is what makes each chapter start on a fresh page even independent of dividers. Decide whether chapter openers keep that fresh-page start (classic) or flow within the part.
+
+**Acceptance.** Regenerate the whole-book bundle and confirm: (a) section_dividers count drops to part dividers only (~11, plus any plate leaves), with **zero** per-chapter `force_right_page` dividers; (b) each chapter opens with a visible title and, where authored, a small epigraph sharing the page with the chapter body; (c) part dividers and plate placement unchanged; (d) a probe render reads as "part divider = full page, chapter = opener-in-flow." Keep it book-agnostic: a bridge default + chapter-opener rendering model, not a codex0 special case.
+
 ## v5-specific consumers to keep in view
 
 - **Part X (`10_witnesses_and_plates`)** is the plate chain: literal images of two-way artifacts in chronological order, minimal exposition (dateline + one-line caption), order authority `21_letters_and_creative/book/codex0/timelines/codex0_letters_and_two_way_artifacts_timeline_2026-07-01.md`. It is the primary stress test for items 2–4. Some artifacts also render as inline plates in their home chapters (a card, a set of synthesis pages) — same-artifact repetition to reconcile at wiring.
@@ -167,7 +185,11 @@ Each marker also accepts an optional `asset="ID"` attribute to pin a specific as
 
 The vocabulary is extensible — one entry per new marker type in `inline_ornament_by_marker`. Verified end-to-end on v5 Swan Song passage (6 authored `<!-- cx0:breath -->` markers now render as B06/B09/T10/FH04/B01/B02 breath ornaments in reading order).
 
+6. Item 9 (chapter dividers off by default + inline chapter openings) — **open, added 2026-07-06.** The bridge default (`--chapter-dividers always`) currently emits a full-page divider at every chapter, contradicting item 1 and the spine policy. Flip the default and convert the chapter opening to an inline heading + optional small epigraph, keeping chapter titles that currently ride on the divider pages. Smallest first step: change the default and probe-render to confirm section_divider count collapses to part boundaries; then wire the inline chapter-opener rendering.
+
 ## Open design questions
+
+- Chapter-opener rendering (item 9): un-suppress per-chapter source-wrapper headings, or add a dedicated inline chapter-opener surface? And do chapter openers keep the per-source fresh-page start, or flow within the part?
 
 - Bridge as generator vs. native spine consumption? (Affects whether the spine schema becomes a first-class Foundry input.)
 - Where does the plate placement contract live — extend `figures:`, or a new `plates:` / anchor-placement contract? (README leans toward a dedicated contract.)
