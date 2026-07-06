@@ -5,10 +5,10 @@ note_role: handoff
 validation_profile: standard
 status: draft
 created: 2026-07-05T19:30:00-04:00
-updated: 2026-07-06T20:00:00-04:00
+updated: 2026-07-06T20:30:00-04:00
 beam_home: 42_optical_foundry
 title: "Session Brief — Book-Production Mechanics Upstream + v5 Support"
-summary: "Starting brief for a Foundry work session that generalizes hand-bound book production beyond Codex 0 and adds the mechanics v5 needs: a spine→codex_bundle bridge, signature-aware plate placement, a per-sheet stock/furnish map so dividers and plates can be printed on cardstock, divider page-tagging, edition selection wired into render, breath/split rendering, and reliable book-level paragraph indentation (the recurring parindent / \\\\-litany raggedness fixed upstream instead of per-block). Grounds each ask in existing Foundry surfaces (render.delivery.imposition, section_dividers[], of-image plates, PROFILE_AND_PANDOC_REFERENCE parindent standard, evidence sidecars) so this extends rather than reinvents. Item 9 (added 2026-07-06) fixes the bridge default that currently emits a full-page divider at every chapter: chapters should open with an inline heading + optional small epigraph, with dividers reserved for part boundaries."
+summary: "Starting brief for a Foundry work session that generalizes hand-bound book production beyond Codex 0 and adds the mechanics v5 needs: a spine→codex_bundle bridge, signature-aware plate placement, a per-sheet stock/furnish map so dividers and plates can be printed on cardstock, divider page-tagging, edition selection wired into render, breath/split rendering, and reliable book-level paragraph indentation (the recurring parindent / \\\\-litany raggedness fixed upstream instead of per-block). Grounds each ask in existing Foundry surfaces (render.delivery.imposition, section_dividers[], of-image plates, PROFILE_AND_PANDOC_REFERENCE parindent standard, evidence sidecars) so this extends rather than reinvents. Item 9 (added 2026-07-06) fixes the bridge default that currently emits a full-page divider at every chapter: chapters should open with an inline heading + optional small epigraph, with dividers reserved for part boundaries. Item 10 (added 2026-07-06) fixes the compiler's unconditional per-source \\newpage so passages within a chapter breathe (item-6 breath surface) instead of each starting a new page, which is inflating the page count; page breaks become boundary-aware (part/chapter only)."
 tags:
   - optical-foundry
   - render-manifest
@@ -156,6 +156,21 @@ Also note the bundle compiler emits an unconditional `\newpage` before every sou
 
 **Acceptance.** Regenerate the whole-book bundle and confirm: (a) section_dividers count drops to part dividers only (~11, plus any plate leaves), with **zero** per-chapter `force_right_page` dividers; (b) each chapter opens with a visible title and, where authored, a small epigraph sharing the page with the chapter body; (c) part dividers and plate placement unchanged; (d) a probe render reads as "part divider = full page, chapter = opener-in-flow." Keep it book-agnostic: a bridge default + chapter-opener rendering model, not a codex0 special case.
 
+### 10. Passages within a chapter must breathe, not page-break (every passage currently starts a new page)
+
+**Defect (found 2026-07-06).** The bundle compiler emits an **unconditional `\newpage` before every source** in the main assembly loop (`engine/manifest_compiler.py` ~line 1080, inside `for src in sorted_sources:`). Because v5 splits each chapter into one source *per passage* (spine policy "split on function"), every passage boundary — even *within a single chapter* — forces a fresh page. Symptom Luis sees: a passage ends a third of the way down a page, the next passage jumps to a new recto/verso, and the page count balloons. On a 108-passage book this is a large, mechanical inflation of the page count.
+
+**Desired model (Luis, 2026-07-06).** Passages within the same chapter should be separated by **at most a breath mark** — the renderer breath from item 6's "split on function, breathe on render" policy (`codex0_v5/structure/codex0_v5_splitting_and_breaths_policy_2026-07-05.md`), i.e. centered ornament or vertical space in-flow, *not* a page break. A hard page break (`\newpage`/`\clearpage`) belongs only at **chapter and part boundaries** (and plate leaves), never between two passages of the same chapter.
+
+**Fix direction.** The `\newpage` must become boundary-aware instead of per-source:
+- Suppress the `\newpage` between two sources that belong to the **same chapter** (the bridge already knows chapter membership — sources carry chapter grouping via the spine projection; expose it to the compiler, e.g. a per-source `page_break_before: false` / `boundary: passage|chapter|part` hint the bridge sets, defaulting passage-internal boundaries to no break).
+- At a same-chapter passage boundary, emit the item-6 breath surface (renderer breath + honor any inline `<!-- cx0:breath -->`) instead of the page break, so passages are separated by an ornament/space envelope.
+- Keep the page break at the *first* source of a chapter (chapter opener, per item 9) and at part boundaries.
+
+This is coupled to items 6 and 9: item 6 supplies the breath surface that replaces the break; item 9 owns the chapter-opener page-break decision. Resolve them together so the boundary model is coherent — *part boundary → full-page divider; chapter boundary → chapter opener (fresh page, per item 9); passage boundary → breath, no page break.*
+
+**Acceptance.** Regenerate the whole-book bundle and confirm: (a) two consecutive passages in the same chapter render on the same page when they fit, separated by a breath ornament/space, with **no** intervening `\newpage`; (b) chapters and parts still begin on fresh pages; (c) total page count drops materially versus the per-passage-page baseline (the 450pp v4 render was passage-broken); (d) inline `<!-- cx0:breath -->` markers still render where authored. Keep it book-agnostic: a boundary-aware page-break contract, not a codex0 patch.
+
 ## v5-specific consumers to keep in view
 
 - **Part X (`10_witnesses_and_plates`)** is the plate chain: literal images of two-way artifacts in chronological order, minimal exposition (dateline + one-line caption), order authority `21_letters_and_creative/book/codex0/timelines/codex0_letters_and_two_way_artifacts_timeline_2026-07-01.md`. It is the primary stress test for items 2–4. Some artifacts also render as inline plates in their home chapters (a card, a set of synthesis pages) — same-artifact repetition to reconcile at wiring.
@@ -186,10 +201,12 @@ Each marker also accepts an optional `asset="ID"` attribute to pin a specific as
 The vocabulary is extensible — one entry per new marker type in `inline_ornament_by_marker`. Verified end-to-end on v5 Swan Song passage (6 authored `<!-- cx0:breath -->` markers now render as B06/B09/T10/FH04/B01/B02 breath ornaments in reading order).
 
 6. Item 9 (chapter dividers off by default + inline chapter openings) — **open, added 2026-07-06.** The bridge default (`--chapter-dividers always`) currently emits a full-page divider at every chapter, contradicting item 1 and the spine policy. Flip the default and convert the chapter opening to an inline heading + optional small epigraph, keeping chapter titles that currently ride on the divider pages. Smallest first step: change the default and probe-render to confirm section_divider count collapses to part boundaries; then wire the inline chapter-opener rendering.
+7. Item 10 (passages breathe, not page-break) — **open, added 2026-07-06.** The compiler's unconditional per-source `\newpage` (`engine/manifest_compiler.py` ~line 1080) forces every passage onto a new page, inflating the page count. Make the page break boundary-aware (part/chapter only); replace same-chapter passage boundaries with the item-6 breath surface. Resolve jointly with items 6 and 9 so the part/chapter/passage boundary model is coherent.
 
 ## Open design questions
 
 - Chapter-opener rendering (item 9): un-suppress per-chapter source-wrapper headings, or add a dedicated inline chapter-opener surface? And do chapter openers keep the per-source fresh-page start, or flow within the part?
+- Boundary-aware page breaks (item 10): where should the passage/chapter/part boundary hint live — a per-source `boundary:`/`page_break_before:` field the bridge sets, or does the compiler re-derive chapter membership from source grouping? And is the same-chapter passage separator a fixed breath, or the authored `<!-- cx0:breath -->` when present and a default breath otherwise?
 
 - Bridge as generator vs. native spine consumption? (Affects whether the spine schema becomes a first-class Foundry input.)
 - Where does the plate placement contract live — extend `figures:`, or a new `plates:` / anchor-placement contract? (README leans toward a dedicated contract.)
