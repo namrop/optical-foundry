@@ -199,6 +199,10 @@ First breath.
 Second breath.
 :::
 
+::: {.codex-whisper}
+A soft shift.
+:::
+
 ::: {.codex-tailpiece}
 A closing mark.
 :::
@@ -217,16 +221,22 @@ A rail echo accompanies.
 """,
     )
 
-    # Breath pool is Luis's 2026-07-06 curated cull; order is his intended
-    # weight sequence starting at legacy B09 → 2026-07-06 breath-09. Cursor
+    # Breath pool 2026-07-07: B09 promoted to whisper (soft turn, not pause);
+    # pool now opens with breath-09 (open gold brackets + green seed). Cursor
     # cycling walks the pool in declared order; height-driven sizing normalizes
     # rendered vertical footprint across mixed-provenance candidates.
-    assert "breath_02__B09__B09_thread_pulse" in latex
     assert "breath-09__B09__alpha_tight" in latex
+    assert "rail_07__B04__B04_vine_comma" in latex  # legacy B04 demoted from rail
     assert "\\CodexBreakOrnament[height=1.7em][1\\baselineskip]" in latex
+    # Whisper is the 2026-07-07 middle tier (breath < whisper < hinge). Pool
+    # opens with breath-31; height-driven at 2.3em; own baselineskip gap.
+    assert "breath-31__B31__alpha_tight" in latex
+    assert "\\CodexBreakOrnament[height=2.0em][1.5\\baselineskip]" in latex
+    assert "\\begin{CodexWhisper}" in latex
     assert "tailpiece_03__T01__T01_closing_vine_knot" in latex
-    assert "breath_04__T05__T05_threaded_coda" in latex
-    # Hinge is also height-driven (passage-separator weight, tunable vs breath).
+    # Hinge pool 2026-07-07 final six opens with hinge-26 (delicate three-floret
+    # cluster). Height-driven at 2.9em; own baselineskip gap.
+    assert "hinge-26__H26__alpha_tight" in latex
     assert "\\CodexBreakOrnament[height=2.9em][2\\baselineskip]" in latex
     assert "seal_01__SM01__SM01_seal_mark" in latex
     # Threshold stays width-driven.
