@@ -312,11 +312,12 @@ def _parse_variant_block(
                 current["body"] = text[current["body_start"]:marker.start()]
                 entries.append(current)
             labels = _edition_labels(marker.group("attrs"), variant_id)
+            register = _edition_register(marker.group("attrs"), variant_id)
             for label in labels:
                 if label in seen_labels:
                     raise CodexEditionRenderError(f"duplicate cx0:edition {label!r} in variant {variant_id}")
                 seen_labels.add(label)
-            current = {"labels": set(labels), "body_start": marker.end()}
+            current = {"labels": set(labels), "register": register, "body_start": marker.end()}
             cursor = marker.end()
             continue
         # role == "close"
@@ -331,9 +332,11 @@ def _parse_variant_block(
         base_body = ""
 
     selected_body: str | None = None
+    selected_register = ""
     for entry in entries:
         if edition in entry["labels"]:
             selected_body = entry["body"]
+            selected_register = entry.get("register", "")
             break
     used_fallback = False
     if selected_body is None:
@@ -348,7 +351,7 @@ def _parse_variant_block(
         selected_body = base_body
         used_fallback = bool(entries)
 
-    return _trim_selected_body(selected_body), {
+    return _wrap_register(_trim_selected_body(selected_body), selected_register), {
         "variant_id": variant_id,
         "end_pos": marker.end(),
     }, used_fallback, warnings
@@ -376,13 +379,12 @@ def _edition_labels(raw: str, variant_id: str) -> list[str]:
         label_str = attrs["editions"]
     elif "edition" in attrs:
         label_str = attrs["edition"]
-    elif attrs:
-        # Unknown attributes without an explicit edition are probably a typo.
-        raise CodexEditionRenderError(
-            f"cx0:edition in variant {variant_id} must specify editions=..., edition=..., or bare labels"
-        )
     else:
-        label_str = raw.strip()
+        # Bare-label form, optionally alongside non-label key="value" attributes
+        # (e.g. register="pataphorical"). Strip the attr tokens; the remainder is
+        # the comma-separated edition labels. A stray attr-only marker leaves an
+        # empty label string and fails below, preserving the typo guard.
+        label_str = _ATTR_RE.sub("", raw).strip()
     labels = [label.strip() for label in label_str.split(",") if label.strip()]
     if not labels:
         raise CodexEditionRenderError(f"cx0:edition in variant {variant_id} has no edition labels")
@@ -390,6 +392,33 @@ def _edition_labels(raw: str, variant_id: str) -> list[str]:
         if not _safe_token(label):
             raise CodexEditionRenderError(f"cx0:edition in variant {variant_id} has unsafe label: {label!r}")
     return labels
+
+
+def _edition_register(raw: str, variant_id: str) -> str:
+    """Return the optional `register="..."` label on a cx0:edition marker.
+
+    A register is a rendering hint (e.g. `pataphorical`) that tags the selected
+    prose with its narrative register so downstream lowering can add a running
+    margin indicator. Absent register is the common case and adds no markup.
+    """
+    register = _parse_attrs(raw).get("register", "").strip()
+    if register and not _safe_token(register):
+        raise CodexEditionRenderError(
+            f"cx0:edition in variant {variant_id} has unsafe register: {register!r}"
+        )
+    return register
+
+
+def _wrap_register(body: str, register: str) -> str:
+    """Wrap a selected block in a register-tagged fenced div when a register is set.
+
+    The div carries a `codex-<register>` class (plus the raw `register` attribute)
+    so the codex0 Pandoc filter can attach a margin rail marking the register.
+    Empty selections (additions absent from this edition) stay empty.
+    """
+    if not register or not body.strip():
+        return body
+    return f"\n::: {{.codex-{register} register=\"{register}\"}}\n{body.strip(chr(10))}\n:::\n"
 
 
 def _guard_labels(raw: str, variant_id: str) -> set[str]:

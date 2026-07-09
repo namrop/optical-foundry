@@ -122,6 +122,44 @@ def test_codex_edition_preprocessor_multi_tag_override(tmp_path):
     assert "Raw base." in archival.rewritten_source.read_text()
 
 
+def test_codex_edition_preprocessor_wraps_selected_register_branch(tmp_path):
+    src = tmp_path / "register.md"
+    src.write_text(
+        "<!-- cx0:variant id=\"v1\" -->\n"
+        "Raw base.\n"
+        "<!-- cx0:edition johannah,witness,reader register=\"pataphorical\" -->\n"
+        "Fable-register prose.\n"
+        "<!-- cx0:endvariant -->\n"
+    )
+
+    result = preprocess_codex_edition_blocks(src, tmp_path, "register", "johannah")
+    rewritten = result.rewritten_source.read_text()
+
+    assert "Raw base." not in rewritten
+    assert "::: {.codex-pataphorical register=\"pataphorical\"}" in rewritten
+    assert "Fable-register prose." in rewritten
+    assert "cx0:" not in rewritten
+
+    archival = preprocess_codex_edition_blocks(src, tmp_path, "register-archival", "archival")
+    archival_text = archival.rewritten_source.read_text()
+    assert "Raw base." in archival_text
+    assert "codex-pataphorical" not in archival_text
+
+
+def test_codex_edition_preprocessor_rejects_unsafe_register(tmp_path):
+    src = tmp_path / "unsafe-register.md"
+    src.write_text(
+        "<!-- cx0:variant id=\"v1\" -->\n"
+        "Raw base.\n"
+        "<!-- cx0:edition reader register=\"../pataphorical\" -->\n"
+        "Reader prose.\n"
+        "<!-- cx0:endvariant -->\n"
+    )
+
+    with pytest.raises(CodexEditionRenderError, match="unsafe register"):
+        preprocess_codex_edition_blocks(src, tmp_path, "unsafe-register", "reader")
+
+
 def test_codex_edition_preprocessor_supports_xml_style_close(tmp_path):
     src = tmp_path / "xmlclose.md"
     src.write_text(

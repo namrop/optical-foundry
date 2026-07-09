@@ -5,7 +5,7 @@ note_role: spec
 validation_profile: standard
 status: draft
 created: 2026-07-02T18:42:18-04:00
-updated: 2026-07-04T21:05:00-04:00
+updated: 2026-07-06T10:30:00-04:00
 beam_home: 42_optical_foundry/docs/guides
 title: "Codex 0 Edition Variants"
 summary: "Guide for Codex 0 source-visible edition variants selected by a pre-Pandoc comment-sentinel culler before figure/source preprocessors run."
@@ -13,6 +13,7 @@ tags:
   - optical-foundry
   - codex0
   - edition-variants
+  - register-rails
   - pandoc
   - preprocessing
 ---
@@ -50,7 +51,10 @@ Supported markers:
 - `<!-- cx0:variant id="..." -->` (optional `guard="..."`, see Safety behavior)
 - `<!-- cx0:edition witness -->` or `<!-- cx0:edition witness,reader -->`
 - `<!-- cx0:edition edition="witness" -->` / `<!-- cx0:edition editions="witness,reader" -->`
+- `<!-- cx0:edition johannah,witness,reader register="pataphorical" -->` (optional `register="..."`, see Register rails)
 - `<!-- cx0:endvariant -->` or the XML-style `<!-- /cx0:variant -->`
+
+Bare edition labels may sit alongside a `register="..."` attribute (`<!-- cx0:edition johannah,witness,reader register="pataphorical" -->`); the culler strips the attribute token and reads the remaining comma-separated labels. An attribute-only marker with no labels still fails as a typo.
 
 The `fallback="..."` attribute is deprecated and ignored (it emits a warning): the archival base is now the universal fallback.
 
@@ -64,6 +68,36 @@ The selected branch remains ordinary Markdown after preprocessing. Inactive bran
 - **reader** — most veiled.
 
 Because the archival base is the universal fallback, editions inherit the raw base for any region left un-overridden. This is fail-**open** for exposure: forgetting to veil a region leaks raw prose into wider editions. Use `guard` (below) on sensitive regions.
+
+## Register rails
+
+A `register="..."` attribute on a `cx0:edition` marker tags the selected override as belonging to a named register (currently `pataphorical`). When that branch is the one selected for the rendered edition, a **margin rail** is drawn beside it — a visual indicator that the reader is in the tagged register rather than the raw base.
+
+```markdown
+<!-- cx0:variant id="the-first-rooms-020" -->
+Raw archival prose.
+<!-- cx0:edition johannah,witness,reader register="pataphorical" -->
+The fable-register prose that carries the pataphor.
+<!-- cx0:endvariant -->
+```
+
+### Authoring
+
+- The attribute sits alongside the comma-separated edition labels: `register="pataphorical"`.
+- It applies only to the block it tags. If the selected edition inherits the archival base (no matching override), no register rail is drawn — the rail marks the register, not the region.
+- The register token must be a safe identifier; a malformed value fails the render.
+
+### Rendering
+
+The pipeline turns the attribute into a rail in three stages:
+
+1. **Resolver** (`codex_editions.py`): when the selected branch carries a register, the culler wraps its body in a fenced div — `::: {.codex-<register> register="<register>"} ... :::` — so the register survives into the generated Markdown as structure rather than a comment.
+2. **Composition filter** (`codex0_composition.lua`): the `Div` handler for `codex-pataphorical` pulls the next asset from the rail pool and injects `\CodexRegisterRail[<width>]{<asset>}` as a leading inline in the block's first paragraph (or as a leading raw block if the first child is not a paragraph).
+3. **Template** (`codex0.tex`): `\CodexRegisterRail` places the asset with `marginnote` (not `\marginpar`), so the rail is **non-floating** and pins to the passage's first line in the outer margin under `twoside`. Because `marginnote` contributes no vertical space to the main galley, placement decisions never shift the body text, and page assignments stay stable across Pandoc's multiple engine passes.
+
+### One rail per page
+
+`\CodexRegisterRail` uses a `zref-abspage` guard to enforce **at most one register rail per physical page**. Each invocation records its absolute page; if a later rail resolves to the same page as the last one placed, it is suppressed. The guard only suppresses when the page is *resolved* (`abspage > 0`) and equal to the last placed page, so an early pass with unresolved cross-references places every rail rather than collapsing them all — the count converges as `zref` resolves on subsequent passes.
 
 ## Selecting an edition
 
