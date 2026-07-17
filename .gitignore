@@ -9,3 +9,11 @@ __pycache__/
 *.swo
 *~
 .DS_Store
+
+# Client-local profile overlays. Client remains usable through the resolver's
+# fallback profile ID `client_report`, but its branding/template assets are
+# deliberately local and must not enter the shared Foundry repository.
+profiles/40_latex_import/assets/client/
+profiles/40_latex_import/defaults/client_report.yaml
+profiles/40_latex_import/styles/texmf/tex/latex/client/
+profiles/40_latex_import/templates/client_report.tex
