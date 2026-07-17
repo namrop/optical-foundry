@@ -63,6 +63,7 @@ per-profile template). This is the biggest family.
 |---|---|---|
 | `document-spine` | `base.tex` | the bare document skeleton (rarely used directly). |
 | `generic-report` | `generic_report.tex` | plain, unbranded reports. |
+| **`client_report`** | `client_report.tex` | **Client security reports** (internal/client/public). Frontmatter-driven classification marking, cover metadata, footers, PDF metadata, and figure caption/numbering — see the [frontmatter contract guide](guides/client-report-frontmatter-contract.md). Template/defaults/sty are **gitignored client brand assets** (on-disk only). Served over the remote MCP (`render_report`, inline Markdown). |
 | `yugen_tech` (`tech`) | `base.tex` | Yugen-branded **technical** documents. |
 | `yugen_risk` (`risk`) | `base.tex` | Yugen **risk / security** documents. |
 | `yugen_creative` (`creative`) | `base.tex` | Yugen **creative** documents. |

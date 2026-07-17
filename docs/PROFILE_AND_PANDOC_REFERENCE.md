@@ -81,6 +81,7 @@ The shared profile resolver maps profile IDs to template/default filenames under
 | Profile ID | Template file | Defaults file |
 |---|---|---|
 | `generic-report` | `generic_report.tex` | `generic_report.yaml` |
+| `client_report` | `client_report.tex` | `client_report.yaml` |
 | `risk` | `risk.tex` | `risk.yaml` |
 | `cam` | `cam.tex` | `cam.yaml` |
 | `tech` | `tech.tex` | `tech.yaml` |
@@ -96,6 +97,24 @@ The shared profile resolver maps profile IDs to template/default filenames under
 | `labels-avery-15264` | `label_sheet.tex` | `labels_avery_5164.yaml` |
 | `sticker-sheet` | `label_sheet.tex` | `sticker_sheet.yaml` |
 
+> **`client_report`** resolves via the fallback name-mangling path *and* is
+> explicitly registered in `engine/profile_checker.py` (TOC guard, tightlist,
+> longtable, bundle-ok). Its template/defaults/style live under
+> `profiles/40_latex_import/` but are **gitignored as client brand assets**
+> (`.gitignore` lines 14–19) — they exist on-disk and are read by the renderer,
+> but are not tracked in this repo.
+>
+> This profile publishes a validated **report frontmatter contract** (document
+> classification, cover metadata, figure caption/numbering, footers, PDF
+> metadata, `artifact-name`). Resolution + validation lives in
+> `engine/report_settings.py` (`resolve_report_settings` → `ReportSettings`),
+> is threaded on `ProjectionPlan.document_settings`, and is lowered by the
+> Pandoc renderer into `-V`/`-M` flags applied *after* the profile `--defaults`
+> so authored settings win. Unknown classification/status values are hard render
+> errors; a missing classification defaults to `highly-confidential` with a
+> warning. See **`docs/guides/client-report-frontmatter-contract.md`** for the
+> full field/enum/default/warning reference and internal/client/public examples.
+
 ## Style resolution
 
 The Pandoc renderer sets `TEXMFHOME` to
@@ -104,6 +123,7 @@ LaTeX find style packages (`.sty` files) in the Foundry-owned TEXMF tree:
 
 ```
 profiles/40_latex_import/styles/texmf/tex/latex/
+  ├── client/clientcommon.sty   (gitignored client brand layer)
   ├── generic/genericreport.sty
   ├── yugen/yugencommon.sty
   ├── yugen/yugenrisk.sty
