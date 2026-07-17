@@ -2,12 +2,11 @@
 """Optical Foundry MCP server.
 
 Exposes the Foundry render lane over MCP (FastMCP), so agents can render
-profile-branded PDFs — e.g. Client client reports — from Markdown without
-touching LaTeX, Pandoc YAML, or brand assets. The contract to callers is
-deliberately narrow: **Markdown + a profile name**. Templates, Pandoc defaults,
-and brand assets stay server-owned inside the profile, which is the whole point
-of the Foundry (do not add a "pass me raw LaTeX/YAML" tool — that dissolves the
-profile abstraction).
+profile-branded PDFs from Markdown without touching LaTeX, Pandoc YAML, or brand
+assets. The contract to callers is deliberately narrow: **Markdown + a profile
+name**. Templates, Pandoc defaults, and brand assets stay server-owned inside
+the profile, which is the whole point of the Foundry (do not add a "pass me raw
+LaTeX/YAML" tool — that dissolves the profile abstraction).
 
 Run (stdio):
     python3 -m mcp_serve            # from the Foundry repo root
@@ -60,7 +59,8 @@ def list_profiles() -> str:
     """List available render profiles and their capabilities as JSON.
 
     Use this to discover valid `profile` values for render_report (e.g.
-    'client' for Client client reports, 'yugen_risk'/'yugen_tech' for Yugen).
+    'generic-report', or the 'yugen_risk'/'yugen_tech'/'yugen_civic' report
+    family).
     """
     return check_all_profiles_json()
 
@@ -69,15 +69,16 @@ def list_profiles() -> str:
 def render_report(
     markdown_path: str | None = None,
     markdown_text: str | None = None,
-    profile: str = "client",
+    profile: str = "generic-report",
     output_dir: str | None = None,
 ) -> dict:
     """Render one Markdown report to a branded PDF through a profile.
 
     Provide exactly one of `markdown_path` (a file on disk) or `markdown_text`
     (inline Markdown, optionally with a YAML frontmatter block for title /
-    subtitle / author / date). `profile` defaults to 'client'. Returns the PDF
-    path plus render evidence (pages, sha256, warnings, placeholder-asset flag).
+    subtitle / author / date). `profile` defaults to 'generic-report'; call
+    list_profiles to discover others. Returns the PDF path plus render evidence
+    (pages, sha256, warnings, placeholder-asset flag).
     """
     if bool(markdown_path) == bool(markdown_text):
         raise ValueError("provide exactly one of markdown_path or markdown_text")
