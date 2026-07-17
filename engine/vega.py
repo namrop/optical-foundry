@@ -56,8 +56,20 @@ def preprocess_vega_blocks(
     render_id: str,
     renderer: VegaRendererFn | None = None,
     output_format: str = "pdf",
+    *,
+    figure_captions: bool = False,
+    figure_numbering: bool = False,
+    figure_numbering_section: bool = False,
 ) -> VegaPreprocessResult:
-    """Render Vega fences and rewrite them to Markdown image references."""
+    """Render Vega fences and rewrite them to Markdown image references.
+
+    Caption/numbering behavior is authored, never invented. A chart with no
+    authored caption renders with no visible caption and no reserved caption
+    whitespace. Doc-level defaults (``figure_captions``/``figure_numbering``) and
+    per-figure fenced attributes (``caption=``/``numbered=``/``#id``/``alt=``)
+    control visibility and numbering independently. The Vega spec ``description``
+    is retained as accessibility alt text, not auto-exposed as a caption.
+    """
 
     markdown_path = Path(markdown_path)
     original_markdown_path = markdown_path
@@ -82,11 +94,14 @@ def preprocess_vega_blocks(
 
     def replace(match: re.Match[str]) -> str:
         index = len(figure_inventory) + 1
+        attrs = _parse_fence_attributes(match.group("attrs") or "")
         raw_source = match.group("body").strip() + "\n"
         try:
             parsed = json.loads(raw_source)
         except json.JSONDecodeError as exc:
             raise VegaRenderError(f"Vega JSON parse failed at chart {index}: {exc}") from exc
+        description = parsed.get("description") if isinstance(parsed, dict) else None
+        description = str(description).strip() if isinstance(description, str) else ""
         themed_spec, spec_evidence = validate_and_theme_vega_spec(parsed, profile_id=profile_id, theme=theme)
         raw_sha = hashlib.sha256(raw_source.encode("utf-8")).hexdigest()
         digest = raw_sha[:16]
@@ -105,6 +120,20 @@ def preprocess_vega_blocks(
         if not figure_path.exists():
             raise VegaRenderError(f"Vega renderer did not produce output for chart {index}: {figure_path}")
         output_sha = _sha256_file(figure_path)
+
+        fig_id = attrs.get("id") or f"fig:vega-{index}"
+        alt = attrs["alt"] if attrs.get("alt") is not None else description
+        explicit_caption = attrs.get("caption")
+        if explicit_caption:
+            caption = explicit_caption
+        elif figure_captions and description:
+            # Only promote the description to a visible caption when the author
+            # opts in via figure-captions; otherwise it stays accessibility text.
+            caption = description
+        else:
+            caption = ""
+        numbered = attrs["numbered"] if attrs.get("numbered") is not None else figure_numbering
+
         figure_inventory.append(
             {
                 "kind": "vega",
@@ -117,11 +146,22 @@ def preprocess_vega_blocks(
                 "output_sha256": output_sha,
                 "output_format": suffix,
                 "theme": theme,
+                "caption": caption,
+                "numbered": bool(caption) and bool(numbered),
+                "alt": alt,
+                "fig_id": fig_id,
                 "warnings": spec_evidence["warnings"],
                 "renderer": spec_evidence.get("renderer", {}),
             }
         )
-        return f"![Vega chart {index}]({figure_path}){{#fig:vega-{index}}}" + "\n"
+        return _emit_vega_reference(
+            figure_path,
+            suffix=suffix,
+            fig_id=fig_id,
+            caption=caption,
+            numbered=bool(numbered),
+            alt=alt,
+        )
 
     rewritten_text = _VEGA_FENCE_RE.sub(replace, text)
     rewritten_source = rewritten_dir / f"{render_id}.vega.md"
@@ -211,9 +251,106 @@ def render_vega_cli(spec: dict[str, Any], output_path: Path, render_context: dic
 
 
 _VEGA_FENCE_RE = re.compile(
-    r"^```vega[^\n]*\n(?P<body>.*?)^```\s*$",
+    r"^```vega(?P<attrs>[^\n]*)\n(?P<body>.*?)^```\s*$",
     flags=re.MULTILINE | re.DOTALL,
 )
+
+# Fenced-attribute tokens: `#id`, `key="quoted value"`, or `key=bareword`.
+_FENCE_ATTR_TOKEN_RE = re.compile(
+    r"""#(?P<id>[A-Za-z0-9_:.-]+)|(?P<key>[A-Za-z_][\w-]*)=(?:"(?P<qval>[^"]*)"|'(?P<sval>[^']*)'|(?P<bval>[^\s}]+))"""
+)
+
+
+def _parse_fence_attributes(raw: str) -> dict[str, Any]:
+    """Parse ``{#fig-x caption="..." numbered=false alt="..."}`` fence attrs.
+
+    Returns keys ``id`` (str|None), ``caption`` (str|None), ``alt`` (str|None),
+    and ``numbered`` (bool|None). Absent keys are None so callers can fall back
+    to document-level defaults.
+    """
+    result: dict[str, Any] = {"id": None, "caption": None, "alt": None, "numbered": None}
+    text = raw.strip()
+    if text.startswith("{") and text.endswith("}"):
+        text = text[1:-1]
+    for match in _FENCE_ATTR_TOKEN_RE.finditer(text):
+        if match.group("id"):
+            result["id"] = match.group("id")
+            continue
+        key = match.group("key")
+        value = match.group("qval")
+        if value is None:
+            value = match.group("sval")
+        if value is None:
+            value = match.group("bval")
+        if value is None:
+            continue
+        if key in {"caption", "title"}:
+            result["caption"] = value
+        elif key == "alt":
+            result["alt"] = value
+        elif key in {"numbered", "number"}:
+            result["numbered"] = value.strip().lower() in {"true", "yes", "on", "1"}
+    return result
+
+
+def _latex_escape_caption(value: str) -> str:
+    """Escape LaTeX specials in an authored caption string."""
+    out = str(value or "")
+    for char, repl in (
+        ("\\", r"\textbackslash{}"),
+        ("&", r"\&"),
+        ("%", r"\%"),
+        ("$", r"\$"),
+        ("#", r"\#"),
+        ("_", r"\_"),
+        ("{", r"\{"),
+        ("}", r"\}"),
+        ("~", r"\textasciitilde{}"),
+        ("^", r"\textasciicircum{}"),
+    ):
+        out = out.replace(char, repl)
+    return out
+
+
+def _emit_vega_reference(
+    figure_path: Path,
+    *,
+    suffix: str,
+    fig_id: str,
+    caption: str,
+    numbered: bool,
+    alt: str,
+) -> str:
+    """Emit the rewritten reference for one rendered Vega figure.
+
+    - PDF, no caption → raw-LaTeX centered ``\\includegraphics`` (no figure
+      environment, no caption slot, no reserved whitespace).
+    - PDF, caption present → raw-LaTeX ``figure`` with ``\\caption`` (numbered)
+      or ``\\caption*`` (unnumbered) plus a ``\\label``.
+    - Non-PDF (svg/png/html) → a Markdown image so alt text survives; the alt
+      is the authored caption when present, else the Vega description.
+    """
+    path_str = str(figure_path)
+    if suffix != "pdf":
+        alt_text = caption or alt or ""
+        return f"![{alt_text}]({path_str}){{#{fig_id}}}\n"
+    if not caption:
+        return (
+            "```{=latex}\n"
+            f"\\begin{{center}}\\includegraphics{{{path_str}}}\\end{{center}}\n"
+            "```\n"
+        )
+    caption_cmd = "\\caption" if numbered else "\\caption*"
+    return (
+        "```{=latex}\n"
+        "\\begin{figure}[htbp]\n"
+        "\\centering\n"
+        f"\\includegraphics{{{path_str}}}\n"
+        f"{caption_cmd}{{{_latex_escape_caption(caption)}}}\n"
+        f"\\label{{{fig_id}}}\n"
+        "\\end{figure}\n"
+        "```\n"
+    )
 
 
 def _converter_for_format(output_format: str) -> str:

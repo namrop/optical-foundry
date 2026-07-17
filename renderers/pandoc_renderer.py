@@ -145,6 +145,12 @@ class PandocRenderer(Renderer):
         if plan.numbersections:
             cmd += ["--number-sections"]
 
+        # Report-frontmatter contract: lower resolved classification, cover
+        # metadata, footers, and PDF docinfo into pandoc -V/-M flags. These are
+        # applied AFTER the profile --defaults so they override the profile's
+        # division/confidentiality/footer_text defaults.
+        cmd += self._document_settings_options(plan)
+
         # tex engine
         # Preserve the engine selected by the profile defaults stack. The legacy
         # Johannah-letter lane uses lualatex; forcing xelatex changes the output
@@ -259,6 +265,8 @@ class PandocRenderer(Renderer):
                 "render_duration_ms": int(elapsed * 1000),
                 "rendered_at": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
                 "success": success,
+                "profile_version": defaults_meta.get("profile_version", "unknown"),
+                **(plan.document_settings.evidence() if plan.document_settings else {}),
             },
             "output": {
                 "pdf_path": str(output_pdf),
@@ -266,6 +274,7 @@ class PandocRenderer(Renderer):
                 "pdf_bytes": pdf_bytes,
                 "pdf_sha256": pdf_sha,
                 "page_size": plan.page_size,
+                **({"artifact_name": plan.document_settings.artifact_name} if plan.document_settings and plan.document_settings.artifact_name else {}),
                 **({"imposition": imposition_output} if imposition_output else {}),
                 **({"bindery_preflight": bindery_preflight} if bindery_preflight else {}),
             },
@@ -293,6 +302,26 @@ class PandocRenderer(Renderer):
 
         evidence_file.write_text(json.dumps(evidence, indent=2) + "\n")
         return evidence
+
+    @staticmethod
+    def _document_settings_options(plan: ProjectionPlan) -> list[str]:
+        """Lower resolved report settings into pandoc -V / -M flags.
+
+        Native metadata (subject/keywords/lang) flows via -M so pandoc escapes
+        it and populates $subject$/$keywords$/$lang$ (and PDF docinfo through the
+        template's hypersetup). Presentation-only values flow via -V, which
+        pandoc does NOT escape, so they are LaTeX-escaped here.
+        """
+        settings = plan.document_settings
+        if settings is None:
+            return []
+        options: list[str] = []
+        for key, value in settings.metadata().items():
+            options += ["--metadata", f"{key}={value}"]
+        for key, value in settings.template_variables().items():
+            safe = value if key == "figure_numbering_section" else PandocRenderer._latex_header_text(value)
+            options += ["--variable", f"{key}={safe}"]
+        return options
 
     def _maybe_impose_bound_pdf(self, plan: ProjectionPlan, output_pdf: Path, out_dir: Path) -> dict[str, Any] | None:
         imposition = plan.delivery.get("imposition", {}) if isinstance(plan.delivery.get("imposition", {}), dict) else {}
@@ -632,6 +661,7 @@ class PandocRenderer(Renderer):
         if not plan.render_source.exists():
             return plan
 
+        settings = plan.document_settings
         result = preprocess_vega_blocks(
             plan.render_source,
             profile_id=plan.profile_id,
@@ -639,6 +669,9 @@ class PandocRenderer(Renderer):
             render_id=plan.render_id,
             renderer=vega_renderer,
             output_format=vega_output_format,
+            figure_captions=bool(settings.figure_captions) if settings else False,
+            figure_numbering=bool(settings.figure_numbering) if settings else False,
+            figure_numbering_section=bool(settings.figure_numbering_section) if settings else False,
         )
         if not result.changed:
             return plan
@@ -787,6 +820,9 @@ class PandocRenderer(Renderer):
             "warnings": list(left.get("warnings", [])) + list(right.get("warnings", [])),
             "boundary": {**left.get("boundary", {}), **right.get("boundary", {})},
         }
+        profile_version = right.get("profile_version") or left.get("profile_version")
+        if profile_version:
+            merged["profile_version"] = profile_version
         return merged
 
     @staticmethod
@@ -995,6 +1031,8 @@ class PandocRenderer(Renderer):
             note = vars_.get("placeholder_asset_note", "Synthetic placeholder assets active.")
             out["warnings"].append(str(note))
             out["boundary"]["placeholder_assets"] = True
+        if isinstance(vars_, dict) and vars_.get("profile_version"):
+            out["profile_version"] = str(vars_["profile_version"])
         return out
 
     @staticmethod

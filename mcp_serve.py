@@ -110,6 +110,12 @@ def _distill(evidence: dict) -> dict:
         "warnings": evidence.get("warnings") or rm.get("warnings") or [],
         "error": rm.get("error") or evidence.get("error"),
         "placeholder_assets": bool(boundary.get("placeholder_assets", False)),
+        # Report-contract surface so a network caller can verify what it got.
+        "profile_id": rm.get("profile"),
+        "profile_version": rm.get("profile_version"),
+        "resolved_classification": rm.get("resolved_classification"),
+        "resolved_document_status": rm.get("resolved_document_status"),
+        "frontmatter_warnings": boundary.get("frontmatter_warnings", []),
         "delivery": "embedded_resource",
         "artifact_retained_on_server": False,
     }
@@ -131,9 +137,12 @@ def _embedded_pdf_result(evidence: dict) -> CallToolResult:
         )
 
     pdf_bytes = pdf_path.read_bytes()
+    # Prefer the frontmatter-derived, sanitized artifact name over the ephemeral
+    # temp source stem (which is otherwise the generic "report.pdf").
+    artifact_name = (evidence.get("output", {}) or {}).get("artifact_name") or pdf_path.name
     metadata.update(
         {
-            "filename": pdf_path.name,
+            "filename": artifact_name,
             "mime_type": "application/pdf",
             "bytes": len(pdf_bytes),
         }
@@ -141,7 +150,7 @@ def _embedded_pdf_result(evidence: dict) -> CallToolResult:
     resource = EmbeddedResource(
         type="resource",
         resource=BlobResourceContents(
-            uri=f"artifact://optical-foundry/{pdf_path.name}",
+            uri=f"artifact://optical-foundry/{artifact_name}",
             mimeType="application/pdf",
             blob=base64.b64encode(pdf_bytes).decode("ascii"),
         ),

@@ -15,9 +15,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from engine.schemas import SCHEMA_VERSION
+
+if TYPE_CHECKING:
+    from engine.report_settings import ReportSettings
 
 
 @dataclass
@@ -97,6 +100,11 @@ class ProjectionPlan:
     # semantic identity; delivery records physical output requirements such as
     # bound geometry, page-number strategy, and colophon behavior.
     delivery: dict[str, Any] = field(default_factory=lambda: {"mode": "screen"})
+
+    # Resolved report-frontmatter contract (classification, cover metadata,
+    # figure caption/numbering, footers, PDF metadata, artifact name). Populated
+    # for direct-document renders; None for manifest/legacy lanes.
+    document_settings: "ReportSettings | None" = None
 
     # Optionally filled for multi-source renders.
     assembly: AssemblyView | None = None

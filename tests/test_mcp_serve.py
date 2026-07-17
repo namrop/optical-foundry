@@ -130,6 +130,37 @@ def test_distill_defaults_missing_placeholder_boundary_to_false() -> None:
     assert metadata["placeholder_assets"] is False
 
 
+def test_distill_surfaces_report_contract_fields() -> None:
+    metadata = mcp_serve._distill(
+        {
+            "status": "ok",
+            "render_metadata": {
+                "success": True,
+                "profile": "client_report",
+                "profile_version": "1.1.0",
+                "resolved_classification": "public",
+                "resolved_document_status": "draft",
+            },
+            "output": {},
+            "boundary": {"frontmatter_warnings": ["classification not set"]},
+        }
+    )
+    assert metadata["profile_id"] == "client_report"
+    assert metadata["profile_version"] == "1.1.0"
+    assert metadata["resolved_classification"] == "public"
+    assert metadata["resolved_document_status"] == "draft"
+    assert metadata["frontmatter_warnings"] == ["classification not set"]
+
+
+def test_embedded_pdf_result_uses_artifact_name_for_filename(tmp_path) -> None:
+    evidence = _fake_evidence(tmp_path, "ephemeral-render")
+    evidence["output"]["artifact_name"] = "slingshot-public-summary.pdf"
+    result = mcp_serve._embedded_pdf_result(evidence)
+    metadata, resource = _result_parts(result)
+    assert metadata["filename"] == "slingshot-public-summary.pdf"
+    assert resource.resource.uri.unicode_string().endswith("slingshot-public-summary.pdf")
+
+
 def test_mcp_render_tools_do_not_accept_caller_controlled_output_directories() -> None:
     assert "output_dir" not in inspect.signature(mcp_serve.render_report).parameters
     assert "output_dir" not in inspect.signature(mcp_serve.render_manifest).parameters

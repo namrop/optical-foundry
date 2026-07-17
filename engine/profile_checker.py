@@ -22,6 +22,8 @@ from engine.profile_resolver import resolve_profile
 PROFILE_TEMPLATE_MAP: dict[str, str] = {
     "generic-report": "generic_report.tex",
     "generic_report": "generic_report.tex",
+    "client-report": "client_report.tex",
+    "client_report": "client_report.tex",
     "risk": "risk.tex",
     "tech": "tech.tex",
     "creative": "creative.tex",
@@ -50,6 +52,7 @@ PROFILE_TEMPLATE_MAP: dict[str, str] = {
 # Profile IDs to check (canonical forms only — no aliases).
 PROFILE_IDS = [
     "generic-report",
+    "client_report",
     "risk",
     "tech",
     "creative",
@@ -81,7 +84,7 @@ PROFILE_IDS = [
 KNOWN_TEMPLATES = {
     "base.tex", "cam.tex", "codex0.tex", "codex0_a5.tex", "convergence.tex",
     "elian_packet.tex", "elian_poster.tex",
-    "generic_report.tex", "keeper.tex",
+    "generic_report.tex", "client_report.tex", "keeper.tex",
     "label_sheet.tex", "mythic.tex",
     "mythic_letter_johannah.tex",
     "personal_letter.tex", "resume.tex",
@@ -99,7 +102,7 @@ TEMPLATE_CORRECTIONS: dict[str, str] = {
 
 # Profiles with TOC guard ($if(toc)$) in their effective template.
 TOC_GUARD_PROFILES = {
-    "generic-report", "risk", "tech", "creative", "yugen-civic", "cam",
+    "generic-report", "client_report", "risk", "tech", "creative", "yugen-civic", "cam",
     "mythic", "codex0", "codex0-a5", "letter", "mythic-letter", "mythic-letter-johannah",
     "convergence", "keeper", "life",
     "yugen-brand", "yugen-brand-elevated", "prometheus-packet",
@@ -107,7 +110,7 @@ TOC_GUARD_PROFILES = {
 
 # Profiles whose effective template defines \tightlist.
 TIGHTLIST_PROFILES = {
-    "generic-report", "risk", "tech", "creative", "yugen-civic", "cam",
+    "generic-report", "client_report", "risk", "tech", "creative", "yugen-civic", "cam",
     "mythic", "codex0", "codex0-a5", "letter", "mythic-letter", "mythic-letter-johannah",
     "convergence", "keeper", "life",
     "yugen-brand", "yugen-brand-elevated", "prometheus-packet",
@@ -117,7 +120,7 @@ TIGHTLIST_PROFILES = {
 
 # Profiles whose effective template defines \longtable.
 LONGTABLE_PROFILES = {
-    "generic-report", "risk", "tech", "creative", "yugen-civic", "cam",
+    "generic-report", "client_report", "risk", "tech", "creative", "yugen-civic", "cam",
     "mythic", "codex0", "codex0-a5", "letter", "mythic-letter", "mythic-letter-johannah",
     "convergence", "keeper", "life",
     "yugen-brand", "yugen-brand-elevated", "prometheus-packet",
@@ -128,7 +131,7 @@ LONGTABLE_PROFILES = {
 
 # Profiles fully compatible with composite_bundle rendering.
 BUNDLE_OK = {
-    "generic-report", "risk", "tech", "creative", "yugen-civic", "cam",
+    "generic-report", "client_report", "risk", "tech", "creative", "yugen-civic", "cam",
     "mythic", "codex0", "codex0-a5", "letter", "mythic-letter", "mythic-letter-johannah",
     "convergence", "keeper", "life",
     "yugen-brand", "yugen-brand-elevated",

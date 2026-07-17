@@ -2,6 +2,11 @@ from pathlib import Path
 
 GF = Path(__file__).resolve().parents[1]
 BASE_TEMPLATE = GF / "profiles" / "40_latex_import" / "templates" / "base.tex"
+CLIENT_TEMPLATE = GF / "profiles" / "40_latex_import" / "templates" / "client_report.tex"
+CLIENT_STY = (
+    GF / "profiles" / "40_latex_import" / "styles" / "texmf" / "tex" / "latex"
+    / "client" / "clientcommon.sty"
+)
 
 
 def test_base_template_titlepage_logo_is_guarded_by_logo_path():
@@ -13,3 +18,41 @@ def test_base_template_titlepage_logo_is_guarded_by_logo_path():
 
     assert before.rfind("$if(logo_path)$") > before.rfind("$if(titlepage)$")
     assert after.find("$endif$") < after.find("$if(title)")
+
+
+def test_client_kicker_uses_document_type_variable():
+    """The cover kicker is frontmatter-driven, defaulting to SECURITY REPORT."""
+    text = CLIENT_TEMPLATE.read_text()
+    assert "$if(document_type)$$document_type$$else$SECURITY REPORT$endif$" in text
+    # The old hard-coded "\quad REPORT" literal must be gone.
+    assert "\\quad REPORT\\par" not in text
+
+
+def test_client_pdf_metadata_hypersetup_present():
+    text = CLIENT_TEMPLATE.read_text()
+    for key in ("pdftitle", "pdfauthor", "pdfsubject", "pdfkeywords", "pdflang"):
+        assert key in text, f"missing {key} in hypersetup"
+    # hyperxmp must load after hyperref.
+    assert text.index("\\usepackage{hyperref}") < text.index("\\usepackage{hyperxmp}")
+
+
+def test_client_figure_counter_detached_from_chapter():
+    text = CLIENT_TEMPLATE.read_text()
+    assert "\\counterwithout{figure}{chapter}" in text
+    assert "\\counterwithin{figure}{section}" in text  # section-scope branch
+
+
+def test_client_toc_title_and_no_self_listing():
+    text = CLIENT_TEMPLATE.read_text()
+    assert "\\renewcommand{\\contentsname}{$if(toc-title)$$toc-title$$else$Contents$endif$}" in text
+    # Starred form omits the Contents-in-Contents self entry.
+    assert "\\tableofcontents*" in text
+
+
+def test_client_footer_default_is_security():
+    sty = CLIENT_STY.read_text()
+    assert "\\providecommand{\\ClientDivision}{CLIENT}" in sty
+    # Report-frontmatter footer override hooks exist in the template.
+    text = CLIENT_TEMPLATE.read_text()
+    assert "$if(footer_center)$\\renewcommand{\\ClientDivision}{$footer_center$}$endif$" in text
+    assert "$if(classification_label)$\\renewcommand{\\ClientConfidentiality}{$classification_label$}$endif$" in text

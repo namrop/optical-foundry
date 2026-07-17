@@ -118,12 +118,82 @@ def test_preprocess_vega_blocks_rewrites_fences_and_records_evidence(tmp_path):
 
     rewritten = result.rewritten_source.read_text()
     assert "```vega" not in rewritten
-    assert "![Vega chart 1]" in rewritten
+    # No invented "Vega chart N" caption/alt. For non-PDF output the image
+    # carries the spec description as alt text; the figure id is retained.
+    assert "Vega chart" not in rewritten
+    assert "![Full Vega smoke bar chart]" in rewritten
+    assert "{#fig:vega-1}" in rewritten
     assert result.figure_inventory[0]["kind"] == "vega"
     assert result.figure_inventory[0]["output_format"] == "svg"
+    assert result.figure_inventory[0]["alt"] == "Full Vega smoke bar chart"
+    assert result.figure_inventory[0]["caption"] == ""
     assert result.figure_inventory[0]["theme"]["palette"][0] == "#0A3870"
     assert result.figure_inventory[0]["normalized_spec_sha256"]
     assert Path(result.figure_inventory[0]["path"]).exists()
+
+
+def test_preprocess_vega_pdf_no_caption_emits_raw_includegraphics(tmp_path):
+    """A caption-less PDF figure must not become an implicit captioned figure."""
+    source = tmp_path / "vega_doc.md"
+    source.write_text("```vega\n" + json.dumps(_bar_spec()) + "\n```\n")
+
+    def fake_renderer(spec, output_path, render_context):
+        output_path.write_text("%PDF-1.5 fake")
+
+    result = preprocess_vega_blocks(
+        source, profile_id="cam", output_dir=tmp_path / "out",
+        render_id="doc", renderer=fake_renderer, output_format="pdf",
+    )
+    rewritten = result.rewritten_source.read_text()
+    assert "Vega chart" not in rewritten
+    assert "\\caption" not in rewritten  # no caption, no figure environment
+    assert "\\begin{center}\\includegraphics" in rewritten
+    assert "```{=latex}" in rewritten
+    assert result.figure_inventory[0]["caption"] == ""
+
+
+def test_preprocess_vega_pdf_authored_caption_numbered(tmp_path):
+    """An authored caption renders a numbered figure; description stays alt."""
+    source = tmp_path / "vega_doc.md"
+    source.write_text(
+        '```vega {#fig-x caption="Finding profile" numbered=true}\n'
+        + json.dumps(_bar_spec()) + "\n```\n"
+    )
+
+    def fake_renderer(spec, output_path, render_context):
+        output_path.write_text("%PDF-1.5 fake")
+
+    result = preprocess_vega_blocks(
+        source, profile_id="cam", output_dir=tmp_path / "out",
+        render_id="doc", renderer=fake_renderer, output_format="pdf",
+        figure_captions=False, figure_numbering=False,
+    )
+    rewritten = result.rewritten_source.read_text()
+    assert "\\begin{figure}" in rewritten
+    assert "\\caption{Finding profile}" in rewritten  # numbered => \caption (not \caption*)
+    assert "\\label{fig-x}" in rewritten
+    assert result.figure_inventory[0]["caption"] == "Finding profile"
+    assert result.figure_inventory[0]["numbered"] is True
+
+
+def test_preprocess_vega_pdf_caption_unnumbered_uses_starred_caption(tmp_path):
+    source = tmp_path / "vega_doc.md"
+    source.write_text(
+        '```vega {caption="Finding profile" numbered=false}\n'
+        + json.dumps(_bar_spec()) + "\n```\n"
+    )
+
+    def fake_renderer(spec, output_path, render_context):
+        output_path.write_text("%PDF-1.5 fake")
+
+    result = preprocess_vega_blocks(
+        source, profile_id="cam", output_dir=tmp_path / "out",
+        render_id="doc", renderer=fake_renderer, output_format="pdf",
+        figure_numbering=True,  # per-figure numbered=false overrides doc default
+    )
+    rewritten = result.rewritten_source.read_text()
+    assert "\\caption*{Finding profile}" in rewritten
+    assert result.figure_inventory[0]["numbered"] is False
 
 
 def test_preprocess_vega_blocks_preserves_heading_after_fence(tmp_path):

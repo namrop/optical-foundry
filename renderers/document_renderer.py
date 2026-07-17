@@ -13,6 +13,7 @@ from pathlib import Path
 from engine.profile_resolver import resolve_profile
 from engine.page_size import page_margins_from_mapping, page_size_from_mapping, profile_default_page_size
 from engine.projection_plan import ProjectionPlan
+from engine.report_settings import ReportSettingsError, resolve_report_settings
 from engine.manifest_compiler import (
     _document_matter_role,
     _frontmatter_to_markdown,
@@ -62,6 +63,29 @@ def _profile_default_toc(profile_id: str) -> bool:
     return False if resolved.profile_family == "stationery_art" else True
 
 
+def _settings_error_evidence(render_id: str, message: str) -> dict:
+    """Return error evidence for a fatal report-frontmatter validation failure.
+
+    Shaped so the MCP layer (`_distill` / `_embedded_pdf_result`) reports a
+    clean error with no PDF, mirroring PandocRenderer._evidence_error.
+    """
+    return {
+        "schema_version": "render_evidence_v1",
+        "render_id": render_id,
+        "status": "error",
+        "error": message,
+        "render_metadata": {"success": False, "error": message},
+        "validation": {
+            "status": "failed",
+            "checks": {"pdf_written": False},
+            "warning_count": 0,
+            "errors": [message],
+        },
+        "output": {},
+        "warnings": [message],
+    }
+
+
 def _profile_default_page_size(profile_id: str) -> tuple[str, str]:
     """Return profile-authored page size default for direct document renders."""
 
@@ -83,6 +107,18 @@ class DocumentRenderer:
         fm, body = _parse_frontmatter(text)
 
         render_id = fm.get("uid") or source.stem or uuid.uuid4().hex[:12]
+
+        # Resolve + validate the report frontmatter contract. Raises
+        # ReportSettingsError on a fatal problem (e.g. unknown classification);
+        # render() catches it and returns clean error evidence.
+        try:
+            canonical_profile_id = resolve_profile(profile_id).canonical_profile_id
+        except Exception:
+            canonical_profile_id = profile_id
+        document_settings, frontmatter_warnings = resolve_report_settings(
+            fm, canonical_profile_id=canonical_profile_id
+        )
+
         matter_role = _document_matter_role({}, fm)
         page_size, page_size_source = page_size_from_mapping(fm, scope="source_frontmatter")
         if page_size_source == "default":
@@ -109,6 +145,7 @@ class DocumentRenderer:
             numbersections=fm.get("numbersections", True),
             page_size=page_size,
             page_margins=page_margins,
+            document_settings=document_settings,
             source_inventory=[
                 {
                     "uid": render_id,
@@ -128,10 +165,29 @@ class DocumentRenderer:
                 "page_size_source": page_size_source,
                 "page_margins": page_margins,
                 "page_margins_source": page_margins_source,
+                # Surface report-frontmatter warnings both into the general
+                # warnings channel (keeps warning_count == len(warnings)) and a
+                # distinct list the MCP response exposes to network callers.
+                "warnings": list(frontmatter_warnings),
+                "frontmatter_warnings": list(frontmatter_warnings),
             },
         )
 
     def render(self, source: Path, profile_id: str, output_dir: str | None = None) -> dict:
         """Render a Markdown document and return evidence."""
-        plan = self.build_plan(source, profile_id)
+        try:
+            plan = self.build_plan(source, profile_id)
+        except ReportSettingsError as exc:
+            render_id = Path(source).stem or "report"
+            evidence = _settings_error_evidence(render_id, str(exc))
+            if output_dir:
+                try:
+                    out = Path(output_dir)
+                    out.mkdir(parents=True, exist_ok=True)
+                    (out / f"{render_id}.evidence.json").write_text(
+                        __import__("json").dumps(evidence, indent=2) + "\n"
+                    )
+                except OSError:
+                    pass
+            return evidence
         return self._pandoc.render(plan, output_dir=output_dir)
