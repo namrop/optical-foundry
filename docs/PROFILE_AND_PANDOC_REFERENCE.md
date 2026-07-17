@@ -18,6 +18,10 @@ beam_home: 42_optical_foundry/docs
 ---
 # Optical Foundry — Profile and Pandoc Reference Wiring
 
+> **Looking for "which profile do I use, and what does it look like?"** — see the
+> purpose-oriented **[Profiles Catalog](PROFILES_CATALOG.md)**. This doc is the wiring
+> reference (ID→template mapping, style resolution, gotchas).
+
 ## Ownership boundary (2026-05-06)
 
 As of commit `32b1358`, Optical Foundry owns editable copies of all
