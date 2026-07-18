@@ -55,11 +55,11 @@ This vows.
     assert "\\begin{CodexVow}{5}{0.80em}{0.90em}" in latex
 
 
-def test_codex_hinge_break_emits_bespoke_ornament_and_rail_companions(tmp_path):
+def test_codex_hinge_break_emits_bespoke_ornament_and_edge_companions(tmp_path):
     latex = _pandoc_latex(
         tmp_path,
         r"""
-::: {.codex-hinge-break ornament="assets/custom-hinge.png" rail="assets/rail.png" edge="assets/edge.png" anchor="paragraph" wrap="true" ornament-width="0.40\linewidth" ornament-gap="0.25em" rail-width="0.42in"}
+::: {.codex-hinge-break ornament="assets/custom-hinge.png" edge="assets/edge.png" anchor="paragraph" wrap="true" ornament-width="0.40\linewidth" ornament-gap="0.25em" rail-width="0.42in"}
 Then something turns.
 :::
 """,
@@ -67,7 +67,6 @@ Then something turns.
 
     assert "\\begin{CodexHingeBreak}{10}{0.90em}{1.00em}" in latex
     assert "\\CodexBreakOrnament[width=0.40\\linewidth][0.25em]{assets/custom-hinge.png}" in latex
-    assert "\\CodexRailCompanion[0.42in]{assets/rail.png}" in latex
     assert "\\CodexEdgeCompanion[0.42in][anchor=paragraph,wrap=true,width=0.42in]{assets/edge.png}" in latex
 
 
@@ -214,10 +213,6 @@ A hinge turns.
 ::: {.codex-threshold}
 A threshold opens.
 :::
-
-::: {.codex-rail-echo}
-A rail echo accompanies.
-:::
 """,
     )
 
@@ -241,8 +236,6 @@ A rail echo accompanies.
     assert "seal_01__SM01__SM01_seal_mark" in latex
     # Threshold stays width-driven.
     assert "\\CodexBreakOrnament[width=0.44\\linewidth][4\\baselineskip]" in latex
-    assert "\\CodexRailCompanion[0.50in]" in latex
-    assert "rail_01__RE01__RE01_outer_rail_echo" in latex
 
 
 def test_codex_filter_supports_asset_id_overrides_for_primary_and_lane_specific_assets(tmp_path):
@@ -253,7 +246,7 @@ def test_codex_filter_supports_asset_id_overrides_for_primary_and_lane_specific_
 Primary asset override.
 :::
 
-::: {.codex-hinge-break ornament-asset="FH12" rail-asset="RE04"}
+::: {.codex-hinge-break ornament-asset="FH12"}
 Lane-specific overrides.
 :::
 """,
@@ -261,14 +254,13 @@ Lane-specific overrides.
 
     assert "hinge_candidate_03__T03__T03_seed_branch_closure" in latex
     assert "hinge_candidate_02__FH12__FH12_vine_tendrils" in latex
-    assert "rail_03__RE04__RE04_outer_rail_echo" in latex
 
 
 def test_codex_filter_ignores_unsafe_asset_paths_and_dimensions(tmp_path):
     latex = _pandoc_latex(
         tmp_path,
         r"""
-::: {.codex-hinge-break ornament="../escape.png" rail="/absolute/rail.png" edge="assets/{bad}.png" ornament-width="1in}\evil{"}
+::: {.codex-hinge-break ornament="../escape.png" edge="assets/{bad}.png" ornament-width="1in}\evil{"}
 Unsafe paths should not be emitted.
 :::
 """,
@@ -276,7 +268,6 @@ Unsafe paths should not be emitted.
 
     assert "\\begin{CodexHingeBreak}" in latex
     assert "CodexBreakOrnament" not in latex
-    assert "CodexRailCompanion" not in latex
     assert "CodexEdgeCompanion" not in latex
     assert "evil" not in latex
     assert "escape.png" not in latex
@@ -312,7 +303,6 @@ def test_codex0_template_exposes_composition_macros_and_environments():
 
     assert "\\NewDocumentCommand{\\CodexBreakOrnament}" in template
     assert "\\CodexMaybeDecorativeImage" in template
-    assert "\\NewDocumentCommand{\\CodexRailCompanion}" in template
     assert "\\NewDocumentCommand{\\CodexEdgeCompanion}" in template
     assert "\\newenvironment{CodexHingeBreak}" in template
     assert "\\newenvironment{CodexQuoteBlock}" in template
