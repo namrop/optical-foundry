@@ -94,6 +94,23 @@ Let this close quietly.
     assert "\\begin{CodexTailpiece}{6}{0.60em}{0.75em}" in latex
 
 
+def test_codex_ownvoice_span_and_heartword_stacking(tmp_path):
+    latex = _pandoc_latex(
+        tmp_path,
+        """
+He said [I have done that a bunch]{.codex-ownvoice} and meant it.
+
+A verbatim that is also a heartword: [it keeps me whole]{.codex-heartword .codex-ownvoice}.
+
+A plain heartword stays accent-colored: [still here]{.codex-heartword}.
+""",
+    )
+
+    assert "\\CodexOwnVoice{I have done that a bunch}" in latex
+    assert "\\CodexOwnVoiceHeartword{it keeps" in latex  # pandoc may wrap inside the braces
+    assert "\\CodexHeartword{still here}" in latex
+
+
 def test_codex_quote_block_lowers_quote_with_author_source_and_date(tmp_path):
     latex = _pandoc_latex(
         tmp_path,
@@ -310,6 +327,9 @@ def test_codex0_template_exposes_composition_macros_and_environments():
     assert "\\newenvironment{CodexEditorialNote}" in template
     assert "\\newenvironment{CodexWitness}" in template
     assert "\\providecommand{\\CodexSignal}" in template
+    assert "\\providecommand{\\CodexOwnVoice}" in template
+    assert "\\providecommand{\\CodexOwnVoiceHeartword}" in template
+    assert "\\definecolor{LetterOwnVoice}{HTML}{432660}" in template
 
 
 def test_codex_inline_rule_marker_lowers_to_centered_horizontal_rule(tmp_path):
