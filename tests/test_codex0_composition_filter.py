@@ -330,7 +330,7 @@ def test_codex0_template_exposes_composition_macros_and_environments():
     assert "\\definecolor{LetterOwnVoice}{HTML}{432660}" in template
 
 
-def test_codex_inline_rule_marker_lowers_to_centered_horizontal_rule(tmp_path):
+def test_codex_inline_rule_marker_lowers_to_wh10_flourish(tmp_path):
     latex = _pandoc_latex(
         tmp_path,
         """
@@ -342,18 +342,30 @@ Continuation passage.
 """,
     )
 
-    # Interim passage separator (Item 10): a plain centered typographic rule,
-    # no ornament asset.
-    assert "\\centering\\rule{0.22\\linewidth}{0.4pt}" in latex
-    assert "CodexBreakOrnament" not in latex
+    # Passage separator (2026-07-19): the WH10 copperplate swelled-rule flourish,
+    # a centered image ornament, replaces the interim plain typographic rule.
+    assert "\\CodexBreakOrnament[width=0.30\\linewidth]" in latex
+    assert "style_map_v2_pools_2026-07-19/selected/rule/WH10_alpha.png" in latex
 
 
-def test_codex_inline_rule_marker_honors_width_and_thickness_overrides(tmp_path):
+def test_codex_inline_rule_marker_honors_width_override(tmp_path):
     latex = _pandoc_latex(
         tmp_path,
         """
-<!-- cx0:rule width="0.4\\linewidth" thickness="0.8pt" -->
+<!-- cx0:rule width="0.4\\linewidth" -->
 """,
     )
 
-    assert "\\rule{0.4\\linewidth}{0.8pt}" in latex
+    assert "\\CodexBreakOrnament[width=0.4\\linewidth]" in latex
+
+
+def test_codex_inline_rule_marker_suppressed_by_asset_none(tmp_path):
+    latex = _pandoc_latex(
+        tmp_path,
+        """
+<!-- cx0:rule asset="none" -->
+""",
+    )
+
+    assert "CodexBreakOrnament" not in latex
+    assert "WH10_alpha.png" not in latex
