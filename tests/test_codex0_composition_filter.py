@@ -233,24 +233,21 @@ A threshold opens.
 """,
     )
 
-    # Breath pool 2026-07-07: B09 promoted to whisper (soft turn, not pause);
-    # pool now opens with breath-09 (open gold brackets + green seed). Cursor
-    # cycling walks the pool in declared order; height-driven sizing normalizes
-    # rendered vertical footprint across mixed-provenance candidates.
-    assert "breath-09__B09__alpha_tight" in latex
-    assert "rail_07__B04__B04_vine_comma" in latex  # legacy B04 demoted from rail
+    # Style map v2 (2026-07-19): each pacing pool is one historical style.
+    # Breath opens with the lightest Aldine hedera (BR08); height-driven sizing.
+    assert "style_map_v2_pools_2026-07-19/selected/breath/BR08_alpha.png" in latex
     assert "\\CodexBreakOrnament[height=1.7em][1\\baselineskip]" in latex
-    # Whisper is the 2026-07-07 middle tier (breath < whisper < hinge). Pool
-    # opens with breath-31; height-driven at 2.3em; own baselineskip gap.
-    assert "breath-31__B31__alpha_tight" in latex
+    # Whisper opens with the lightest copperplate flourish (WH05).
+    assert "style_map_v2_pools_2026-07-19/selected/whisper/WH05_alpha.png" in latex
     assert "\\CodexBreakOrnament[height=2.0em][1.5\\baselineskip]" in latex
     assert "\\begin{CodexWhisper}" in latex
-    assert "tailpiece_03__T01__T01_closing_vine_knot" in latex
-    # Hinge pool 2026-07-07 final six opens with hinge-26 (delicate three-floret
-    # cluster). Height-driven at 2.9em; own baselineskip gap.
-    assert "hinge-26__H26__alpha_tight" in latex
+    # Tailpiece opens with the lightest cul-de-lampe (TL05).
+    assert "style_map_v2_pools_2026-07-19/selected/tailpiece/TL05_alpha.png" in latex
+    # Hinge opens with the lightest Rococo Fournier vignette (HN04).
+    assert "style_map_v2_pools_2026-07-19/selected/hinge/HN04_alpha.png" in latex
     assert "\\CodexBreakOrnament[height=2.9em][2\\baselineskip]" in latex
-    assert "seal_01__SM01__SM01_seal_mark" in latex
+    # Seal/threshold opens with the compass-rose volvelle.
+    assert "style_map_v2_pools_2026-07-19/selected/seal/HS11_compass_alpha.png" in latex
     # Threshold stays width-driven.
     assert "\\CodexBreakOrnament[width=0.44\\linewidth][4\\baselineskip]" in latex
 
