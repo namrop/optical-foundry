@@ -233,9 +233,10 @@ A threshold opens.
 """,
     )
 
-    # Style map v2 (2026-07-19): each pacing pool is one historical style.
-    # Breath opens with the lightest Aldine hedera (BR08); height-driven sizing.
-    assert "style_map_v2_pools_2026-07-19/selected/breath/BR08_alpha.png" in latex
+    # Style map v2 r2 (2026-07-19): each pacing pool is one historical style;
+    # breath is the Aldine leaf-fleuron FAMILY. Pool opens with the lightest
+    # member (BR02, mirrored ivy pair); height-driven sizing.
+    assert "style_map_v2_pools_2026-07-19/selected/breath/BR02_alpha.png" in latex
     assert "\\CodexBreakOrnament[height=1.7em][1\\baselineskip]" in latex
     # Whisper opens with the lightest copperplate flourish (WH05).
     assert "style_map_v2_pools_2026-07-19/selected/whisper/WH05_alpha.png" in latex
