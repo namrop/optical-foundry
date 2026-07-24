@@ -758,7 +758,9 @@ def _inline_chapter_opener_lines(opener: dict[str, Any]) -> list[str]:
     escaped = _latex_escape_text(title)
     lines = [
         "\\phantomsection",
-        f"\\addcontentsline{{toc}}{{section}}{{{escaped}}}",
+        # Registered one level below the part dividers' section-level entries so
+        # a TOC can show parts alone via tocdepth=1 (chapters reappear at >=2).
+        f"\\addcontentsline{{toc}}{{subsection}}{{{escaped}}}",
         f"\\markboth{{{escaped}}}{{{escaped}}}",
     ]
     epigraph = opener.get("epigraph")
