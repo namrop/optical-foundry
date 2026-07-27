@@ -273,6 +273,10 @@ DOCUMENT_VARIABLE_ALLOWLIST = {
     "chart_muted",
     "codex_edition",
     "codex_strip_editorial_callouts",
+    # Per-volume designation for the Codex 0 three-volume split (OF issue 22).
+    # A short label ("Volume I") the codex0 template lowers to \CodexVolume,
+    # printed on the half-title and title page of each volume.
+    "codex_volume",
 }
 
 RUNNING_TEXT_KEY_ALIASES = {
