@@ -64,6 +64,31 @@
     \OFIntentionalBlankPage%
   \fi%
 }
+% Furnish-marker ink suppression. engine/manifest_compiler.py stamps an
+% `[[OFDIV:<uid>]]` string at 1pt on every divider page; post-render,
+% engine/furnish.py extracts it via pdftotext to map divider uid -> PDF page.
+% PDF text render mode 3 ("neither fill nor stroke") keeps the string in the
+% text layer for that extraction while drawing no ink — the trick OCR layers
+% use. Needed because divider pages are no longer always full-bleed artwork:
+% codex0 v5 poem versos are white, where 1pt type prints as a visible hairline
+% across the poem's first line. Defined here rather than emitted into the body
+% because pandoc's raw_tex reader mangles the primitive's space-separated
+% argument (`literal{3 Tr}` -> `literal\{3 Tr\}`), so only a single token may
+% cross the pandoc boundary. Engine-guarded: luatex takes \pdfextension, pdftex
+% \pdfliteral, and xelatex/dvipdfmx the \special; anything else degrades to the
+% previous plain-1pt behaviour rather than dying on an undefined control
+% sequence. engine/manifest_compiler.py \providecommand's an identity fallback,
+% so a profile whose template lacks this still renders.
+\newcommand{\OFDivMarkerHideBegin}{%
+  \ifdefined\pdfextension\pdfextension literal{3 Tr}%
+  \else\ifdefined\pdfliteral\pdfliteral{3 Tr}%
+  \else\special{pdf:literal direct 3 Tr}\fi\fi
+}
+\newcommand{\OFDivMarkerHideEnd}{%
+  \ifdefined\pdfextension\pdfextension literal{0 Tr}%
+  \else\ifdefined\pdfliteral\pdfliteral{0 Tr}%
+  \else\special{pdf:literal direct 0 Tr}\fi\fi
+}
 \newcommand{\OFSectionDividerBackground}[1]{%
   \AddToShipoutPictureBG*{%
     \AtPageLowerLeft{%

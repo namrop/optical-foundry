@@ -588,9 +588,35 @@ def _section_divider_start_lines(divider: dict[str, Any]) -> list[str]:
         # \fontsize{1}{1} into the rest of the document. \detokenize{} keeps
         # underscores + other TeX-special chars in the uid from tripping text
         # mode ("Missing $ inserted").
+        # Bracketed by \OFDivMarkerHideBegin/End so templates that can suppress
+        # the ink do (PDF text render mode 3 — draws nothing, but the string
+        # stays in the text layer for the pdftotext extraction above), while
+        # profiles whose template lacks them get the no-op fallbacks
+        # \providecommand'd below and behave exactly as before. Matters because
+        # divider pages are no longer always full-bleed artwork: codex0 v5 poem
+        # versos are white, where 1pt type prints as a visible hairline across
+        # the poem's first line.
+        #
+        # Two arg-less commands rather than one \OFDivMarkerHide{...} wrapper:
+        # pandoc's raw_tex reader STRIPS an unknown macro that takes a braced
+        # argument and keeps only the argument, so a wrapper silently no-ops
+        # (verified — the emitted .tex came out unwrapped). Bare control
+        # sequences survive, as \OFEnsureRightPage above already relies on. The
+        # render-mode primitive itself can't be emitted here at all: pandoc
+        # mangles its space-separated keyword (`literal{3 Tr}` -> `literal\{`).
+        # Emitted inside an explicit ```{=latex} fence so pandoc passes the line
+        # through verbatim as a RawBlock. Without the fence pandoc parses this as
+        # a paragraph of raw INLINES and silently drops control sequences it
+        # doesn't know — both a \cmd{...} wrapper and bare \cmd tokens vanished
+        # from the emitted .tex, leaving the marker visible. (Neighbouring lines
+        # like \OFEnsureRightPage survive only because each is a standalone
+        # block.) The fence also means the Hide macros reach LaTeX intact.
+        lines.append("```{=latex}")
         lines.append(
-            f"\\begingroup\\fontsize{{1}}{{1}}\\selectfont\\hbox{{\\detokenize{{[[OFDIV:{uid}]]}}}}\\endgroup"
+            f"\\begingroup\\fontsize{{1}}{{1}}\\selectfont\\OFDivMarkerHideBegin"
+            f"\\hbox{{\\detokenize{{[[OFDIV:{uid}]]}}}}\\OFDivMarkerHideEnd\\endgroup"
         )
+        lines.append("```")
     background_image = divider.get("background_image")
     if background_image:
         lines.append(f"\\OFSectionDividerBackground{{{background_image}}}")
@@ -699,6 +725,12 @@ def _render_section_divider(divider: dict[str, Any], numbering_strategy: str = "
 
 
 _CHAPTER_OPENER_FALLBACK_DEFS = [
+    # No-op fallbacks for the furnish-marker ink suppression. Profiles that want
+    # the marker hidden define these in their template (see base.tex/codex0.tex);
+    # \providecommand leaves those alone and only fires for profiles that don't,
+    # preserving the previous 1pt-visible behaviour.
+    "\\providecommand{\\OFDivMarkerHideBegin}{}",
+    "\\providecommand{\\OFDivMarkerHideEnd}{}",
     "\\providecommand{\\OFChapterOpener}[1]{{\\par\\bigskip\\begingroup\\centering\\Large #1\\par\\endgroup\\medskip}}",
     "\\providecommand{\\OFChapterOpenerEpigraph}[2]{{\\par\\bigskip\\begingroup\\centering\\Large #1\\par\\smallskip\\small\\itshape #2\\par\\endgroup\\medskip}}",
     # Fallbacks so a non-codex0 profile can still render a codex-quote epigraph
