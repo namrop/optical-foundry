@@ -49,10 +49,13 @@ def _default_registry() -> ManifestRegistry:
 def cmd_doc(args: argparse.Namespace) -> int:
     dr = DocumentRenderer()
     evidence = dr.render(Path(args.input), args.profile, output_dir=args.output)
-    print(json.dumps({"status": "ok", "render_id": evidence.get("render_id", "?"),
+    success = evidence.get("status") != "error"
+    print(json.dumps({"status": "ok" if success else "error",
+                       "render_id": evidence.get("render_id", "?"),
                        "output": evidence.get("output", {}).get("pdf_path", "unknown"),
-                       "pages": evidence.get("output", {}).get("pdf_pages", 0)}, indent=2))
-    return 0 if evidence.get("status") != "error" else 1
+                       "pages": evidence.get("output", {}).get("pdf_pages", 0),
+                       "error": evidence.get("error", "")}, indent=2))
+    return 0 if success else 1
 
 
 def _parse_yaml_file(path: Path) -> dict:
@@ -199,7 +202,8 @@ def cmd_manifest(args: argparse.Namespace) -> int:
     print(json.dumps({"status": "ok" if success else "error",
                        "render_id": evidence.get("render_id", "?"),
                        "output": evidence.get("output", {}).get("pdf_path", "unknown"),
-                       "pages": evidence.get("output", {}).get("pdf_pages", 0)}, indent=2))
+                       "pages": evidence.get("output", {}).get("pdf_pages", 0),
+                       "error": evidence.get("error", "")}, indent=2))
     return 0 if success else 1
 
 

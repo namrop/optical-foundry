@@ -2,6 +2,7 @@ from pathlib import Path
 
 GF = Path(__file__).resolve().parents[1]
 BASE_TEMPLATE = GF / "profiles" / "40_latex_import" / "templates" / "base.tex"
+CODEX0_TEMPLATE = GF / "profiles" / "40_latex_import" / "templates" / "codex0.tex"
 CLIENT_TEMPLATE = GF / "profiles" / "40_latex_import" / "templates" / "client_report.tex"
 CLIENT_STY = (
     GF / "profiles" / "40_latex_import" / "styles" / "texmf" / "tex" / "latex"
@@ -18,6 +19,13 @@ def test_base_template_titlepage_logo_is_guarded_by_logo_path():
 
     assert before.rfind("$if(logo_path)$") > before.rfind("$if(titlepage)$")
     assert after.find("$endif$") < after.find("$if(title)")
+
+
+def test_codex0_template_routes_verbatim_grinning_emoji_through_fallback_font():
+    """U+1F601 in a text-message epigraph must not fall through to Iowan."""
+    text = CODEX0_TEMPLATE.read_text()
+
+    assert r"\newunicodechar{😁}{{\EmojiFont 😁}}" in text
 
 
 def test_client_kicker_uses_document_type_variable():

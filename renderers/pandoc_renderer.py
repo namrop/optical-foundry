@@ -27,6 +27,7 @@ from engine.codex_editions import (
 )
 from engine.d2 import D2RenderError, preprocess_d2_blocks
 from engine.graphviz import GraphvizRenderError, preprocess_graphviz_blocks
+from engine.glyph_lint import format_missing_character_failures, scan_missing_character_warnings
 from engine.furnish import (
     build_page_to_stock,
     compute_furnish,
@@ -194,7 +195,8 @@ class PandocRenderer(Renderer):
         success = result.returncode == 0 and output_pdf.exists()
 
         # log
-        log_file.write_text(result.stdout + "\n--- STDERR ---\n" + result.stderr)
+        render_log = result.stdout + "\n--- STDERR ---\n" + result.stderr
+        log_file.write_text(render_log)
 
         if not success:
             return self._evidence_error(
@@ -211,6 +213,44 @@ class PandocRenderer(Renderer):
             text_extract = text_file.read_text(errors="replace") if text_file.exists() else ""
         except Exception:
             text_extract = ""
+
+        # LuaLaTeX/Pandoc treats a missing font glyph as a warning and exits 0,
+        # leaving .notdef tofu in the PDF. Promote that warning to a render
+        # failure. The compile log gives the original codepoint; pdftotext's
+        # form-feed-separated U+FFFD output supplies the physical PDF page.
+        missing_characters = scan_missing_character_warnings(render_log, text_extract)
+        if missing_characters:
+            message = "missing-character lint failed: " + format_missing_character_failures(missing_characters)
+            evidence = {
+                "schema_version": "render_evidence_v1",
+                "render_id": plan.render_id,
+                "status": "error",
+                "error": message,
+                "validation": {
+                    "status": "failed",
+                    "checks": {
+                        "pdf_written": output_pdf.exists(),
+                        "text_extract_exists": bool(text_extract),
+                        "all_sources_represented": len(plan.source_inventory) > 0,
+                        "figure_inventory_recorded": isinstance(plan.figure_inventory, list),
+                        "raw_latex_leakage": self._raw_latex_leakage(text_extract),
+                        "missing_character_warnings": True,
+                    },
+                    "warning_count": len(missing_characters),
+                    "errors": [message],
+                },
+                "output": {
+                    "pdf_path": str(output_pdf),
+                    "pdf_pages": self._count_pages(output_pdf),
+                    "pdf_bytes": output_pdf.stat().st_size,
+                    "pdf_sha256": self._sha256_file(output_pdf),
+                },
+                "missing_characters": missing_characters,
+                "command": " ".join(cmd),
+                "logs": str(log_file),
+            }
+            evidence_file.write_text(json.dumps(evidence, indent=2) + "\n")
+            return evidence
 
         # --- pdf info ---
         pdf_bytes = output_pdf.stat().st_size
@@ -1606,6 +1646,7 @@ class PandocRenderer(Renderer):
             "all_sources_represented": len(source_inventory) > 0,
             "figure_inventory_recorded": isinstance(figure_inventory, list),
             "raw_latex_leakage": self._raw_latex_leakage(text_extract),
+            "missing_character_warnings": False,
         }
         passed = (
             checks["pdf_written"]
@@ -1631,6 +1672,7 @@ class PandocRenderer(Renderer):
                 "all_sources_represented": False,
                 "figure_inventory_recorded": False,
                 "raw_latex_leakage": False,
+                "missing_character_warnings": False,
             },
             "warning_count": 0,
             "errors": [message],
