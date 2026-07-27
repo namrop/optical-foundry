@@ -5,7 +5,7 @@ note_role: architecture_note
 validation_profile: standard
 status: active
 created: 2026-07-27T12:45:00-04:00
-updated: 2026-07-27T12:45:00-04:00
+updated: 2026-07-27T13:10:00-04:00
 beam_home: 42_optical_foundry
 title: "Optical Foundry — Architecture Direction: profiles, content, and runtime separation"
 tags:
@@ -16,7 +16,7 @@ tags:
   - non-regression
   - direction
   - luis-ruled
-summary: "Luis-ruled architecture direction (2026-07-27) ahead of a dedicated design session: profiles decouple from runtime so the engine can be released publicly with profiles as configuration; content (images/assets) decouples from profiles because it is data, not engine; and nothing in the existing profile set may regress. Establishes that 'book' is the largest format the Foundry supports, not the frame to design around. Finds that the first and third principles are already stated in DESIGN.md and have drifted, while asset location was never modeled at all — the root cause of 194MB of Codex 0 plates living inside the profile tree. Direction and evidence only; the design belongs to the session."
+summary: "Luis-ruled architecture direction (2026-07-27) ahead of a dedicated design session: profiles decouple from runtime so the engine can be released publicly with profiles as configuration; content (images/assets) decouples from profiles because it is data, not engine; and nothing in the existing profile set may regress. Establishes that 'book' is the largest format the Foundry supports, not the frame to design around. Finds that the first and third principles are already stated in DESIGN.md and have drifted, while asset location was never modeled at all — the root cause of 194MB of Codex 0 plates living inside the profile tree. Also records the standing goal of filtering cross-domain work up out of the codex0 profile (which is the reference implementation, not the outlier — the other profiles are legacy), with the client classification model named as the strongest generalization candidate, and the far-roadmap web-app target as a constraint on the renderer seam. Direction and evidence only; the design belongs to the session."
 ---
 
 # Architecture Direction — profiles, content, and runtime separation
@@ -183,7 +183,77 @@ configuration rather than engine behavior.
 
 ---
 
-## 7. Sequencing and non-goals
+## 7. Generalization direction — codex0 is the reference implementation, not the outlier
+
+**Luis, 2026-07-27:** much of what was learned building the codex0 profile is *"wider
+spanning than just codex zero or even just the book objects."* The codex0 profile is the
+closest thing to how he wants to operate across the whole Foundry. **The rest of the
+profiles are legacy and deliberately untouched.** The standing goal: *"filter as much truly
+cross-domain work up as far as possible."*
+
+This inverts the usual hoisting instinct. Normally you generalize from the common
+denominator; here the **newest, most specific profile is the mature one**, and the shared
+layer is the stale one. Promotion flows *up from* codex0, not down from the base.
+
+It also sharpens P3. **Non-regression is not the same as non-change.** The legacy profiles
+must keep *working*; they are not the pattern to preserve. The thing being protected is
+their output, not their design.
+
+**Symptom in miniature — capability that is already engine-level but wears a profile's
+name.** `engine/codex_editions.py` is general machinery (audience-conditional content with
+fail-closed guards) sitting in `engine/`, but named for one profile and keyed to that
+profile's `cx0:` marker vocabulary. The capability generalized; the naming never did.
+
+**The strongest concrete candidate — and it serves paid client work.** `client_report`
+renders *"internal, client-confidential, and public"* documents, but its `classification`
+field is **marking only**: cover and running-header treatment, defaulting to
+`highly-confidential` when omitted, hard-erroring on unknown values. The fail-closed
+instinct is already there — but only at the label layer. There is **no content gating**:
+producing internal / client / public versions of one assessment means maintaining separate
+source documents that drift.
+
+That is precisely what `codex_editions.py` already does — one source, N audience branches,
+guarded regions that fail closed when an edition has no override. The Codex 0 edition model
+and the security-classification model are **the same abstraction at different stakes**.
+Generalizing it would let one assessment source render three audience versions with the
+gating enforced rather than remembered.
+
+(Register issue 23 — guards are intra-file only, with no node-level scope — is therefore
+not a Codex 0 issue. It is a limitation of a general capability, discovered through the
+book.)
+
+Other candidates worth triaging the same way, from `engine/`: `layout_images.py`,
+`emoji_substitution.py`, `font_resolver.py`, `dropcap_assets.py`, `page_size.py` read as
+general; `imposition.py`, `bindery_preflight.py`, `delivery.py` read as physical-object
+(bucket B in §6), which is a family, not a profile.
+
+---
+
+## 8. Roadmap horizon — non-PDF targets
+
+**Luis, 2026-07-27 (explicitly far out on the roadmap):** compiling *"a tree or a document
+into a web app of some kind."*
+
+Recorded now because it constrains the architecture even while deferred:
+
+- It **tensions with a stated non-negotiable.** DESIGN.md §0: *"Pandoc remains the sole
+  render engine."* Pandoc emits HTML, but a web app is more than an HTML target. Whether
+  that constraint holds, narrows to "Pandoc remains *a* renderer," or is scoped to print
+  targets is a design-session question — not something to settle by drift.
+- **The seam already exists in the design.** §0.5 models a *projection plan / assembly
+  view* as "internal compiled render IR," with the renderer as a "mechanical backend
+  adapter." If that IR is genuinely renderer-agnostic, a web target is **another adapter,
+  not a rewrite**. If the IR has quietly absorbed LaTeX/PDF assumptions, it is not, and the
+  cost of finding out later is high.
+- **A "tree" target implies content roots too** (§3): a compiled web artifact needs its
+  assets resolvable and relocatable, not baked into a profile directory.
+- It reinforces the framing from §1 from the other direction: if the Foundry can target a
+  web app, then "book" is emphatically not the frame — it is one output among print
+  formats, physical sheets, and eventually interactive ones.
+
+---
+
+## 9. Sequencing and non-goals
 
 - **The repo split is future work.** Luis: not now. P2 (content out of the engine) is the
   refactor that unblocks it and can proceed independently.
@@ -195,7 +265,7 @@ configuration rather than engine behavior.
 
 ---
 
-## 8. Open questions for the design session
+## 10. Open questions for the design session
 
 1. What is the **asset/content layer** in DESIGN.md §0.5's abstraction — and what supplies
    content roots to a render? Manifest, profile, invocation, or a resolution chain?
@@ -212,3 +282,9 @@ configuration rather than engine behavior.
    collapses to `render_report` alone — the pre-book, report-era model, with no counterpart
    to issue 1's proposed book/manifest input.
 6. What is the **non-regression harness**, given §5 says part of it can never live here?
+7. Which capabilities **filter up out of codex0** (§7), and what is the promotion test — the
+   `codex_editions.py` → client-classification generalization is the first candidate, and
+   it has a paying use case.
+8. Is the **projection plan / assembly view IR renderer-agnostic today**, or has it absorbed
+   LaTeX/PDF assumptions? This decides whether the far-roadmap web target (§8) is an adapter
+   or a rewrite, and it is cheap to answer now and expensive to answer later.
