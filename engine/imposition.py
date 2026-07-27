@@ -174,11 +174,17 @@ def impose_pdf(
     sheet_size: str,
     signature_size: int | str,
     duplex_mode: str,
+    gutter_bias_mm: float = 0.0,
 ) -> ImpositionResult:
     """Impose a PDF into booklet/signature sheet sides.
 
     ``output`` may be either a directory or a final ``.pdf`` path. A JSON page
     map is written beside the imposed PDF.
+
+    ``gutter_bias_mm`` (Luis-ruled 2026-07-27, plate sheets) nudges each imposed
+    page OUTWARD toward its outer sheet edge by this amount, so any printer
+    unprintable/fade shortfall accumulates in the CENTER (spine/gutter, hidden in
+    the bind) rather than at the trimmed fore-edges. Default 0 (pure-text sheets).
     """
 
     input_path = Path(input_pdf).expanduser().resolve()
@@ -214,7 +220,9 @@ def impose_pdf(
     build_input = build_dir / "input.pdf"
     shutil.copy2(input_path, build_input)
     tex_path = build_dir / "impose.tex"
-    tex_path.write_text(_render_imposition_tex(plan, page_size=page, sheet_size=sheet, input_name=build_input.name))
+    tex_path.write_text(_render_imposition_tex(
+        plan, page_size=page, sheet_size=sheet, input_name=build_input.name,
+        gutter_bias_mm=gutter_bias_mm))
 
     xelatex = os.environ.get("XELATEX") or shutil.which("xelatex") or "/Library/TeX/texbin/xelatex"
     proc = subprocess.run(
@@ -312,20 +320,30 @@ def _validate_pdf_page_size(pdf_info: dict[str, object], page_size: str, *, cont
         )
 
 
-def _render_imposition_tex(plan: BookletImpositionPlan, *, page_size: str, sheet_size: str, input_name: str) -> str:
+def _render_imposition_tex(plan: BookletImpositionPlan, *, page_size: str, sheet_size: str, input_name: str, gutter_bias_mm: float = 0.0) -> str:
     sheet_w, sheet_h = PAGE_SIZE_INCHES[sheet_size]
     landscape_w, landscape_h = max(sheet_w, sheet_h), min(sheet_w, sheet_h)
+    bias = f"{max(0.0, float(gutter_bias_mm))}mm"
     lines = [
         r"\documentclass{article}",
         rf"\usepackage[paperwidth={landscape_w}in,paperheight={landscape_h}in,margin=0in]{{geometry}}",
         r"\usepackage{graphicx}",
         r"\pagestyle{empty}",
         r"\setlength{\parindent}{0pt}",
+        # Gutter bias (plate sheets): nudge each page outward by \OFGutterBias so
+        # the printer shortfall lands in the center (spine/gutter), not the
+        # fore-edges. Left page shifts left, right page shifts right, opening a
+        # 2*bias gap at the fold. 0mm = pure text sheets, no shift. The outward
+        # overflow past the sheet edge is the fore-edge (trimmed / bleed-absorbed).
+        rf"\newlength{{\OFGutterBias}}\setlength{{\OFGutterBias}}{{{bias}}}",
         r"\newcommand{\OFSlot}[1]{\begin{minipage}[c][\paperheight][c]{0.5\paperwidth}\centering #1\end{minipage}}",
         rf"\newcommand{{\OFSourcePage}}[1]{{\OFSlot{{\includegraphics[page=#1,width=\linewidth,height=\paperheight,keepaspectratio]{{{input_name}}}}}}}",
         r"\newcommand{\OFBlankPage}{\OFSlot{}}",
-        r"\newcommand{\OFSide}[2]{\noindent#1#2\newpage}",
-        r"\newcommand{\OFRotatedSide}[2]{\noindent\rotatebox{180}{\begin{minipage}{\paperwidth}#1#2\end{minipage}}\newpage}",
+        # #1 = left page (shift left/outward), #2 = right page (shift right/outward).
+        r"\newcommand{\OFSide}[2]{\noindent\hspace*{-\OFGutterBias}{#1}\hspace*{2\OFGutterBias}{#2}\newpage}",
+        # Rotated (long-edge duplex): the 180 rotation flips left/right, so bias is
+        # inverted inside the rotatebox to keep the physical shift outward.
+        r"\newcommand{\OFRotatedSide}[2]{\noindent\rotatebox{180}{\begin{minipage}{\paperwidth}\hspace*{-\OFGutterBias}{#1}\hspace*{2\OFGutterBias}{#2}\end{minipage}}\newpage}",
         r"\begin{document}",
     ]
     for signature in plan.signatures:

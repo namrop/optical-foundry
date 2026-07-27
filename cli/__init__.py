@@ -278,6 +278,7 @@ def cmd_impose(args: argparse.Namespace) -> int:
             sheet_size=args.sheet_size,
             signature_size=args.signature_size,
             duplex_mode=args.duplex,
+            gutter_bias_mm=args.gutter_bias_mm,
         )
     except ImpositionError as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
@@ -421,6 +422,14 @@ def main() -> int:
         required=True,
         choices=["short-edge", "short_edge", "long-edge", "long_edge"],
         help="Printer duplex mode; short-edge is typical for landscape booklet sheets",
+    )
+    im_ap.add_argument(
+        "--gutter-bias-mm",
+        type=float,
+        default=0.0,
+        help=("Nudge each imposed page outward toward its outer sheet edge by this many mm "
+              "so printer shortfall lands in the center gutter (hidden in the bind), not the "
+              "fore-edges. Use for plate/divider sheets (e.g. 1.0); 0 (default) for text sheets."),
     )
     im_ap.set_defaults(func=cmd_impose)
 
