@@ -338,7 +338,11 @@ def _render_imposition_tex(plan: BookletImpositionPlan, *, page_size: str, sheet
         rf"\newlength{{\OFGutterBias}}\setlength{{\OFGutterBias}}{{{bias}}}",
         r"\newcommand{\OFSlot}[1]{\begin{minipage}[c][\paperheight][c]{0.5\paperwidth}\centering #1\end{minipage}}",
         rf"\newcommand{{\OFSourcePage}}[1]{{\OFSlot{{\includegraphics[page=#1,width=\linewidth,height=\paperheight,keepaspectratio]{{{input_name}}}}}}}",
-        r"\newcommand{\OFBlankPage}{\OFSlot{}}",
+        # \strut keeps the slot at its full 0.5\paperwidth: an EMPTY minipage
+        # collapses to zero width, which shifts the facing (non-blank) page to the
+        # wrong half — e.g. a recto leaf paired with a leading blank printed on the
+        # LEFT instead of the right (found on the single-leaf cardstock test).
+        r"\newcommand{\OFBlankPage}{\OFSlot{\strut}}",
         # #1 = left page (shift left/outward), #2 = right page (shift right/outward).
         r"\newcommand{\OFSide}[2]{\noindent\hspace*{-\OFGutterBias}{#1}\hspace*{2\OFGutterBias}{#2}\newpage}",
         # Rotated (long-edge duplex): the 180 rotation flips left/right, so bias is
