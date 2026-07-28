@@ -422,6 +422,21 @@ def test_codex0_template_wires_pataphor_ranges_to_page_local_role_rails():
     assert "\\CodexRailTextClearance" in template
 
 
+def test_codex_pataphor_begin_enters_horizontal_mode_before_saving_first_position():
+    template = (PROFILE_ROOT / "templates" / "codex0.tex").read_text()
+
+    begin_macro = template.split(
+        "\\NewDocumentCommand{\\CodexPataphorBegin}{m}", 1
+    )[1].split("\\NewDocumentCommand{\\CodexPataphorEnd}{m}", 1)[0]
+    assert "\\leavevmode" in begin_macro
+    assert begin_macro.index("\\leavevmode") < begin_macro.index(
+        "\\zref@labelbyprops{codexpatstart@#1}{abspage}"
+    )
+    assert begin_macro.index("\\leavevmode") < begin_macro.index(
+        "\\zsavepos{codexpatstartpos@#1}"
+    )
+
+
 def test_codex_inline_rule_marker_lowers_to_wh10_flourish(tmp_path):
     latex = _pandoc_latex(
         tmp_path,
