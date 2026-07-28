@@ -399,7 +399,11 @@ def test_codex0_template_wires_pataphor_ranges_to_page_local_role_rails():
     assert "\\codex_rail_select_role:" in template
     assert "\\codex_rail_select_band:" in template
     assert "\\codex_rail_select_seed:" in template
-    assert "height=#2,width=#1,keepaspectratio" in template
+    # Height-only scaling: width floats proportionally, staying at or under
+    # the design width. This eliminates the aspect-ratio cap that left gaps
+    # on full-page head/tail segments.
+    assert "height=#2" in template
+    assert "width=#1,keepaspectratio" not in template
     assert "\\CodexShipoutPataphorRail" in template
     assert "\\AddToShipoutPictureBG{\\CodexShipoutPataphorRail}" in template
     # The old one-rail-per-page and whole-range tier state must be gone: two
