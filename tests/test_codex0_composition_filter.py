@@ -306,6 +306,10 @@ def test_codex0_profile_wires_filter_and_defaults_only_to_codex0():
     assert codex_defaults["variables"]["codex_threshold_ornament_gap"] == "4\\baselineskip"
     assert codex_defaults["variables"]["codex_quote_gap_after"] == "0.85em"
     assert codex_defaults["variables"]["codex_ornament_width"] == "0.44\\linewidth"
+    # Provisional 2026-07-28 print→scan calibration: digital heartword #800020
+    # scanned as #863055; physical Writer's Blood scanned as #84315C. Applying
+    # the same local Lab shift yields #7F0227 as the print-source ownvoice hex.
+    assert codex_defaults["variables"]["ownvoice_color"] == "7F0227"
 
     spine_defaults = yaml.safe_load((PROFILE_ROOT / "defaults" / "document_spine.yaml").read_text())
     johannah_defaults = yaml.safe_load((PROFILE_ROOT / "defaults" / "mythic_letter_johannah.yaml").read_text())
@@ -378,7 +382,7 @@ def test_codex0_template_exposes_composition_macros_and_environments():
     assert "\\providecommand{\\CodexSignal}" in template
     assert "\\providecommand{\\CodexOwnVoice}" in template
     assert "\\providecommand{\\CodexOwnVoiceHeartword}" in template
-    assert "\\definecolor{LetterOwnVoice}{HTML}{432660}" in template
+    assert "\\definecolor{LetterOwnVoice}{HTML}{7F0227}" in template
 
 
 def test_codex0_template_wires_pataphor_ranges_to_page_local_role_rails():
