@@ -3,6 +3,8 @@ from pathlib import Path
 import json
 import sys
 
+import pytest
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from engine.furnish import (  # noqa: E402
@@ -12,6 +14,8 @@ from engine.furnish import (  # noqa: E402
     write_furnish_json,
     write_furnish_text,
 )
+from engine.projection_plan import ProjectionPlan  # noqa: E402
+from renderers.pandoc_renderer import FurnishMapError, PandocRenderer  # noqa: E402
 
 
 def _sample_imposition_mapping() -> dict:
@@ -127,3 +131,71 @@ def test_write_furnish_json_and_text_roundtrip(tmp_path):
     assert "Furnish plan" in txt
     assert "cardstock" in txt
     assert "part-i" in txt  # divider landing table
+
+
+def test_renderer_furnish_uses_preserved_map_after_final_pdf_is_sanitized(tmp_path):
+    mapping_path = tmp_path / "book.imposition.json"
+    mapping_path.write_text(json.dumps(_sample_imposition_mapping()))
+    source = tmp_path / "source.md"
+    source.write_text("Body\n")
+    plan = ProjectionPlan(
+        profile_id="codex0",
+        render_id="furnish-preserved-map",
+        render_source=source,
+        boundary_assertions={
+            "section_dividers": [
+                {"uid": "part-i", "stock": "cardstock", "blank_after": False}
+            ]
+        },
+    )
+
+    summary = PandocRenderer()._emit_furnish_map(
+        plan,
+        tmp_path / "sanitized-final.pdf",
+        mapping_path,
+        divider_page_map={"part-i": 3},
+    )
+
+    assert summary is not None
+    furnish_payload = json.loads(mapping_path.with_suffix(".furnish.json").read_text())
+    assert furnish_payload["divider_page_map"] == {"part-i": 3}
+    assert summary["divider_page_map_count"] == 1
+
+
+def test_renderer_furnish_does_not_fall_back_to_sanitized_pdf(tmp_path, monkeypatch):
+    mapping_path = tmp_path / "book.imposition.json"
+    mapping_path.write_text(json.dumps(_sample_imposition_mapping()))
+    source = tmp_path / "source.md"
+    source.write_text("Body\n")
+    plan = ProjectionPlan(
+        profile_id="codex0",
+        render_id="furnish-map-required",
+        render_source=source,
+        boundary_assertions={
+            "section_dividers": [
+                {"uid": "part-i", "stock": "cardstock", "blank_after": False}
+            ]
+        },
+    )
+    fallback_called = False
+
+    def forbidden_sanitized_pdf_fallback(_pdf_path):
+        nonlocal fallback_called
+        fallback_called = True
+        return {"part-i": 3}
+
+    monkeypatch.setattr(
+        "renderers.pandoc_renderer.extract_divider_page_map",
+        forbidden_sanitized_pdf_fallback,
+    )
+
+    with pytest.raises(FurnishMapError, match="preserved pre-sanitization"):
+        PandocRenderer()._emit_furnish_map(
+            plan,
+            tmp_path / "sanitized-final.pdf",
+            mapping_path,
+        )
+
+    assert fallback_called is False
+    assert not mapping_path.with_suffix(".furnish.json").exists()
+    assert not mapping_path.with_suffix(".furnish.txt").exists()

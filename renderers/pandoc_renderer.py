@@ -14,6 +14,7 @@ import re
 import shutil
 import subprocess
 import time
+import uuid
 from dataclasses import replace
 from pathlib import Path
 from typing import Any
@@ -29,9 +30,12 @@ from engine.d2 import D2RenderError, preprocess_d2_blocks
 from engine.graphviz import GraphvizRenderError, preprocess_graphviz_blocks
 from engine.glyph_lint import format_missing_character_failures, scan_missing_character_warnings
 from engine.furnish import (
+    DividerMarkerSanitizationError,
     build_page_to_stock,
     compute_furnish,
     extract_divider_page_map,
+    sanitize_divider_markers,
+    write_divider_page_map,
     write_furnish_json,
     write_furnish_text,
 )
@@ -53,6 +57,14 @@ from engine.projection_plan import ProjectionPlan
 from renderers.base import Renderer
 
 
+class FurnishMapError(RuntimeError):
+    """Raised when preserved divider evidence cannot support a furnish map."""
+
+
+class RenderArtifactPublicationError(RuntimeError):
+    """Raised when validated render intermediates cannot be published safely."""
+
+
 class PandocRenderer(Renderer):
     """Execute a ProjectionPlan through Pandoc.
 
@@ -72,6 +84,13 @@ class PandocRenderer(Renderer):
         log_file = out_dir / f"{plan.render_id}.log"
         evidence_file = out_dir / f"{plan.render_id}.evidence.json"
         text_file = out_dir / f"{plan.render_id}.txt"
+        compile_token = uuid.uuid4().hex
+        compile_pdf = out_dir / (
+            f".{plan.render_id}.compile-stage-{compile_token}{plan.output_extension}"
+        )
+        compile_text_file = out_dir / (
+            f".{plan.render_id}.compile-stage-{compile_token}.txt"
+        )
 
         # --- build pandoc command ---
         try:
@@ -98,7 +117,7 @@ class PandocRenderer(Renderer):
             render_source, out_dir, plan.render_id, resolved_profile.profile_family
         )
         cmd_source = self._titlepage_background_normalized_source(cmd_source, out_dir, plan.render_id)
-        cmd = ["pandoc", str(cmd_source), "-o", str(output_pdf)]
+        cmd = ["pandoc", str(cmd_source), "-o", str(compile_pdf)]
         defaults_meta: dict[str, Any] = {}
         for defaults_file in resolved_profile.defaults_stack:
             cmd += ["--defaults", str(defaults_file)]
@@ -188,11 +207,11 @@ class PandocRenderer(Renderer):
         except subprocess.TimeoutExpired:
             elapsed = time.monotonic() - start
             return self._evidence_error(
-                plan, output_pdf, evidence_file, elapsed, "pandoc timed out after 300s", cmd
+                plan, compile_pdf, evidence_file, elapsed, "pandoc timed out after 300s", cmd
             )
 
         elapsed = time.monotonic() - start
-        success = result.returncode == 0 and output_pdf.exists()
+        success = result.returncode == 0 and compile_pdf.exists()
 
         # log
         render_log = result.stdout + "\n--- STDERR ---\n" + result.stderr
@@ -200,19 +219,24 @@ class PandocRenderer(Renderer):
 
         if not success:
             return self._evidence_error(
-                plan, output_pdf, evidence_file, elapsed,
+                plan, compile_pdf, evidence_file, elapsed,
                 f"pandoc exit {result.returncode}: {result.stderr[-500:]}", cmd
             )
 
-        # --- extract text ---
+        # --- extract compile-stage text for missing-glyph validation ---
         try:
             subprocess.run(
-                ["pdftotext", str(output_pdf), str(text_file)],
-                capture_output=True, timeout=60,
+                ["pdftotext", str(compile_pdf), str(compile_text_file)],
+                capture_output=True,
+                timeout=60,
+                check=True,
             )
-            text_extract = text_file.read_text(errors="replace") if text_file.exists() else ""
-        except Exception:
-            text_extract = ""
+            text_extract = compile_text_file.read_text(errors="replace")
+        except (subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError) as exc:
+            message = f"could not extract compile-stage PDF text layer: {exc}"
+            return self._evidence_error(
+                plan, compile_pdf, evidence_file, elapsed, message, cmd
+            )
 
         # LuaLaTeX/Pandoc treats a missing font glyph as a warning and exits 0,
         # leaving .notdef tofu in the PDF. Promote that warning to a render
@@ -229,7 +253,7 @@ class PandocRenderer(Renderer):
                 "validation": {
                     "status": "failed",
                     "checks": {
-                        "pdf_written": output_pdf.exists(),
+                        "pdf_written": False,
                         "text_extract_exists": bool(text_extract),
                         "all_sources_represented": len(plan.source_inventory) > 0,
                         "figure_inventory_recorded": isinstance(plan.figure_inventory, list),
@@ -240,10 +264,11 @@ class PandocRenderer(Renderer):
                     "errors": [message],
                 },
                 "output": {
-                    "pdf_path": str(output_pdf),
-                    "pdf_pages": self._count_pages(output_pdf),
-                    "pdf_bytes": output_pdf.stat().st_size,
-                    "pdf_sha256": self._sha256_file(output_pdf),
+                    "pdf_path": str(compile_pdf),
+                    "pdf_pages": self._count_pages(compile_pdf),
+                    "pdf_bytes": compile_pdf.stat().st_size,
+                    "pdf_sha256": self._sha256_file(compile_pdf),
+                    "publication_status": "withheld",
                 },
                 "missing_characters": missing_characters,
                 "command": " ".join(cmd),
@@ -252,25 +277,158 @@ class PandocRenderer(Renderer):
             evidence_file.write_text(json.dumps(evidence, indent=2) + "\n")
             return evidence
 
+        # --- preserve furnish map, then sanitize the intermediate PDF text ---
+        divider_page_map: dict[str, int] = {}
+        divider_marker_hygiene: dict[str, Any] = {
+            "extracted_before_sanitization": 0,
+            "removed_text_operations": 0,
+            "final_pdf_marker_count": 0,
+            "page_map_path": "",
+        }
+        publication_text_file = compile_text_file
+        publication_extra_artifacts: tuple[tuple[Path, Path], ...] = ()
+        divider_inventory = (plan.boundary_assertions or {}).get("section_dividers") or []
+        if divider_inventory:
+            divider_page_map = extract_divider_page_map(compile_pdf)
+            expected_uids = {
+                str(item.get("uid", "")).strip()
+                for item in divider_inventory
+                if str(item.get("uid", "")).strip()
+            }
+            missing_uids = sorted(expected_uids - set(divider_page_map))
+            if missing_uids:
+                message = "compile-stage OFDIV extraction missed divider uid(s): " + ", ".join(missing_uids)
+                return self._evidence_error(
+                    plan, compile_pdf, evidence_file, elapsed, message, cmd
+                )
+
+            page_map_path = out_dir / f"{plan.render_id}.divider_pages.json"
+            page_map_stage_path = out_dir / (
+                f".{plan.render_id}.divider-pages-stage-{compile_token}.json"
+            )
+            try:
+                write_divider_page_map(
+                    divider_page_map,
+                    page_map_stage_path,
+                    render_id=plan.render_id,
+                )
+                sanitization = sanitize_divider_markers(
+                    compile_pdf, divider_page_map
+                )
+            except (DividerMarkerSanitizationError, OSError) as exc:
+                return self._evidence_error(
+                    plan, compile_pdf, evidence_file, elapsed, str(exc), cmd
+                )
+
+            # Extract into a second intermediate. The initial text remains useful
+            # compile evidence until the sanitized PDF and refreshed text have
+            # both passed verification and are ready for pair publication.
+            publication_text_file = out_dir / (
+                f".{plan.render_id}.sanitized-text-stage-{compile_token}.txt"
+            )
+            try:
+                subprocess.run(
+                    ["pdftotext", str(compile_pdf), str(publication_text_file)],
+                    capture_output=True,
+                    timeout=60,
+                    check=True,
+                )
+                text_extract = publication_text_file.read_text(errors="replace")
+            except (subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError) as exc:
+                message = f"could not verify sanitized intermediate-PDF text layer: {exc}"
+                return self._evidence_error(
+                    plan, compile_pdf, evidence_file, elapsed, message, cmd
+                )
+            if "[[OFDIV:" in text_extract:
+                message = "OFDIV marker survived sanitized text-sidecar refresh"
+                return self._evidence_error(
+                    plan, compile_pdf, evidence_file, elapsed, message, cmd
+                )
+
+            publication_extra_artifacts = ((page_map_stage_path, page_map_path),)
+            divider_marker_hygiene = {
+                "extracted_before_sanitization": len(divider_page_map),
+                "removed_text_operations": sanitization.removed_text_operations,
+                "pages_sanitized": sanitization.pages_sanitized,
+                "final_pdf_marker_count": sanitization.final_pdf_marker_count,
+                "page_map_path": str(page_map_path),
+            }
+
+        warnings = (
+            list(plan.boundary_assertions.get("warnings", []))
+            + defaults_meta.get("warnings", [])
+            + resolved_profile.warnings
+        )
+        validation = self._validation_success(
+            pdf_written=compile_pdf.exists(),
+            text_extract=text_extract,
+            source_inventory=plan.source_inventory,
+            figure_inventory=plan.figure_inventory,
+            warnings=warnings,
+        )
+        if validation["status"] != "passed":
+            failed_checks = [
+                name
+                for name, value in validation["checks"].items()
+                if (name in {"raw_latex_leakage", "missing_character_warnings"} and value)
+                or (name not in {"raw_latex_leakage", "missing_character_warnings"} and not value)
+            ]
+            message = "render validation failed before publication"
+            if failed_checks:
+                message += ": " + ", ".join(failed_checks)
+            validation["errors"] = [message]
+            evidence = {
+                "schema_version": "render_evidence_v1",
+                "render_id": plan.render_id,
+                "status": "error",
+                "error": message,
+                "validation": validation,
+                "output": {
+                    "pdf_path": str(compile_pdf),
+                    "publication_status": "withheld",
+                },
+                "command": " ".join(cmd),
+                "logs": str(log_file),
+            }
+            evidence_file.write_text(json.dumps(evidence, indent=2) + "\n")
+            return evidence
+
+        # Nothing final-named is touched until compile, glyph, marker, sanitizer,
+        # and text-refresh checks have all passed. Publication uses atomic
+        # same-directory replaces and bounded rollback of this artifact set.
+        try:
+            self._publish_render_artifacts(
+                compile_pdf,
+                publication_text_file,
+                output_pdf,
+                text_file,
+                extra_artifacts=publication_extra_artifacts,
+            )
+        except RenderArtifactPublicationError as exc:
+            return self._evidence_error(
+                plan, compile_pdf, evidence_file, elapsed, str(exc), cmd
+            )
+        if publication_text_file != compile_text_file:
+            try:
+                compile_text_file.unlink(missing_ok=True)
+            except OSError:
+                pass
+
         # --- pdf info ---
         pdf_bytes = output_pdf.stat().st_size
         pdf_sha = self._sha256_file(output_pdf)
         pages = self._count_pages(output_pdf)
-        imposition_output = self._maybe_impose_bound_pdf(plan, output_pdf, out_dir)
+        imposition_output = self._maybe_impose_bound_pdf(
+            plan,
+            output_pdf,
+            out_dir,
+            divider_page_map=divider_page_map,
+        )
         bindery_preflight = generate_bindery_preflight(
             output_pdf,
             out_dir=out_dir,
             plan=plan,
             imposition=imposition_output,
-        )
-
-        warnings = list(plan.boundary_assertions.get("warnings", [])) + defaults_meta.get("warnings", []) + resolved_profile.warnings
-        validation = self._validation_success(
-            pdf_written=output_pdf.exists(),
-            text_extract=text_extract,
-            source_inventory=plan.source_inventory,
-            figure_inventory=plan.figure_inventory,
-            warnings=warnings,
         )
 
         # --- evidence ---
@@ -325,6 +483,7 @@ class PandocRenderer(Renderer):
                 "toc_present": plan.toc,
                 "toc_depth": plan.toc_depth,
                 "figures_validated": len(plan.figure_inventory) == 0,
+                "divider_markers": divider_marker_hygiene,
             },
             "validation": validation,
             "warnings": warnings,
@@ -363,7 +522,100 @@ class PandocRenderer(Renderer):
             options += ["--variable", f"{key}={safe}"]
         return options
 
-    def _maybe_impose_bound_pdf(self, plan: ProjectionPlan, output_pdf: Path, out_dir: Path) -> dict[str, Any] | None:
+    @staticmethod
+    def _publish_render_artifacts(
+        staged_pdf: Path,
+        staged_text: Path,
+        final_pdf: Path,
+        final_text: Path,
+        *,
+        extra_artifacts: tuple[tuple[Path, Path], ...] = (),
+    ) -> None:
+        """Atomically replace validated render artifacts with bounded rollback.
+
+        Every staged, final, and rollback path is in the same output directory,
+        so each ``os.replace`` is a same-filesystem atomic operation. Since
+        multiple directory entries cannot be replaced as one operation, prior
+        finals are copied to private rollback paths first. If a later promotion
+        fails, earlier promotions are restored (or removed when they had no
+        predecessor). Rollback is deliberately bounded to this artifact set.
+        """
+
+        artifacts = (
+            (staged_pdf, final_pdf),
+            (staged_text, final_text),
+            *extra_artifacts,
+        )
+        parents = {path.parent.resolve() for pair in artifacts for path in pair}
+        if len(parents) != 1:
+            raise RenderArtifactPublicationError(
+                "render publication requires staged and final artifacts in one directory"
+            )
+        missing = [str(staged) for staged, _final in artifacts if not staged.is_file()]
+        if missing:
+            raise RenderArtifactPublicationError(
+                "validated render intermediate missing before publication: "
+                + ", ".join(missing)
+            )
+
+        rollback_paths: dict[Path, Path | None] = {}
+        try:
+            for _staged, final in artifacts:
+                if final.exists():
+                    rollback = final.with_name(
+                        f".{final.name}.rollback-{uuid.uuid4().hex}"
+                    )
+                    shutil.copy2(final, rollback)
+                    rollback_paths[final] = rollback
+                else:
+                    rollback_paths[final] = None
+        except OSError as exc:
+            for rollback in rollback_paths.values():
+                if rollback is not None:
+                    try:
+                        rollback.unlink(missing_ok=True)
+                    except OSError:
+                        pass
+            raise RenderArtifactPublicationError(
+                f"could not prepare render publication rollback: {exc}"
+            ) from exc
+
+        promoted: list[Path] = []
+        try:
+            for staged, final in artifacts:
+                os.replace(staged, final)
+                promoted.append(final)
+        except OSError as exc:
+            rollback_errors: list[str] = []
+            for final in reversed(promoted):
+                rollback = rollback_paths[final]
+                try:
+                    if rollback is None:
+                        final.unlink(missing_ok=True)
+                    else:
+                        os.replace(rollback, final)
+                except OSError as rollback_exc:
+                    rollback_errors.append(f"{final}: {rollback_exc}")
+            detail = f"could not publish validated render artifacts: {exc}"
+            if rollback_errors:
+                detail += "; bounded rollback failed for " + "; ".join(rollback_errors)
+            raise RenderArtifactPublicationError(detail) from exc
+        finally:
+            for rollback in rollback_paths.values():
+                if rollback is not None:
+                    try:
+                        rollback.unlink(missing_ok=True)
+                    except OSError:
+                        pass
+
+    def _maybe_impose_bound_pdf(
+        self,
+        plan: ProjectionPlan,
+        output_pdf: Path,
+        out_dir: Path,
+        *,
+        divider_page_map: dict[str, int] | None = None,
+    ) -> dict[str, Any] | None:
         imposition = plan.delivery.get("imposition", {}) if isinstance(plan.delivery.get("imposition", {}), dict) else {}
         if plan.delivery.get("mode") != "bound" or not imposition.get("enabled"):
             return None
@@ -382,7 +634,23 @@ class PandocRenderer(Renderer):
                 "error": str(exc),
                 "layout": str(imposition.get("layout", "booklet_signature_2up")),
             }
-        furnish_summary = self._emit_furnish_map(plan, output_pdf, Path(result.mapping_json))
+        try:
+            furnish_summary = self._emit_furnish_map(
+                plan,
+                output_pdf,
+                Path(result.mapping_json),
+                divider_page_map=divider_page_map,
+            )
+        except FurnishMapError as exc:
+            return {
+                "status": "error",
+                "stage": "furnish",
+                "error": str(exc),
+                "layout": str(imposition.get("layout", "booklet_signature_2up")),
+                "input_pdf": str(output_pdf),
+                "output_pdf": str(result.output_pdf),
+                "mapping_json": str(result.mapping_json),
+            }
         payload: dict[str, Any] = {
             "status": "ok",
             "layout": str(imposition.get("layout", "booklet_signature_2up")),
@@ -403,25 +671,51 @@ class PandocRenderer(Renderer):
         return payload
 
     def _emit_furnish_map(
-        self, plan: ProjectionPlan, output_pdf: Path, imposition_mapping_path: Path,
+        self,
+        plan: ProjectionPlan,
+        output_pdf: Path,
+        imposition_mapping_path: Path,
+        *,
+        divider_page_map: dict[str, int] | None = None,
     ) -> dict[str, Any] | None:
         """Compute + write .furnish.json + .furnish.txt next to the imposition mapping.
 
-        Extracts `[[OFDIV:<uid>]]` marker pages from the rendered PDF, joins to
-        the divider inventory in boundary_assertions, walks the imposition
-        mapping, and emits the furnish sidecars. Returns a small summary for
-        the render evidence; returns None if there's no divider inventory or
-        the imposition mapping is unreadable.
+        Consumes the divider-page map extracted from the compile-stage PDF before
+        final-PDF sanitization, joins it to the divider inventory in
+        boundary_assertions, walks the imposition mapping, and emits the furnish
+        sidecars. The sanitized reader-facing PDF intentionally contains no
+        `[[OFDIV:<uid>]]` tokens and is never used as an extraction fallback.
+        Returns a small summary for render evidence; returns None if there is no
+        divider inventory or the imposition mapping is unreadable. Raises
+        :class:`FurnishMapError` when divider inventory exists without the
+        preserved map needed to furnish it safely.
         """
         boundary = plan.boundary_assertions or {}
         divider_inventory = boundary.get("section_dividers") or []
         if not divider_inventory:
             return None
+        if not divider_page_map:
+            raise FurnishMapError(
+                "furnish requires the preserved pre-sanitization divider-page map"
+            )
+
+        page_map = dict(divider_page_map)
+        expected_uids = {
+            str(item.get("uid", "")).strip()
+            for item in divider_inventory
+            if str(item.get("uid", "")).strip()
+        }
+        missing_uids = sorted(expected_uids - set(page_map))
+        if missing_uids:
+            raise FurnishMapError(
+                "preserved divider-page map is incomplete for furnish: "
+                + ", ".join(missing_uids)
+            )
+
         try:
             mapping = json.loads(imposition_mapping_path.read_text())
         except (OSError, json.JSONDecodeError):
             return None
-        page_map = extract_divider_page_map(output_pdf)
         total_pages = int(mapping.get("padded_pages", 0) or 0)
         page_to_stock = build_page_to_stock(total_pages, page_map, divider_inventory)
         furnish = compute_furnish(

@@ -577,26 +577,24 @@ def _section_divider_inventory_entry(
 
 def _section_divider_start_lines(divider: dict[str, Any]) -> list[str]:
     lines = ["\\OFEnsureRightPage" if divider.get("force_right_page", True) is not False else "\\clearpage"]
-    # Invisible-in-body furnish marker. Post-render, engine/furnish.py extracts
-    # `[[OFDIV:<uid>]]` strings via pdftotext to know which PDF page each
-    # divider lands on; combined with the divider's stock tag this drives the
-    # per-sheet furnish map. Emitted verbatim (no \OFDividerFurnishLabel macro)
-    # so profiles that don't ship the macro still work.
+    # Compile-stage furnish marker. engine/furnish.py extracts
+    # `[[OFDIV:<uid>]]` from the unsanitized renderer intermediate to know which
+    # PDF page each divider lands on; the renderer preserves that map as a
+    # sidecar, then removes marker text-show operators from the final PDF.
     uid = str(divider.get("uid", "") or "").strip()
     if uid:
-        # Invisible furnish marker. Post-render, engine/furnish.py extracts
-        # `[[OFDIV:<uid>]]` via pdftotext to know which PDF page each divider
-        # lands on. Uses `\begingroup ... \endgroup` explicitly rather than
+        # Invisible compile-stage furnish marker. engine/furnish.py extracts
+        # `[[OFDIV:<uid>]]` before final-PDF sanitization; the preserved sidecar
+        # then drives imposition/furnish after this token leaves the text layer.
         # `{...}` because pandoc's raw_tex extension strips the outer literal
         # braces when reading the line as raw LaTeX, which would leak
         # \fontsize{1}{1} into the rest of the document. \detokenize{} keeps
         # underscores + other TeX-special chars in the uid from tripping text
         # mode ("Missing $ inserted").
-        # Bracketed by \OFDivMarkerHideBegin/End so templates that can suppress
-        # the ink do (PDF text render mode 3 — draws nothing, but the string
-        # stays in the text layer for the pdftotext extraction above), while
-        # profiles whose template lacks them get the no-op fallbacks
-        # \providecommand'd below and behave exactly as before. Matters because
+        # Bracketed by \OFDivMarkerHideBegin/End so templates suppress its ink
+        # (PDF text render mode 3). It remains extractable in the compile-stage
+        # PDF, then the renderer removes its text-show operator from the final
+        # PDF after writing the out-of-band divider-page map. This matters because
         # divider pages are no longer always full-bleed artwork: codex0 v5 poem
         # versos are white, where 1pt type prints as a visible hairline across
         # the poem's first line.
@@ -729,10 +727,10 @@ def _render_section_divider(divider: dict[str, Any], numbering_strategy: str = "
 
 
 _CHAPTER_OPENER_FALLBACK_DEFS = [
-    # No-op fallbacks for the furnish-marker ink suppression. Profiles that want
-    # the marker hidden define these in their template (see base.tex/codex0.tex);
-    # \providecommand leaves those alone and only fires for profiles that don't,
-    # preserving the previous 1pt-visible behaviour.
+    # No-op compatibility fallbacks for profiles without tagged marker macros.
+    # They allow compilation to reach evidence generation, where final-PDF
+    # sanitization fails closed rather than publishing a visible/unsanitized
+    # `[[OFDIV:...]]` token. Tagged templates define the real wrappers first.
     "\\providecommand{\\OFDivMarkerHideBegin}{}",
     "\\providecommand{\\OFDivMarkerHideEnd}{}",
     "\\providecommand{\\OFChapterOpener}[1]{{\\par\\bigskip\\begingroup\\centering\\Large #1\\par\\endgroup\\medskip}}",
