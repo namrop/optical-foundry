@@ -809,31 +809,58 @@ _CHAPTER_OPENER_FALLBACK_DEFS = [
     "\\else\\textemdash{} #1\\if\\relax\\detokenize{#2}\\relax\\else, \\emph{#2}\\fi\\fi"
     "\\if\\relax\\detokenize{#3}\\relax\\else\\ (#3)\\fi\\par}}}",
     "\\ifdefined\\CodexQuoteBlock\\else\\newenvironment{CodexQuoteBlock}[3]{\\par\\medskip\\begin{quote}\\itshape}{\\end{quote}\\par\\medskip}\\fi",
+    # Layered chapter-opener epigraph (2026-07-28 grammar). codex0 defines the
+    # rich version (small-caps speaker line, middot bibliographic line, gold
+    # context line, register-inverted body); this fallback keeps any other
+    # profile safe with a best-effort italic body + em-dash attribution.
+    # Args: {register}{text}{speaker}{context}{author}{source}{date}
+    "\\providecommand{\\CodexSmallCaps}[1]{\\textsc{#1}}",
+    "\\providecommand{\\CodexOpenerEpigraph}[7]{{\\par\\smallskip"
+    "\\begin{quote}\\itshape #2\\end{quote}"
+    "{\\raggedleft"
+    "\\if\\relax\\detokenize{#3}\\relax\\else{\\small\\textemdash{}~\\textsc{#3}"
+    "\\if\\relax\\detokenize{#4}\\relax\\else, #4\\fi\\par}\\fi"
+    "{\\footnotesize"
+    "\\if\\relax\\detokenize{#3}\\relax\\textemdash{}~\\fi"
+    "\\if\\relax\\detokenize{#5}\\relax\\else#5\\fi"
+    "\\if\\relax\\detokenize{#6}\\relax\\else\\space\\textperiodcentered\\space\\emph{#6}\\fi"
+    "\\if\\relax\\detokenize{#7}\\relax\\else\\space\\textperiodcentered\\space#7\\fi\\par}"
+    "\\par}}}",
 ]
 
 
 def _inline_chapter_opener_epigraph_lines(epigraph: dict[str, Any]) -> list[str]:
-    """Lower a structured opener epigraph through the codex quote mechanism.
+    """Lower a structured opener epigraph through the layered attribution grammar.
 
-    The epigraph line is pulled from the corpus of letters (one per chapter) and
-    rendered as a `CodexQuoteBlock` — the same italic quote env that fenced
-    `.codex-quote` divs lower to — with optional `\\CodexQuoteAttribution`. This
-    keeps the epigraph in the codex quote grammar rather than a bespoke macro.
+    The epigraph line is pulled from the corpus (one per chapter) and rendered
+    via `\\CodexOpenerEpigraph{register}{text}{speaker}{context}{author}{source}
+    {date}` (ratified 2026-07-28). The macro handles the register-inverted quote
+    body (witness upright / literary italic), the small-caps speaker line, the
+    middot bibliographic line, and the gold context line. The generic
+    `CodexQuoteBlock` / `\\CodexQuoteAttribution` grammar is left untouched for
+    body-prose fenced `.codex-quote` divs.
     """
     text = str(epigraph.get("text") or "").strip()
     if not text:
         return []
-    author = _latex_escape_text(str(epigraph.get("author") or "").strip())
-    source = _latex_escape_text(str(epigraph.get("source") or "").strip())
-    date = _latex_escape_text(str(epigraph.get("date") or "").strip())
-    lines = [
-        "\\begin{CodexQuoteBlock}{4}{0.35em}{0.9em}",
-        _latex_escape_text(text),
+
+    def esc(key: str) -> str:
+        return _latex_escape_text(str(epigraph.get(key) or "").strip())
+
+    register = str(epigraph.get("register") or "").strip().lower()
+    # Only an explicit "witness" register inverts the body to upright; anything
+    # else (including a missing register) renders literary/italic by default.
+    register_arg = "witness" if register == "witness" else "literary"
+    speaker = esc("speaker")
+    context = esc("context")
+    author = esc("author")
+    source = esc("source")
+    date = esc("date")
+    body = _latex_escape_text(text)
+    return [
+        f"\\CodexOpenerEpigraph{{{register_arg}}}{{{body}}}{{{speaker}}}"
+        f"{{{context}}}{{{author}}}{{{source}}}{{{date}}}"
     ]
-    if author or source or date:
-        lines.append(f"\\CodexQuoteAttribution{{{author}}}{{{source}}}{{{date}}}")
-    lines.append("\\end{CodexQuoteBlock}")
-    return lines
 
 
 def _inline_chapter_opener_lines(opener: dict[str, Any]) -> list[str]:
@@ -844,9 +871,10 @@ def _inline_chapter_opener_lines(opener: dict[str, Any]) -> list[str]:
     but no page break of its own — the first passage's own `\\newpage` already
     opens the chapter on a fresh page, so the opener simply headlines it.
 
-    The epigraph may be a mapping (`{text, author?, source?, date?}`, rendered
-    via the codex quote mechanism beneath the heading) or a plain string
-    (rendered via the profile-styled `\\OFChapterOpenerEpigraph` macro). The
+    The epigraph may be a mapping (`{text, speaker?, context?, author?, source?,
+    date?, register?}`, rendered via the layered `\\CodexOpenerEpigraph` grammar
+    beneath the heading) or a plain string (rendered via the profile-styled
+    `\\OFChapterOpenerEpigraph` macro). The
     `\\OFChapterOpener` macros are profile-styled (codex0 overrides them); the
     fallback definitions emitted once upstream keep any profile safe.
     """

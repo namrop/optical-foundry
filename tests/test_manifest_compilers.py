@@ -1128,7 +1128,7 @@ def test_inline_chapter_opener_bare_heading():
     assert any(ln.startswith("\\addcontentsline") for ln in lines)
 
 
-def test_inline_chapter_opener_dict_epigraph_uses_codex_quote():
+def test_inline_chapter_opener_dict_epigraph_uses_layered_grammar():
     lines = _inline_chapter_opener_lines({
         "title": "Alpha One",
         "epigraph": {
@@ -1138,12 +1138,47 @@ def test_inline_chapter_opener_dict_epigraph_uses_codex_quote():
         },
     })
     body = "\n".join(lines)
-    # Heading first, then the codex quote env with attribution.
+    # Heading first, then the layered opener-epigraph macro. A source-only
+    # (no speaker, no register) epigraph lowers to literary with empty
+    # speaker/context/author args.
     assert "\\OFChapterOpener{Alpha One}" in body
-    assert "\\begin{CodexQuoteBlock}{4}{0.35em}{0.9em}" in body
-    assert "You are the room I keep returning to." in body
-    assert "\\CodexQuoteAttribution{}{Letter, first winter}{2019}" in body
-    assert "\\end{CodexQuoteBlock}" in body
+    assert (
+        "\\CodexOpenerEpigraph{literary}{You are the room I keep returning to.}"
+        "{}{}{}{Letter, first winter}{2019}" in body
+    )
+    # The generic body-prose quote grammar is not used for openers anymore.
+    assert "CodexQuoteBlock" not in body
+    assert "CodexQuoteAttribution" not in body
+
+
+def test_inline_chapter_opener_epigraph_witness_register_and_speaker_context():
+    lines = _inline_chapter_opener_lines({
+        "title": "Alpha One",
+        "epigraph": {
+            "text": "see you soon",
+            "speaker": "A. Friend",
+            "context": "at the harbor",
+            "author": "Junot Diaz",
+            "source": "Oscar Wao",
+            "date": "2007",
+            "register": "witness",
+        },
+    })
+    body = "\n".join(lines)
+    assert (
+        "\\CodexOpenerEpigraph{witness}{see you soon}{A. Friend}{at the harbor}"
+        "{Junot Diaz}{Oscar Wao}{2007}" in body
+    )
+
+
+def test_inline_chapter_opener_epigraph_defaults_to_literary_register():
+    lines = _inline_chapter_opener_lines({
+        "title": "Alpha One",
+        "epigraph": {"text": "a line", "author": "Someone"},
+    })
+    body = "\n".join(lines)
+    # Missing / unknown register renders literary (italic body).
+    assert "\\CodexOpenerEpigraph{literary}{a line}{}{}{Someone}{}{}" in body
 
 
 def test_inline_chapter_opener_string_epigraph_uses_macro():

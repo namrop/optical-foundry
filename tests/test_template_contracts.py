@@ -28,6 +28,24 @@ def test_codex0_template_routes_verbatim_grinning_emoji_through_fallback_font():
     assert r"\newunicodechar{😁}{{\EmojiFont 😁}}" in text
 
 
+def test_codex0_defines_layered_opener_epigraph_grammar():
+    """The 2026-07-28 layered chapter-opener epigraph macro must be defined with
+    the register-inverted body, the small-caps speaker line, the middot
+    bibliographic line, and the gold context line."""
+    text = CODEX0_TEMPLATE.read_text()
+    assert "\\NewDocumentCommand{\\CodexOpenerEpigraph}{m m m m m m m}" in text
+    # Register inversion: witness -> upright, else italic.
+    assert "\\ifx\\CodexEpiReg\\CodexEpiWitnessName\\upshape\\else\\itshape\\fi" in text
+    # Speaker line uses real small caps (Iowan Old Style carries smcp).
+    assert "\\CodexSmallCaps{#3}" in text
+    # Bibliographic line uses middot separators, no parentheses.
+    assert "\\textperiodcentered" in text
+    # Gold context line uses the LetterRule (gold) color.
+    assert "\\textcolor{LetterRule}{#4}" in text
+    # The generic body-prose quote grammar is left intact and separate.
+    assert "\\NewDocumentCommand{\\CodexQuoteAttribution}{m m m}" in text
+
+
 def test_client_kicker_uses_document_type_variable():
     """The cover kicker is frontmatter-driven, defaulting to SECURITY REPORT."""
     text = CLIENT_TEMPLATE.read_text()
