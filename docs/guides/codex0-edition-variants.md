@@ -5,7 +5,7 @@ note_role: spec
 validation_profile: standard
 status: draft
 created: 2026-07-02T18:42:18-04:00
-updated: 2026-07-28T01:08:40-04:00
+updated: 2026-07-28T03:14:29-04:00
 beam_home: 42_optical_foundry/docs/guides
 title: "Codex 0 Edition Variants"
 summary: "Guide for Codex 0 source-visible edition variants selected by a pre-Pandoc comment-sentinel culler before figure/source preprocessors run."
@@ -51,7 +51,7 @@ Supported markers:
 - `<!-- cx0:variant id="..." -->` (optional `guard="..."`, see Safety behavior)
 - `<!-- cx0:edition witness -->` or `<!-- cx0:edition witness,reader -->`
 - `<!-- cx0:edition edition="witness" -->` / `<!-- cx0:edition editions="witness,reader" -->`
-- `<!-- cx0:edition johannah,witness,reader register="pataphorical" -->` (optional `register="..."`, see Register rails)
+- `<!-- cx0:edition johannah,witness,reader register="pataphorical" -->` (legacy compatibility form; source-local fenced Divs are the production rail authority)
 - `<!-- cx0:endvariant -->` or the XML-style `<!-- /cx0:variant -->`
 
 Bare edition labels may sit alongside a `register="..."` attribute (`<!-- cx0:edition johannah,witness,reader register="pataphorical" -->`); the culler strips the attribute token and reads the remaining comma-separated labels. An attribute-only marker with no labels still fails as a typo.
@@ -71,21 +71,19 @@ Because the archival base is the universal fallback, editions inherit the raw ba
 
 ## Register rails
 
-A `register="..."` attribute on a `cx0:edition` marker tags the selected override as belonging to a named register (currently `pataphorical`). When that branch is the one selected for the rendered edition, a **margin rail** is drawn beside it — a visual indicator that the reader is in the tagged register rather than the raw base.
+A pataphorical register rail is a semantic ornament: it claims that the adjacent prose is currently inside Codex 0's native pataphorical field. The **production authoring authority is the source-local fenced Div**, not a part label, whole-source manifest flag, edition guard, or isolated margin marker:
 
 ```markdown
-<!-- cx0:variant id="the-first-rooms-020" -->
-Raw archival prose.
-<!-- cx0:edition johannah,witness,reader register="pataphorical" -->
-The fable-register prose that carries the pataphor.
-<!-- cx0:endvariant -->
+::: {.codex-pataphorical register="pataphorical"}
+Existing prose, unchanged.
+:::
 ```
 
-### Authoring
+The opening and closing fences define the semantic field's exact extent. A pataphor-native part or passage is not automatically one uninterrupted block; literal exposition, documentary material, deliberate reality breaks, images, plates, layout code, and structural ornaments can interrupt it.
 
-Edition guards are an access-control boundary: malformed or accidentally widened guards can expose sensitive prose. Do not modify a variant ID, `guard=`, edition label, or variant-close marker merely to add rail guidance.
+### Edition-safe authoring
 
-The `register="pataphorical"` attribute on an edition marker remains supported for existing sources, but new rail-only boundary work should use a distinct fenced-Div layer wholly inside the already-selected branch:
+Edition guards are an access-control boundary: malformed or accidentally widened guards can expose sensitive prose. Do not modify a variant ID, `guard=`, edition label, or variant-close marker merely to add rail guidance. Place both Div fences wholly inside the selected branch:
 
 ```markdown
 <!-- cx0:variant id="the-first-rooms-020" guard="witness,reader" -->
@@ -97,24 +95,26 @@ Existing veiled prose, unchanged.
 <!-- cx0:endvariant -->
 ```
 
-- Both fences must sit inside one branch. They must never cross a `cx0:edition` or variant-close marker.
+- A fence must never cross a `cx0:edition` or variant-close marker.
+- An edition that does not select the fenced branch receives neither its prose nor its rail guidance.
 - The fenced Div may also wrap a source-local pataphor span outside an edition variant.
-- It applies only to the text it encloses. An edition that does not select that branch receives neither its prose nor its rail guidance.
-- Images, plates, layout code, hinges, and thresholds normally remain outside. A `cx0:breath` may remain inside when it is only pacing within one continuous pataphor field; do not create visual rail fragments by treating every breath as a field exit.
+- Images, plates, captions, layout code, hinges, thresholds, and section ornaments normally remain outside. A `cx0:breath` is pacing, not automatically a field exit; keep it inside when the pataphorical field continues on both sides.
+- Separate pataphor fields on one page remain separate Divs and render as separate page-local rails.
 - The register token must be a safe identifier; a malformed value fails the render.
-- When replacing a coarse `register="pataphorical"` branch wrapper with explicit spans, remove only that rendering attribute; preserve the variant ID, guard, edition labels, and close marker exactly. Preprocess every affected edition before and after, strip only rail guidance from the comparison, and require identical selected prose and identical fail-closed errors.
+
+The `register="pataphorical"` attribute on an edition marker remains supported for compatibility. `sources[].codex_register` also remains available as a coarse manifest-level wrapper for renderer probes or a source that has been explicitly adjudicated as continuously pataphorical. Neither is the default production mapping mechanism. When replacing a coarse edition wrapper, remove only the rendering attribute; preserve the variant ID, guard, edition labels, and close marker exactly. Preprocess every affected edition before and after, strip only rail-guidance fences from the comparison, and require identical selected prose and identical fail-closed errors.
 
 ### Rendering
 
-The pipeline turns the attribute into a rail in three stages:
+All supported producer paths converge on the same structural object: a `.codex-pataphorical` Div.
 
-1. **Resolver** (`codex_editions.py`): when the selected branch carries a register, the culler wraps its body in a fenced div — `::: {.codex-<register> register="<register>"} ... :::` — so the register survives into the generated Markdown as structure rather than a comment.
-2. **Composition filter** (`codex0_composition.lua`): the `Div` handler for `codex-pataphorical` pulls the next asset from the rail pool and injects `\CodexRegisterRail[<width>]{<asset>}` as a leading inline in the block's first paragraph (or as a leading raw block if the first child is not a paragraph).
-3. **Template** (`codex0.tex`): `\CodexRegisterRail` places the asset with `marginnote` (not `\marginpar`), so the rail is **non-floating** and pins to the passage's first line in the outer margin under `twoside`. Because `marginnote` contributes no vertical space to the main galley, placement decisions never shift the body text, and page assignments stay stable across Pandoc's multiple engine passes.
+1. **Source or resolver:** the source-local Div passes through directly. For legacy edition attributes, `codex_editions.py` produces the equivalent Div only after selecting the branch. For an explicitly continuous whole-source probe, `manifest_compiler.py` may produce the same wrapper from `sources[].codex_register`.
+2. **Composition filter** (`codex0_composition.lua`): the `Div` handler assigns a stable semantic-block ID and emits `\CodexPataphorBegin{...}` / `\CodexPataphorEnd{...}` around the existing content. It also declares the approved contained/head/body/tail role-and-length rail pools.
+3. **Template** (`codex0.tex`): zref records both absolute pages and vertical positions, then the shipout layer derives each page-local segment and places a role/length-matched rail in the outer margin without moving the galley.
 
-### One rail per page
+### Page-local coverage
 
-`\CodexRegisterRail` uses a `zref-abspage` guard to enforce **at most one register rail per physical page**. Each invocation records its absolute page; if a later rail resolves to the same page as the last one placed, it is suppressed. The guard only suppresses when the page is *resolved* (`abspage > 0`) and equal to the last placed page, so an early pass with unresolved cross-references places every rail rather than collapsing them all — the count converges as `zref` resolves on subsequent passes.
+Rail count follows semantic-block geometry, not a one-rail-per-page suppression rule. One long Div can produce head, continuation, and tail rails across successive pages. Two separated Divs on the same page can produce two distinct rails. Pages outside every Div receive none. This is why source-local field boundaries are part of the ornament contract rather than merely editorial commentary.
 
 ## Selecting an edition
 

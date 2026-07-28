@@ -5,7 +5,7 @@ note_role: handoff
 validation_profile: standard
 status: draft
 created: 2026-07-05T19:30:00-04:00
-updated: 2026-07-07T00:20:00-04:00
+updated: 2026-07-28T03:14:29-04:00
 beam_home: 42_optical_foundry
 title: "Session Brief — Book-Production Mechanics Upstream + v5 Support"
 summary: "Starting brief for a Foundry work session that generalizes hand-bound book production beyond Codex 0 and adds the mechanics v5 needs: a spine→codex_bundle bridge, signature-aware plate placement, a per-sheet stock/furnish map so dividers and plates can be printed on cardstock, divider page-tagging, edition selection wired into render, breath/split rendering, and reliable book-level paragraph indentation (the recurring parindent / \\\\-litany raggedness fixed upstream instead of per-block). Grounds each ask in existing Foundry surfaces (render.delivery.imposition, section_dividers[], of-image plates, PROFILE_AND_PANDOC_REFERENCE parindent standard, evidence sidecars) so this extends rather than reinvents. Item 9 (added 2026-07-06) fixes the bridge default that currently emits a full-page divider at every chapter: chapters should open with an inline heading + optional small epigraph, with dividers reserved for part boundaries. Item 10 (added 2026-07-06) fixes the compiler's unconditional per-source \\newpage so passages within a chapter breathe (item-6 hinge surface, refined 2026-07-07) instead of each starting a new page, which is inflating the page count; page breaks become boundary-aware (part/chapter only). Items 11–13 (added 2026-07-07 from the Part II proof review) cover breath-weight uniformity, register demarcation for johannah/pataphorical variant branches, and an image weight-tier contract plus a usable-image re-pass."
@@ -181,15 +181,22 @@ This is coupled to items 6 and 9: item 6 supplies the hinge/breath surface that 
 
 **Acceptance.** In a re-render, every `<!-- cx0:breath -->` in a part reads at the same quiet weight; hinges/tailpieces still vary. Confirm against the Part II proof passages.
 
-### 12. Variant branches (johannah / pataphorical) need a register demarcation (found in the 2026-07-06 Part II proof)
+### 12. Variant branches (johannah / pataphorical) need a register demarcation — resolved 2026-07-28
 
-**Defect (Luis, 2026-07-07 render review).** In an edition render, a `cx0:variant` passage emits the literal (johannah) branch followed by the pataphorical (fable) branch — the fable is edition-tagged for johannah/witness/reader. Currently the two run together with no visual boundary, so the reader can't tell where the literal register ends and the fable register begins. Luis: "the pataphorical sections, or at the very least the johannah sections, should have a demarcation of some kind."
+**Original defect (Luis, 2026-07-07 render review).** Edition-selected literal and pataphorical material could run together without a legible register signal.
 
-**Desired model.** When a selected edition emits more than one branch (literal + fable) for a passage, the two registers are visually demarcated — at minimum the johannah (literal) section is marked; ideally both registers carry a register signal so the reader always knows which mode they're reading.
+**Resolved model.** Edition selection and register ornamentation are independent control layers. `cx0:variant` / `cx0:edition` sentinels decide which prose exists in the render. An authored source-local fenced Div then decides exactly which selected prose receives the pataphorical rail:
 
-**Fix direction.** `codex0_composition.lua` already parses `cx0:variant` / `cx0:edition` markers for edition selection; extend the lowering so a multi-branch emission separates the branches with a register-boundary surface — e.g. a labeled rule, a register glyph/ornamental divider between literal and fable, or a wrapping environment (`CodexLiteralRegister` / `CodexFableRegister`) that styles each register distinctly. Book-agnostic: a register-boundary ornament driven off the existing variant/edition markers, not hand-inserted per passage.
+```markdown
+<!-- cx0:edition witness -->
+::: {.codex-pataphorical register="pataphorical"}
+Existing veiled prose, unchanged.
+:::
+```
 
-**Acceptance.** A johannah-edition render of a variant passage (e.g. Part II `02_the_saturday_route`, `03_…`) shows a clear demarcation between the literal branch and the fable branch.
+The fences sit wholly inside one selected branch. They never cross or modify the variant ID, `guard=`, edition labels, or close marker. The same Div form works outside variants. The old edition-line `register="pataphorical"` attribute remains compatibility input, but is not the production authoring default.
+
+**Acceptance.** Every rendered rail resolves from a `.codex-pataphorical` Div whose source boundaries were semantically adjudicated. Selected prose and fail-closed guard behavior remain identical before and after adding or migrating rail guidance. Literal intervals, images, plates, layout code, and structural ornaments remain unrailed unless explicitly inside the field.
 
 ### 13. Imagery needs weight gradations + a fresh usable-image pass (found in the 2026-07-06 Part II proof)
 
@@ -215,27 +222,27 @@ This is coupled to items 6 and 9: item 6 supplies the hinge/breath surface that 
 2. Item 8 (back-matter apparatus) — endnotes wiring + bridge backmatter-source hook. Small, self-contained, unlocks reader-facing whole-book renders that include Notes / How This Book Was Made / etc. **(Landed 2026-07-06.)**
 3. Item 4 + 3 (divider tagging → stock/furnish map) on the 11 part dividers — smallest real cardstock case. **(Landed 2026-07-06: `section_dividers[].stock` + `print_image` propagate to evidence, bridge exposes `--part-divider-stock` / `--chapter-divider-stock`, `engine/furnish.py` computes per-sheet-side stock via `[[OFDIV:<uid>]]` marker extraction against `.imposition.json`, and the renderer writes `.furnish.json` + `.furnish.txt` next to the imposed PDF. First v5 cardstock render lands 11 part dividers on 22 sheet-sides of 244 total; each cardstock sheet-side is flagged mixed because saddle-stitch imposition pairs each cardstock leaf with a text-stock leaf — expected, and now visible to the print shop / hand-binder.)**
 4. Item 2 (plate placement) — **redefined 2026-07-06 by Luis: Part X removed from the spine; plates disperse to 2 per part, printed onto the same cardstock sheet as the part divider (divider leaf + plate leaf, 4 cardstock pages per part boundary), arranged in the signature and sewn. Not tipped in.** The bridge now takes `--plates-dir <path>` and reads `plate_NN_<part_slug>_<a|b>.md` files, injecting each pair as source-backed section_dividers with `stock: cardstock` immediately after the corresponding part divider, so the physical order is: divider recto → blank verso → plate A recto → plate B verso. **Landed 2026-07-06 as a staging spot** with 20 placeholder plates at `21_letters_and_creative/book/codex0_v5/plates_staging/`; when real plate images arrive Luis swaps the file bodies without touching the pipeline. No signature-aware-placement machinery was needed under this model — the cardstock envelope is just 4 consecutive pages at each part boundary, and imposition treats them as ordinary consecutive pages.
-5. Item 6 (inline cx0 ornament markers) — **redefined and landed 2026-07-06.** The brief scoped this to just the `<!-- cx0:breath -->` marker; Luis pointed out that breath is one of many ornamentation types in the Codex composition grammar (landing, breath, hinge, tailpiece, rail-echo, threshold, vow, vow-block, axiom, quote, witness, source-note, held-object as blocks; signal, heartword, smallcaps, quiet, bold as inline emphasis; per-primitive asset pools + local overrides). `.codex-*` div classes and span emphases already work via `filters/codex0_composition.lua` → `codex0.tex` environments. The gap was the inline marker family — HTML comment triggers with no wrapped content, useful for intra-passage pacing. `codex0_composition.lua` now grows a `RawBlock` handler that lowers six inline marker families:
+5. Item 6 (inline cx0 ornament markers) — **redefined and landed 2026-07-06; semantic-rail boundary clarified 2026-07-28.** The brief scoped this to just the `<!-- cx0:breath -->` marker; Luis pointed out that breath is one of many ornamentation types in the Codex composition grammar (landing, breath, hinge, tailpiece, rail-echo, threshold, vow, vow-block, axiom, quote, witness, source-note, held-object as blocks; signal, heartword, smallcaps, quiet, bold as inline emphasis; per-primitive asset pools + local overrides). `.codex-*` div classes and span emphases already work via `filters/codex0_composition.lua` → `codex0.tex` environments. The gap was the inline marker family — HTML comment triggers with no wrapped content, useful for intra-passage pacing. `codex0_composition.lua` lowers the active inline marker families:
 
 - `<!-- cx0:breath -->` / `cx0:tailpiece` / `cx0:hinge` / `cx0:threshold` — centered break-in-flow ornament, each pulling the next asset from its pool via `\CodexBreakOrnament`;
-- `<!-- cx0:rail -->` — outer-margin companion, via `\CodexRailCompanion` (recto/verso-aware under bound delivery, `\marginpar` fallback otherwise), pulling from the rail pool (RE01, RE03, RE04, RE06, RE08, RE09, B04, B08);
 - `<!-- cx0:landing -->` — pure vertical spacing, no ornament per the grammar.
 
-Each marker also accepts an optional `asset="ID"` attribute to pin a specific asset from the pool (matching the `.codex-*` div grammar's override syntax), and `asset="none"` to suppress the ornament while keeping the pause/spacing envelope:
+The historical `<!-- cx0:rail -->` lane is an explicit one-shot decorative companion. It is **not** the semantic authority for pataphorical register rails and must not be used to mark a field's extent. Production register rails are defined by a source-local fenced Div around unchanged prose:
 
 ```markdown
-<!-- cx0:breath -->                  <!-- pool default, cycles -->
-<!-- cx0:breath asset="B09" -->      <!-- pinned to B09 -->
-<!-- cx0:breath asset="none" -->     <!-- suppressed, spacing only -->
-<!-- cx0:rail asset="RE04" -->       <!-- pinned rail companion -->
+::: {.codex-pataphorical register="pataphorical"}
+Existing prose, unchanged.
+:::
 ```
 
-The vocabulary is extensible — one entry per new marker type in `inline_ornament_by_marker`. Verified end-to-end on v5 Swan Song passage (6 authored `<!-- cx0:breath -->` markers now render as B06/B09/T10/FH04/B01/B02 breath ornaments in reading order).
+The two fences are the authored semantic boundaries. The composition filter emits a stable begin/end range, and the template projects role-and-length-matched contained/head/body/tail rails over the exact page-local intervals. Coarse `sources[].codex_register` wrapping remains a compatibility/probe mechanism only unless the entire source has been explicitly adjudicated as one continuous field. Edition-branch `register="pataphorical"` attributes are likewise compatibility input; new rail guidance belongs wholly inside the selected branch and never changes the branch's access-control sentinels.
+
+Inline marker asset overrides remain available to their own ornament lanes; they do not pin or redefine semantic register rails. Meaning-aware selection of a specific rail species for a specific pataphor block is a separate future feature from defining whether the block is pataphorical at all.
 
 6. Item 9 (chapter dividers off by default + inline chapter openings) — **resolved 2026-07-06.** The bridge default flipped from `--chapter-dividers always` to `off`, and a new `--chapter-openers inline` (default) attaches a `chapter_opener` (title + optional epigraph) plus a recto running-header override to each chapter's first passage source. The compiler renders the opener inline at the top of that passage's page (`_inline_chapter_opener_lines`, profile-styled `\OFChapterOpener[Epigraph]` with a book-agnostic `\providecommand` fallback), so the chapter headlines its first page instead of a full-page divider. codex0.tex also wires `\OFSetRunningDivision`/`\OFSetRunningTagline` into `\CodexDivision`/`\CodexTagline`, restoring the dropped running headers (verso = part, recto = chapter). Full v5 probe: section_dividers collapsed from 55 chapter dividers to 0 (55 inline openers), page count 552 → 468.
 7. Item 10 (passages breathe, not page-break) — **open, added 2026-07-06; refined 2026-07-07.** The compiler's unconditional per-source `\newpage` (`engine/manifest_compiler.py` ~line 1080) forces every passage onto a new page, inflating the page count. Make the page break boundary-aware (part/chapter only); replace same-chapter passage boundaries with the item-6 **hinge** surface (Luis 2026-07-07). Resolve jointly with items 6 and 9 so the part/chapter/passage boundary model is coherent.
 8. Item 11 (breath weight uniform) — **open, added 2026-07-07** from the Part II proof review. Constrain the breath pool to one weight; let hinge/tailpiece carry variety. Small, couples to items 6 and 13.
-9. Item 12 (variant register demarcation) — **open, added 2026-07-07** from the Part II proof review. Demarcate literal (johannah) vs fable (pataphorical) branches in edition renders, off the existing variant/edition markers.
+9. Item 12 (variant register demarcation) — **resolved for pataphorical rails 2026-07-28.** Edition selection and rail definition are separate layers: select the branch with unchanged `cx0:*` sentinels, then place source-local `.codex-pataphorical` Divs wholly inside that branch. Legacy branch-level `register="pataphorical"` remains supported, but it is not the production authoring default.
 10. Item 13 (image weight gradations + usable-image re-pass) — **open, added 2026-07-07** from the Part II proof review. An image-tier contract (full-plate / inline figure / vignette) plus Luis's editorial audit of real usable images. Couples to items 2–4 and 6/11.
 
 ## Open design questions
