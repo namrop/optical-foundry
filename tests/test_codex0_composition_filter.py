@@ -313,6 +313,57 @@ def test_codex0_profile_wires_filter_and_defaults_only_to_codex0():
     assert "filters" not in johannah_defaults
 
 
+def test_codex_pataphorical_blocks_emit_page_ranges_and_role_length_pools(tmp_path):
+    latex = _pandoc_latex(
+        tmp_path,
+        r"""
+::: {.codex-pataphorical}
+The first field opens.
+
+It continues long enough to need page coverage.
+:::
+
+Ordinary prose stays outside the field.
+
+::: {.codex-pataphorical}
+The second field opens.
+:::
+""",
+    )
+
+    assert latex.count("\\CodexPataphorBegin{") == 2
+    assert latex.count("\\CodexPataphorEnd{") == 2
+    assert "\\CodexPataphorBegin{1}" in latex
+    assert "\\CodexPataphorEnd{1}" in latex
+    assert "\\CodexPataphorBegin{2}" in latex
+    assert "\\CodexPataphorEnd{2}" in latex
+    assert latex.index("\\CodexPataphorBegin{1}") < latex.index("The first field opens")
+    assert latex.index("The first field opens") < latex.index("\\CodexPataphorEnd{1}")
+
+    # Pool declarations are emitted once, before the first range. Role and
+    # line-band membership stay data-only; no folio-specific placement enters
+    # the source.
+    assert latex.count("\\CodexRailPoolReset") == 1
+    assert "\\CodexRailPoolAdd{head}{4}{" in latex
+    assert "H04B_head_04lines_scabiosa_exact_300ppi.png" in latex
+    assert "\\CodexRailPoolAdd{head}{32}{" in latex
+    assert "H32D_head_32lines_cow_vetch_exact_300ppi.png" in latex
+    assert "\\CodexRailPoolAdd{tail}{4}{" in latex
+    assert "T04B_tail_04lines_scabiosa_exact_300ppi.png" in latex
+    assert "\\CodexRailPoolAdd{tail}{32}{" in latex
+    assert "T32E_tail_32lines_lupine_exact_300ppi.png" in latex
+    assert "\\CodexRailPoolAdd{body}{38}{" in latex
+    assert "F22_body_38lines_lupine_dense_exact_300ppi.png" in latex
+    assert "F29_body_38lines_lupine_quiet_exact_300ppi.png" in latex
+    # Finite-to-finite legacy ladders remain available only to contained blocks.
+    assert "\\CodexRailPoolAdd{contained}{4}{" in latex
+    assert "RS01_lavender_sprig_tip_alpha.png" in latex
+    assert "\\CodexRailPoolAdd{contained}{25}{" in latex
+    assert "RL01_lavender_sheaf_tall_alpha.png" in latex
+    assert latex.index("\\CodexRailPoolReset") < latex.index("\\CodexPataphorBegin{1}")
+    assert "\\CodexRegisterRail" not in latex
+
+
 def test_codex0_template_exposes_composition_macros_and_environments():
     template = (PROFILE_ROOT / "templates" / "codex0.tex").read_text()
 
@@ -328,6 +379,39 @@ def test_codex0_template_exposes_composition_macros_and_environments():
     assert "\\providecommand{\\CodexOwnVoice}" in template
     assert "\\providecommand{\\CodexOwnVoiceHeartword}" in template
     assert "\\definecolor{LetterOwnVoice}{HTML}{432660}" in template
+
+
+def test_codex0_template_wires_pataphor_ranges_to_page_local_role_rails():
+    template = (PROFILE_ROOT / "templates" / "codex0.tex").read_text()
+
+    assert "\\NewDocumentCommand{\\CodexRailPoolReset}" in template
+    assert "\\NewDocumentCommand{\\CodexRailPoolAdd}{m m m}" in template
+    assert "\\NewDocumentCommand{\\CodexPataphorBegin}" in template
+    assert "\\NewDocumentCommand{\\CodexPataphorEnd}" in template
+    assert "\\usepackage{zref-savepos}" in template
+    assert "\\zsavepos{codexpatstartpos@#1}" in template
+    assert "\\zsavepos{codexpatendpos@#1}" in template
+    assert "\\tl_new:N \\l_codex_rail_role_tl" in template
+    assert "\\int_new:N \\l_codex_rail_band_int" in template
+    assert "\\dim_new:N \\l_codex_rail_segment_top_dim" in template
+    assert "\\dim_new:N \\l_codex_rail_segment_bottom_dim" in template
+    assert "\\dim_new:N \\l_codex_rail_segment_height_dim" in template
+    assert "\\codex_rail_select_role:" in template
+    assert "\\codex_rail_select_band:" in template
+    assert "\\codex_rail_select_seed:" in template
+    assert "height=#2,width=#1,keepaspectratio" in template
+    assert "\\CodexShipoutPataphorRail" in template
+    assert "\\AddToShipoutPictureBG{\\CodexShipoutPataphorRail}" in template
+    # The old one-rail-per-page and whole-range tier state must be gone: two
+    # distinct semantic blocks on one physical page each need their own segment.
+    assert "l_codex_rail_page_claimed_bool" not in template
+    assert "l_codex_rail_span_int" not in template
+    # The shipout path must use physical-page parity and the already trim-shifted
+    # margin separation, rather than a one-direction hspace that breaks versos.
+    assert "\\int_if_odd:nTF { \\l_codex_rail_page_int }" in template
+    assert "\\marginparsep" in template
+    assert "\\CodexTrimAllowance" in template
+    assert "\\CodexRailTextClearance" in template
 
 
 def test_codex_inline_rule_marker_lowers_to_wh10_flourish(tmp_path):

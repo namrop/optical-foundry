@@ -180,6 +180,22 @@ def _body_opens_with_cx0_marker(body: str) -> bool:
     return False
 
 
+_SUPPORTED_CODEX_SOURCE_REGISTERS = frozenset({"pataphorical"})
+
+
+def _wrap_codex_source_register(body: str, register: str) -> str:
+    """Wrap one assembled source body in its validated Codex semantic register."""
+
+    normalized = str(register or "").strip().lower()
+    if normalized not in _SUPPORTED_CODEX_SOURCE_REGISTERS:
+        raise ValueError(f"unsupported codex source register: {register!r}")
+    return (
+        f'::: {{.codex-{normalized} register="{normalized}"}}\n'
+        f"{body.rstrip()}\n"
+        ":::"
+    )
+
+
 def _write_temp_markdown(prefix: str, content: str) -> Path:
     """Write assembled Markdown to a named temp file and return its path."""
     fd, path = tempfile.mkstemp(suffix=".md", prefix=f"of_{prefix}_")
@@ -1337,6 +1353,12 @@ class CompositeBundleCompiler(ManifestCompiler):
                 source_body = _demote_headings(body, levels=1)
             else:
                 source_body = body if preserve_source_heading_levels else _demote_headings(body)
+            source_register = src.get("codex_register")
+            if source_register:
+                # Source-register authority wraps only the passage body. Chapter
+                # openers, running-text changes, and passage separators were
+                # already emitted above and remain outside the semantic field.
+                source_body = _wrap_codex_source_register(source_body, str(source_register))
             lines.append(source_body.rstrip())
             lines.append("")
 
@@ -1582,6 +1604,17 @@ class CompositeBundleCompiler(ManifestCompiler):
                 role = src.get("role")
                 if role not in {"frontmatter", "primary_anchor", "supporting_anchor", "appendix", "reference"}:
                     errors.append(f"source[{i}] unknown role: {role}")
+                register = src.get("codex_register")
+                if register is not None:
+                    scope = f"sources[{i}].codex_register"
+                    if self.kind != "codex_bundle":
+                        errors.append(f"{scope} is supported only by codex_bundle manifests")
+                    elif manifest.get("profile") != "codex0":
+                        errors.append(f"{scope} requires profile codex0")
+                    elif not isinstance(register, str) or register.strip().lower() not in _SUPPORTED_CODEX_SOURCE_REGISTERS:
+                        errors.append(
+                            f"{scope} must be one of {sorted(_SUPPORTED_CODEX_SOURCE_REGISTERS)}"
+                        )
                 errors.extend(_validate_running_text(src, f"source[{i}]"))
 
         # figures

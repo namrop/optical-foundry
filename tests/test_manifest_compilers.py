@@ -1450,6 +1450,42 @@ def _passage_body(assembled: str) -> str:
     return body
 
 
+def test_codex_bundle_source_register_wraps_only_the_passage_body(tmp_path):
+    manifest = _codex_bundle_two_passages(
+        tmp_path,
+        second_extra={
+            "page_break_before": False,
+            "passage_separator": "hinge",
+            "codex_register": "pataphorical",
+        },
+    )
+    compiler = CodexBundleCompiler()
+    assert compiler.validate(manifest) == []
+    assembled = compiler.compile(manifest).render_source.read_text()
+
+    wrapper = '::: {.codex-pataphorical register="pataphorical"}'
+    assert assembled.count(wrapper) == 1
+    assert assembled.index("<!-- cx0:hinge -->") < assembled.index(wrapper)
+    body_index = assembled.index("Continuation passage.")
+    assert assembled.index(wrapper) < body_index
+    assert body_index < assembled.index("\n:::", body_index)
+    assert "First passage.\n\n:::" not in assembled
+
+
+def test_codex_bundle_source_register_rejects_unknown_or_wrong_profile(tmp_path):
+    manifest = _codex_bundle_two_passages(
+        tmp_path,
+        second_extra={"codex_register": "../pataphorical"},
+    )
+    errors = CodexBundleCompiler().validate(manifest)
+    assert any("sources[1].codex_register" in error for error in errors)
+
+    manifest["sources"][1]["codex_register"] = "pataphorical"
+    manifest["profile"] = "mythic"
+    errors = CodexBundleCompiler().validate(manifest)
+    assert any("requires profile codex0" in error for error in errors)
+
+
 def test_codex_bundle_passage_break_before_false_emits_hinge_separator(tmp_path):
     manifest = _codex_bundle_two_passages(
         tmp_path,
