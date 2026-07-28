@@ -57,6 +57,28 @@ def test_client_toc_title_and_no_self_listing():
     assert "\\tableofcontents*" in text
 
 
+def test_codex0_template_applies_optional_body_folio_start_after_mainmatter_reset():
+    """Frontmatter stays roman while a reading volume can continue body folios."""
+    text = CODEX0_TEMPLATE.read_text()
+
+    start = text.index("$if(body_folio_start)$")
+    end = text.index("$endif$", start)
+    block = text[start:end]
+    assert r"\let\CodexOriginalMainmatter\mainmatter" in block
+    unstarred = block[block.index(r"\newcommand{\CodexBodyMainmatter}"):]
+    starred = block[block.index(r"\newcommand{\CodexBodyMainmatterStar}"):]
+    assert unstarred.index(r"\CodexOriginalMainmatter") < unstarred.index(
+        r"\setcounter{page}{$body_folio_start$}"
+    )
+    assert starred.index(r"\CodexOriginalMainmatter*") < starred.index(
+        r"\setcounter{page}{$body_folio_start$}"
+    )
+    assert (
+        r"\renewcommand{\mainmatter}{\@ifstar{\CodexBodyMainmatterStar}"
+        r"{\CodexBodyMainmatter}}"
+    ) in block
+
+
 def test_client_footer_default_is_security():
     sty = CLIENT_STY.read_text()
     assert "\\providecommand{\\ClientDivision}{CLIENT}" in sty

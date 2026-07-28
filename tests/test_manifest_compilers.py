@@ -608,6 +608,7 @@ def test_composite_bundle_accepts_manifest_variables_and_writes_frontmatter():
         "variables": {
             "codex_edition": "johannah",
             "codex_strip_editorial_callouts": True,
+            "body_folio_start": 201,
             "not_allowlisted": "rejected",
         },
         "sources": [
@@ -617,6 +618,7 @@ def test_composite_bundle_accepts_manifest_variables_and_writes_frontmatter():
     plan = compiler.compile(manifest)
     assert "codex_edition" in plan.boundary_assertions["accepted_manifest_variables"]
     assert "codex_strip_editorial_callouts" in plan.boundary_assertions["accepted_manifest_variables"]
+    assert "body_folio_start" in plan.boundary_assertions["accepted_manifest_variables"]
     assert "not_allowlisted" in plan.boundary_assertions["rejected_manifest_variables"]
 
     # Assembled intermediate must carry codex_edition in both top-level and
@@ -628,7 +630,92 @@ def test_composite_bundle_accepts_manifest_variables_and_writes_frontmatter():
     fm = body[4:fm_end]
     assert "codex_edition: johannah" in fm
     assert "codex_strip_editorial_callouts: true" in fm
+    assert "body_folio_start: 201" in fm
     assert "not_allowlisted" not in fm
+
+
+def test_composite_bundle_rejects_invalid_or_injectable_body_folio_start():
+    compiler = CompositeBundleCompiler()
+    base_manifest = {
+        "kind": "composite_bundle",
+        "schema_version": "bundle_manifest_v1",
+        "bundle_id": "invalid-body-folio",
+        "profile": "cam",
+        "sources": [
+            {
+                "uid": "fixture-src-001",
+                "path": str(SRC / "source-001.md"),
+                "role": "primary_anchor",
+                "order": 1,
+            },
+        ],
+    }
+    invalid_values = [
+        True,
+        0,
+        -1,
+        1.5,
+        "201",
+        "201}^^5csetcounter{page}{999",
+    ]
+
+    for value in invalid_values:
+        manifest = {**base_manifest, "variables": {"body_folio_start": value}}
+        assert "variables.body_folio_start must be a positive integer" in (
+            compiler.validate(manifest)
+        )
+
+
+def test_markdown_document_rejects_reserved_body_folio_ingress_bypasses(tmp_path):
+    payload = "201}^^5csetcounter{page}{999"
+    top_level_source = tmp_path / "top-level.md"
+    top_level_source.write_text(
+        "---\nbody_folio_start: '" + payload + "'\n---\n\nBody.\n"
+    )
+    nested_source = tmp_path / "nested.md"
+    nested_source.write_text(
+        "---\nvariables:\n  body_folio_start: '" + payload + "'\n---\n\nBody.\n"
+    )
+    compiler = MarkdownDocumentCompiler()
+
+    def manifest(source_path, metadata=None):
+        result = {
+            "kind": "markdown_document",
+            "schema_version": "document_manifest_v1",
+            "document_id": "reserved-body-folio-ingress",
+            "profile": "codex0",
+            "source": {"path": str(source_path)},
+        }
+        if metadata is not None:
+            result["metadata"] = metadata
+        return result
+
+    assert (
+        "source_frontmatter.body_folio_start is reserved; set it through "
+        "manifest.variables.body_folio_start"
+        in compiler.validate(manifest(top_level_source))
+    )
+    assert (
+        "source_frontmatter.variables.body_folio_start is reserved; set it through "
+        "manifest.variables.body_folio_start"
+        in compiler.validate(manifest(nested_source))
+    )
+
+    clean_source = SRC / "source-001.md"
+    assert (
+        "metadata.body_folio_start is reserved; set it through "
+        "manifest.variables.body_folio_start"
+        in compiler.validate(
+            manifest(clean_source, {"body_folio_start": payload})
+        )
+    )
+    assert (
+        "metadata.variables.body_folio_start is reserved; set it through "
+        "manifest.variables.body_folio_start"
+        in compiler.validate(
+            manifest(clean_source, {"variables": {"body_folio_start": payload}})
+        )
+    )
 
 
 def test_composite_bundle_records_divider_stock_and_print_image():

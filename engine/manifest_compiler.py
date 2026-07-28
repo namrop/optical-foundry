@@ -277,6 +277,10 @@ DOCUMENT_VARIABLE_ALLOWLIST = {
     # A short label ("Volume I") the codex0 template lowers to \CodexVolume,
     # printed on the half-title and title page of each volume.
     "codex_volume",
+    # Optional arabic folio assigned immediately after memoir's \mainmatter reset.
+    # This lets a later physical volume continue the reading-volume folio sequence
+    # while keeping its own independent roman-numbered frontmatter.
+    "body_folio_start",
 }
 
 RUNNING_TEXT_KEY_ALIASES = {
@@ -324,12 +328,56 @@ def _safe_logo_path(value: Any) -> bool:
     return _safe_render_resource_path(value)
 
 
+def _validate_document_variables(variables: dict[str, Any]) -> list[str]:
+    errors: list[str] = []
+    if "body_folio_start" in variables:
+        value = variables["body_folio_start"]
+        if isinstance(value, bool) or not isinstance(value, int) or value < 1:
+            errors.append("variables.body_folio_start must be a positive integer")
+    return errors
+
+
+def _reserved_document_variable_ingress_errors(
+    mapping: dict[str, Any], scope: str
+) -> list[str]:
+    errors: list[str] = []
+    if "body_folio_start" in mapping:
+        errors.append(
+            f"{scope}.body_folio_start is reserved; set it through "
+            "manifest.variables.body_folio_start"
+        )
+    nested = mapping.get("variables")
+    if isinstance(nested, dict) and "body_folio_start" in nested:
+        errors.append(
+            f"{scope}.variables.body_folio_start is reserved; set it through "
+            "manifest.variables.body_folio_start"
+        )
+    return errors
+
+
+def _strip_reserved_document_variables(mapping: dict[str, Any]) -> dict[str, Any]:
+    """Defense in depth: reserved template variables have one validated ingress."""
+    cleaned = dict(mapping)
+    cleaned.pop("body_folio_start", None)
+    nested = cleaned.get("variables")
+    if isinstance(nested, dict):
+        cleaned_nested = dict(nested)
+        cleaned_nested.pop("body_folio_start", None)
+        cleaned["variables"] = cleaned_nested
+    return cleaned
+
+
 def _guard_manifest_variables(variables: dict[str, Any]) -> tuple[dict[str, Any], dict[str, str]]:
     accepted: dict[str, Any] = {}
     rejected: dict[str, str] = {}
     for key, value in variables.items():
         if key not in DOCUMENT_VARIABLE_ALLOWLIST:
             rejected[key] = "variable key is not allowlisted for document manifests"
+            continue
+        if key == "body_folio_start" and (
+            isinstance(value, bool) or not isinstance(value, int) or value < 1
+        ):
+            rejected[key] = "body_folio_start must be a positive integer"
             continue
         if not _safe_scalar(value):
             rejected[key] = "variable value must be a scalar"
@@ -864,6 +912,11 @@ class MarkdownDocumentCompiler(ManifestCompiler):
         accepted_variables, rejected_variables = _guard_manifest_variables(variables)
         merged_fm: dict[str, Any] = dict(source_fm) if preserve_source_metadata else {}
         merged_fm.update(metadata)
+        # `body_folio_start` is directly lowered into a TeX integer context. Its
+        # sole supported ingress is the validated top-level manifest.variables
+        # mapping; strip source/metadata copies defensively even though validate()
+        # rejects them before normal compilation.
+        merged_fm = _strip_reserved_document_variables(merged_fm)
         if accepted_variables:
             existing_vars = merged_fm.get("variables", {}) if isinstance(merged_fm.get("variables", {}), dict) else {}
             merged_fm["variables"] = {**existing_vars, **accepted_variables}
@@ -1020,6 +1073,11 @@ class MarkdownDocumentCompiler(ManifestCompiler):
             else:
                 source_fm, _source_body = _split_frontmatter_and_body(Path(path).read_text(errors="ignore"))
                 if source_fm:
+                    errors.extend(
+                        _reserved_document_variable_ingress_errors(
+                            source_fm, "source_frontmatter"
+                        )
+                    )
                     try:
                         _resolve_document_matter_role(
                             source_fm,
@@ -1033,6 +1091,13 @@ class MarkdownDocumentCompiler(ManifestCompiler):
                 _resolve_document_matter_role(source, DOCUMENT_MATTER_SOURCE_KEYS, "source")
             except ValueError as exc:
                 errors.append(str(exc))
+        metadata = manifest.get("metadata", {})
+        if metadata is not None and not isinstance(metadata, dict):
+            errors.append("metadata must be a mapping")
+        elif isinstance(metadata, dict):
+            errors.extend(
+                _reserved_document_variable_ingress_errors(metadata, "metadata")
+            )
         render_cfg = manifest.get("render", {})
         if render_cfg is not None and not isinstance(render_cfg, dict):
             errors.append("render must be a mapping")
@@ -1049,6 +1114,8 @@ class MarkdownDocumentCompiler(ManifestCompiler):
         variables = manifest.get("variables", {})
         if variables is not None and not isinstance(variables, dict):
             errors.append("variables must be a mapping")
+        elif isinstance(variables, dict):
+            errors.extend(_validate_document_variables(variables))
         return errors
 
 
@@ -1461,6 +1528,12 @@ class CompositeBundleCompiler(ManifestCompiler):
                 page_margins_from_mapping(render_cfg, scope="render")
             except PageMarginError as exc:
                 errors.append(str(exc))
+
+        variables = manifest.get("variables", {})
+        if variables is not None and not isinstance(variables, dict):
+            errors.append("variables must be a mapping")
+        elif isinstance(variables, dict):
+            errors.extend(_validate_document_variables(variables))
 
         pres = manifest.get("presentation", {})
         if pres is not None and not isinstance(pres, dict):
