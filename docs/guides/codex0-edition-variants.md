@@ -5,7 +5,7 @@ note_role: spec
 validation_profile: standard
 status: draft
 created: 2026-07-02T18:42:18-04:00
-updated: 2026-07-06T10:30:00-04:00
+updated: 2026-07-28T01:08:40-04:00
 beam_home: 42_optical_foundry/docs/guides
 title: "Codex 0 Edition Variants"
 summary: "Guide for Codex 0 source-visible edition variants selected by a pre-Pandoc comment-sentinel culler before figure/source preprocessors run."
@@ -83,9 +83,26 @@ The fable-register prose that carries the pataphor.
 
 ### Authoring
 
-- The attribute sits alongside the comma-separated edition labels: `register="pataphorical"`.
-- It applies only to the block it tags. If the selected edition inherits the archival base (no matching override), no register rail is drawn — the rail marks the register, not the region.
+Edition guards are an access-control boundary: malformed or accidentally widened guards can expose sensitive prose. Do not modify a variant ID, `guard=`, edition label, or variant-close marker merely to add rail guidance.
+
+The `register="pataphorical"` attribute on an edition marker remains supported for existing sources, but new rail-only boundary work should use a distinct fenced-Div layer wholly inside the already-selected branch:
+
+```markdown
+<!-- cx0:variant id="the-first-rooms-020" guard="witness,reader" -->
+Raw archival prose.
+<!-- cx0:edition witness -->
+::: {.codex-pataphorical register="pataphorical"}
+Existing veiled prose, unchanged.
+:::
+<!-- cx0:endvariant -->
+```
+
+- Both fences must sit inside one branch. They must never cross a `cx0:edition` or variant-close marker.
+- The fenced Div may also wrap a source-local pataphor span outside an edition variant.
+- It applies only to the text it encloses. An edition that does not select that branch receives neither its prose nor its rail guidance.
+- Images, plates, layout code, hinges, and thresholds normally remain outside. A `cx0:breath` may remain inside when it is only pacing within one continuous pataphor field; do not create visual rail fragments by treating every breath as a field exit.
 - The register token must be a safe identifier; a malformed value fails the render.
+- When replacing a coarse `register="pataphorical"` branch wrapper with explicit spans, remove only that rendering attribute; preserve the variant ID, guard, edition labels, and close marker exactly. Preprocess every affected edition before and after, strip only rail guidance from the comparison, and require identical selected prose and identical fail-closed errors.
 
 ### Rendering
 

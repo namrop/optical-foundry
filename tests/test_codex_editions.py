@@ -146,6 +146,45 @@ def test_codex_edition_preprocessor_wraps_selected_register_branch(tmp_path):
     assert "codex-pataphorical" not in archival_text
 
 
+def test_codex_edition_preprocessor_preserves_guard_selection_with_distinct_rail_guidance(tmp_path):
+    src = tmp_path / "guarded-guidance.md"
+    src.write_text(
+        "<!-- cx0:variant id=\"guarded-guidance\" guard=\"witness,reader\" -->\n"
+        "Sensitive archival prose.\n"
+        "<!-- cx0:edition witness -->\n"
+        "::: {.codex-pataphorical register=\"pataphorical\"}\n"
+        "Veiled witness prose.\n"
+        ":::\n"
+        "<!-- cx0:edition reader -->\n"
+        "Most veiled reader prose.\n"
+        "<!-- cx0:endvariant -->\n"
+    )
+
+    witness = preprocess_codex_edition_blocks(src, tmp_path, "guarded-guidance-witness", "witness")
+    witness_text = witness.rewritten_source.read_text()
+    assert "Sensitive archival prose." not in witness_text
+    assert "Veiled witness prose." in witness_text
+    assert "Most veiled reader prose." not in witness_text
+    assert '::: {.codex-pataphorical register="pataphorical"}' in witness_text
+    assert "cx0:" not in witness_text
+
+    reader = preprocess_codex_edition_blocks(src, tmp_path, "guarded-guidance-reader", "reader")
+    reader_text = reader.rewritten_source.read_text()
+    assert "Sensitive archival prose." not in reader_text
+    assert "Veiled witness prose." not in reader_text
+    assert "Most veiled reader prose." in reader_text
+    assert "codex-pataphorical" not in reader_text
+    assert "cx0:" not in reader_text
+
+    archival = preprocess_codex_edition_blocks(src, tmp_path, "guarded-guidance-archival", "archival")
+    archival_text = archival.rewritten_source.read_text()
+    assert "Sensitive archival prose." in archival_text
+    assert "Veiled witness prose." not in archival_text
+    assert "Most veiled reader prose." not in archival_text
+    assert "codex-pataphorical" not in archival_text
+    assert "cx0:" not in archival_text
+
+
 def test_codex_edition_preprocessor_rejects_unsafe_register(tmp_path):
     src = tmp_path / "unsafe-register.md"
     src.write_text(
