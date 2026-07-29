@@ -350,10 +350,16 @@ The second field opens.
     assert latex.count("\\CodexRailPoolReset") == 1
     assert "\\CodexRailPoolAdd{head}{4}{" in latex
     assert "H04B_head_04lines_scabiosa_exact_300ppi.png" in latex
+    assert latex.count("\\CodexRailPoolAdd{head}{11}{") == 2
+    assert "H11B_head_11lines_phalaenopsis_exact_300ppi.png" in latex
+    assert "H11D_head_11lines_allium_exact_300ppi.png" in latex
     assert "\\CodexRailPoolAdd{head}{32}{" in latex
-    assert "H32D_head_32lines_cow_vetch_exact_300ppi.png" in latex
+    assert "H32G_head_32lines_cow_vetch_exact_300ppi.png" in latex
+    assert "H32D_head_32lines_cow_vetch_exact_300ppi.png" not in latex
     assert "\\CodexRailPoolAdd{tail}{4}{" in latex
     assert "T04B_tail_04lines_scabiosa_exact_300ppi.png" in latex
+    assert "T11G_tail_11lines_harebell_exact_300ppi.png" in latex
+    assert "T11C_tail_11lines_allium_exact_300ppi.png" not in latex
     assert "\\CodexRailPoolAdd{tail}{32}{" in latex
     assert "T32E_tail_32lines_lupine_exact_300ppi.png" in latex
     assert "\\CodexRailPoolAdd{body}{38}{" in latex
@@ -377,7 +383,8 @@ The second field opens.
     assert "F29_body_38lines_lupine_quiet_exact_300ppi.png" not in latex
     # Finite-to-finite legacy ladders remain available only to contained blocks.
     assert "\\CodexRailPoolAdd{contained}{4}{" in latex
-    assert "RS01_lavender_sprig_tip_alpha.png" in latex
+    assert "RS06_contained_04lines_english_lavender_exact_300ppi.png" in latex
+    assert "RS01_lavender_sprig_tip_alpha.png" not in latex
     assert "\\CodexRailPoolAdd{contained}{25}{" in latex
     assert "RL01_lavender_sheaf_tall_alpha.png" in latex
     assert latex.index("\\CodexRailPoolReset") < latex.index("\\CodexPataphorBegin{1}")
