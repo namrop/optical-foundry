@@ -357,8 +357,24 @@ The second field opens.
     assert "\\CodexRailPoolAdd{tail}{32}{" in latex
     assert "T32E_tail_32lines_lupine_exact_300ppi.png" in latex
     assert "\\CodexRailPoolAdd{body}{38}{" in latex
-    assert "F22_body_38lines_lupine_dense_exact_300ppi.png" in latex
-    assert "F29_body_38lines_lupine_quiet_exact_300ppi.png" in latex
+    integral_assets = [
+        "S38BV02E_blue_vervain_integral_38lines_exact_300ppi.png",
+        "S38BF02E_harebell_integral_38lines_exact_300ppi.png",
+        "S38LU02E_lupine_integral_38lines_exact_300ppi.png",
+        "S38LA02E_English_lavender_integral_38lines_exact_300ppi.png",
+        "S38VE02E_spike_speedwell_integral_38lines_exact_300ppi.png",
+        "S38BF08E_harebell_alternate_integral_38lines_exact_300ppi.png",
+        "S38LU08E_lupine_alternate_integral_38lines_exact_300ppi.png",
+        "S38BV02ME_blue_vervain_mirrored_integral_38lines_exact_300ppi.png",
+        "S38VE08E_spike_speedwell_alternate_integral_38lines_exact_300ppi.png",
+    ]
+    assert latex.count("\\CodexRailPoolAdd{body}{38}{") == len(integral_assets)
+    assert latex.count("\\CodexRailPoolAdd{contained}{32}{") == len(integral_assets)
+    assert latex.count("\\CodexRailPoolAdd{contained}{38}{") == len(integral_assets)
+    for filename in integral_assets:
+        assert latex.count(filename) == 3
+    assert "F22_body_38lines_lupine_dense_exact_300ppi.png" not in latex
+    assert "F29_body_38lines_lupine_quiet_exact_300ppi.png" not in latex
     # Finite-to-finite legacy ladders remain available only to contained blocks.
     assert "\\CodexRailPoolAdd{contained}{4}{" in latex
     assert "RS01_lavender_sprig_tip_alpha.png" in latex
