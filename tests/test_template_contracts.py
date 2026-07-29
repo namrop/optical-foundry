@@ -28,6 +28,13 @@ def test_codex0_template_routes_verbatim_grinning_emoji_through_fallback_font():
     assert r"\newunicodechar{😁}{{\EmojiFont 😁}}" in text
 
 
+def test_codex0_template_routes_verbatim_rainbow_emoji_through_fallback_font():
+    """U+1F308 in a raw-LaTeX kept line must not fall through to Iowan."""
+    text = CODEX0_TEMPLATE.read_text()
+
+    assert r"\newunicodechar{🌈}{{\EmojiFont 🌈}}" in text
+
+
 def test_codex0_defines_layered_opener_epigraph_grammar():
     """The 2026-07-28 layered chapter-opener epigraph macro must be defined with
     the register-inverted body, the small-caps speaker line, the middot
