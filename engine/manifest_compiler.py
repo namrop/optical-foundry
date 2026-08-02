@@ -297,6 +297,10 @@ DOCUMENT_VARIABLE_ALLOWLIST = {
     # This lets a later physical volume continue the reading-volume folio sequence
     # while keeping its own independent roman-numbered frontmatter.
     "body_folio_start",
+    # Colophon prose-word measure, computed by the codex0 spine-projection tool
+    # at bundle time and substituted into the colophon's <<COLOPHON_WORDS>>
+    # placeholder by the codex0 template's intermediate assembly step.
+    "colophon_words",
 }
 
 RUNNING_TEXT_KEY_ALIASES = {
@@ -350,6 +354,14 @@ def _validate_document_variables(variables: dict[str, Any]) -> list[str]:
         value = variables["body_folio_start"]
         if isinstance(value, bool) or not isinstance(value, int) or value < 1:
             errors.append("variables.body_folio_start must be a positive integer")
+    if "colophon_words" in variables:
+        value = variables["colophon_words"]
+        if isinstance(value, bool) or not isinstance(value, (int, str)):
+            errors.append("variables.colophon_words must be an integer or an English phrase")
+        elif isinstance(value, int) and value < 1:
+            errors.append("variables.colophon_words must be positive")
+        elif isinstance(value, str) and not value.strip():
+            errors.append("variables.colophon_words must not be empty")
     return errors
 
 
@@ -1472,6 +1484,16 @@ class CompositeBundleCompiler(ManifestCompiler):
         assembled_content = "\n".join(lines)
         if prelude_lines:
             assembled_content = "\n".join(prelude_lines) + "\n" + assembled_content
+        # Build-time colophon measure: the codex0 spine tool computes the
+        # assembled prose-word count and carries it as the allowlisted
+        # `colophon_words` variable; the colophon source leaves a
+        # <<COLOPHON_WORDS>> placeholder which is substituted here, after
+        # assembly, so the printed number always reflects this exact build.
+        colophon_words_value = accepted_manifest_variables.get("colophon_words")
+        if colophon_words_value is not None:
+            assembled_content = assembled_content.replace(
+                "<<COLOPHON_WORDS>>", str(colophon_words_value)
+            )
         # Merge title-page variables and bundle-level manifest variables into a
         # single frontmatter block. Both surfaces write to top-level keys AND
         # under `variables:` so downstream readers (edition_from_source_frontmatter,
