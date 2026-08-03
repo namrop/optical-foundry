@@ -383,11 +383,26 @@ The second field opens.
     assert "\\CodexRegisterRail" not in latex
 
 
-def test_codex_pataphorical_same_story_divs_merge_into_one_run_across_an_interlude(tmp_path):
+def _pataphor_markers(latex):
+    """Return ordered [(kind, seg, run), ...] for every \\CodexPataphorBegin/End.
+
+    Markers are \\CodexPataphorBegin{seg}{run} / \\CodexPataphorEnd{seg}{run}
+    (per-segment drawing, 2026-08-02): seg id is the per-div draw extent, run id
+    is the story family/seed key.
+    """
+    import re
+    return [
+        (m.group(1), int(m.group(2)), int(m.group(3)))
+        for m in re.finditer(r"\\CodexPataphor(Begin|End)\{(\d+)\}\{(\d+)\}", latex)
+    ]
+
+
+def test_codex_pataphorical_same_story_divs_share_a_run_but_draw_as_separate_segments(tmp_path):
     # Story-scoped runs (Capability A, 2026-08-02): consecutive .codex-pataphorical
-    # divs sharing story= collapse to a single run. Begin fires only at the run's
-    # first div; End fires at every div so the merged [first-start, last-end] range
-    # rails through the literal interlude and ornaments between them.
+    # divs sharing story= share ONE run id (seed/family key). But per-segment
+    # drawing (Luis-caught in Apertures) means each div is its OWN segment with its
+    # own Begin+End, so the literal-prose interlude BETWEEN them draws no rail --
+    # the run no longer paints a hull across the gap.
     latex = _pandoc_latex(
         tmp_path,
         r"""
@@ -403,12 +418,18 @@ The same story resumes.
 """,
     )
 
-    # One run: a single Begin, two Ends, all keyed on run id 1.
-    assert latex.count("\\CodexPataphorBegin{") == 1
-    assert latex.count("\\CodexPataphorEnd{") == 2
-    assert "\\CodexPataphorBegin{1}" in latex
-    assert latex.count("\\CodexPataphorEnd{1}") == 2
-    assert "\\CodexPataphorBegin{2}" not in latex
+    markers = _pataphor_markers(latex)
+    begins = [m for m in markers if m[0] == "Begin"]
+    ends = [m for m in markers if m[0] == "End"]
+    # Two segments, each fully bracketed by its own Begin and End (so each draws on
+    # its own pages, and nothing spans the interlude between them).
+    assert len(begins) == 2 and len(ends) == 2
+    begin_segs = {seg for _, seg, _ in begins}
+    end_segs = {seg for _, seg, _ in ends}
+    assert begin_segs == end_segs  # every segment is individually opened and closed
+    assert len(begin_segs) == 2  # two DISTINCT segments, not one hull
+    # ...but both segments carry the SAME run id, so the story reads as one family.
+    assert {run for _, _, run in begins} == {1}
 
 
 def test_codex_pataphorical_story_change_starts_a_new_run(tmp_path):
@@ -425,18 +446,17 @@ The shared telling begins.
 """,
     )
 
-    # Two runs: girl -> run 1, both -> run 2. Each run's first div emits Begin.
-    assert latex.count("\\CodexPataphorBegin{") == 2
-    assert "\\CodexPataphorBegin{1}" in latex
-    assert "\\CodexPataphorBegin{2}" in latex
-    assert latex.index("\\CodexPataphorBegin{1}") < latex.index("Her telling")
-    assert latex.index("\\CodexPataphorBegin{2}") < latex.index("The shared telling")
+    begins = [m for m in _pataphor_markers(latex) if m[0] == "Begin"]
+    # girl -> run 1 (seg 1), both -> run 2 (seg 2): two segments, two runs.
+    assert [(seg, run) for _, seg, run in begins] == [(1, 1), (2, 2)]
+    assert latex.index("\\CodexPataphorBegin{1}{1}") < latex.index("Her telling")
+    assert latex.index("\\CodexPataphorBegin{2}{2}") < latex.index("The shared telling")
 
 
 def test_codex_pataphorical_run_resets_at_a_chapter_opener(tmp_path):
     # A chapter opener (\OFSetRunningTagline raw block, as the manifest emits it)
     # resets the run state, so same-story divs on opposite sides of a chapter
-    # boundary do NOT merge -- a run can never cross a chapter boundary.
+    # boundary land in DIFFERENT runs -- a story family can never cross a chapter.
     latex = _pandoc_latex(
         tmp_path,
         r"""
@@ -452,10 +472,9 @@ The boy's tale, chapter two, must not merge with chapter one.
 """,
     )
 
-    # Two distinct runs despite the identical story, because the opener reset ran.
-    assert latex.count("\\CodexPataphorBegin{") == 2
-    assert "\\CodexPataphorBegin{1}" in latex
-    assert "\\CodexPataphorBegin{2}" in latex
+    begins = [m for m in _pataphor_markers(latex) if m[0] == "Begin"]
+    # Identical story, but the opener reset means run ids differ.
+    assert [run for _, _, run in begins] == [1, 2]
 
 
 def test_codex_pataphorical_run_resets_at_a_part_divider(tmp_path):
@@ -474,13 +493,14 @@ Realm telling after the part divider must not merge.
 """,
     )
 
-    assert latex.count("\\CodexPataphorBegin{") == 2
+    begins = [m for m in _pataphor_markers(latex) if m[0] == "Begin"]
+    assert [run for _, _, run in begins] == [1, 2]
 
 
 def test_codex_pataphorical_untagged_div_falls_back_to_its_own_run(tmp_path):
     # An untagged div must never silently merge into a neighbor; it gets a
-    # standalone run (Begin + End) and does not merge with the tagged div beside
-    # it, nor with a second untagged div.
+    # standalone run and does not share a family with the tagged div beside it,
+    # nor with a second untagged div.
     latex = _pandoc_latex(
         tmp_path,
         r"""
@@ -498,11 +518,12 @@ Untagged div two.
 """,
     )
 
-    # Three runs: boy (1), untagged (2), untagged (3) -- none merge.
-    assert latex.count("\\CodexPataphorBegin{") == 3
-    assert latex.count("\\CodexPataphorEnd{") == 3
-    for run in ("1", "2", "3"):
-        assert f"\\CodexPataphorBegin{{{run}}}" in latex
+    markers = _pataphor_markers(latex)
+    begins = [m for m in markers if m[0] == "Begin"]
+    ends = [m for m in markers if m[0] == "End"]
+    # Three segments, three runs (boy 1, untagged 2, untagged 3): none merge.
+    assert [(seg, run) for _, seg, run in begins] == [(1, 1), (2, 2), (3, 3)]
+    assert len(ends) == 3
 
 
 def test_codex0_template_exposes_composition_macros_and_environments():
@@ -527,8 +548,14 @@ def test_codex0_template_wires_pataphor_ranges_to_page_local_role_rails():
 
     assert "\\NewDocumentCommand{\\CodexRailPoolReset}" in template
     assert "\\NewDocumentCommand{\\CodexRailPoolAdd}{m m m}" in template
-    assert "\\NewDocumentCommand{\\CodexPataphorBegin}" in template
-    assert "\\NewDocumentCommand{\\CodexPataphorEnd}" in template
+    # Per-segment drawing (2026-08-02): Begin/End take {seg}{run}; the seg id keys
+    # the draw-extent labels, the run id keys the seed via \g_codex_seg_run_prop.
+    assert "\\NewDocumentCommand{\\CodexPataphorBegin}{m m}" in template
+    assert "\\NewDocumentCommand{\\CodexPataphorEnd}{m m}" in template
+    assert "\\prop_new:N \\g_codex_seg_run_prop" in template
+    assert "\\prop_gput:Nnn \\g_codex_seg_run_prop {#1} {#2}" in template
+    assert "\\prop_get:NnNF \\g_codex_seg_run_prop {#1} \\l_codex_rail_run_tl" in template
+    assert "\\codex_rail_select_seed:n { \\l_codex_rail_run_int }" in template
     assert "\\usepackage{zref-savepos}" in template
     assert "\\zsavepos{codexpatstartpos@#1}" in template
     assert "\\zsavepos{codexpatendpos@#1}" in template
@@ -578,8 +605,8 @@ def test_codex_pataphor_begin_enters_horizontal_mode_before_saving_first_positio
     template = (PROFILE_ROOT / "templates" / "codex0.tex").read_text()
 
     begin_macro = template.split(
-        "\\NewDocumentCommand{\\CodexPataphorBegin}{m}", 1
-    )[1].split("\\NewDocumentCommand{\\CodexPataphorEnd}{m}", 1)[0]
+        "\\NewDocumentCommand{\\CodexPataphorBegin}{m m}", 1
+    )[1].split("\\NewDocumentCommand{\\CodexPataphorEnd}{m m}", 1)[0]
     assert "\\leavevmode" in begin_macro
     assert begin_macro.index("\\leavevmode") < begin_macro.index(
         "\\zref@labelbyprops{codexpatstart@#1}{abspage}"
