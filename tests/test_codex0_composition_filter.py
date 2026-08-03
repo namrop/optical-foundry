@@ -348,47 +348,161 @@ The second field opens.
     # line-band membership stay data-only; no folio-specific placement enters
     # the source.
     assert latex.count("\\CodexRailPoolReset") == 1
-    assert "\\CodexRailPoolAdd{head}{4}{" in latex
-    assert "H04B_head_04lines_scabiosa_exact_300ppi.png" in latex
-    assert latex.count("\\CodexRailPoolAdd{head}{11}{") == 2
-    assert "H11B_head_11lines_phalaenopsis_exact_300ppi.png" in latex
-    assert "H11D_head_11lines_allium_exact_300ppi.png" in latex
-    assert "\\CodexRailPoolAdd{head}{32}{" in latex
-    assert "H32G_head_32lines_cow_vetch_exact_300ppi.png" in latex
-    assert "H32D_head_32lines_cow_vetch_exact_300ppi.png" not in latex
-    assert "\\CodexRailPoolAdd{tail}{4}{" in latex
-    assert "T04B_tail_04lines_scabiosa_exact_300ppi.png" in latex
-    assert "T11G_tail_11lines_harebell_exact_300ppi.png" in latex
-    assert "T11C_tail_11lines_allium_exact_300ppi.png" not in latex
-    assert "\\CodexRailPoolAdd{tail}{32}{" in latex
-    assert "T32E_tail_32lines_lupine_exact_300ppi.png" in latex
-    assert "\\CodexRailPoolAdd{body}{38}{" in latex
-    integral_assets = [
-        "S38BV02E_blue_vervain_integral_38lines_exact_300ppi.png",
-        "S38BF02E_harebell_integral_38lines_exact_300ppi.png",
-        "S38LU02E_lupine_integral_38lines_exact_300ppi.png",
-        "S38LA02E_English_lavender_integral_38lines_exact_300ppi.png",
-        "S38VE02E_spike_speedwell_integral_38lines_exact_300ppi.png",
-        "S38BF08E_harebell_alternate_integral_38lines_exact_300ppi.png",
-        "S38LU08E_lupine_alternate_integral_38lines_exact_300ppi.png",
-        "S38BV02ME_blue_vervain_mirrored_integral_38lines_exact_300ppi.png",
-        "S38VE08E_spike_speedwell_alternate_integral_38lines_exact_300ppi.png",
-    ]
-    assert latex.count("\\CodexRailPoolAdd{body}{38}{") == len(integral_assets)
-    assert latex.count("\\CodexRailPoolAdd{contained}{32}{") == len(integral_assets)
-    assert latex.count("\\CodexRailPoolAdd{contained}{38}{") == len(integral_assets)
-    for filename in integral_assets:
-        assert latex.count(filename) == 3
-    assert "F22_body_38lines_lupine_dense_exact_300ppi.png" not in latex
-    assert "F29_body_38lines_lupine_quiet_exact_300ppi.png" not in latex
-    # Finite-to-finite legacy ladders remain available only to contained blocks.
-    assert "\\CodexRailPoolAdd{contained}{4}{" in latex
-    assert "RS06_contained_04lines_english_lavender_exact_300ppi.png" in latex
+
+    # Contained-only grammar (Luis, 2026-08-02). Every rail is a complete plant,
+    # finite at both ends, drawn natively at its line length. The endpoint roles
+    # (head/tail) and the open/open body role are retired from emission: a
+    # multi-page passage draws a distinct contained specimen per page rather
+    # than continuing one stem across the spread.
+    for retired_role in ("head", "tail", "body"):
+        assert f"\\CodexRailPoolAdd{{{retired_role}}}{{" not in latex
+
+    # The ladder is emitted at 2-line rungs, 2..38, contained role only.
+    rungs = list(range(2, 39, 2))
+    for rung in rungs:
+        assert f"\\CodexRailPoolAdd{{contained}}{{{rung}}}{{" in latex
+    assert latex.count("\\CodexRailPoolAdd{") == 58
+
+    # Rung membership comes from the solved ladder allocation. Spot-check the
+    # two ends: the shortest bloom marks and the full-text-block rails.
+    assert "CL32_new_england_aster_mid_alpha.png" in latex          # 2L
+    assert "CL15_purple_loosestrife_tall_2x_alpha.png" in latex     # 38L, venice 2x
+    assert latex.count("\\CodexRailPoolAdd{contained}{38}{") == 9
+
+    # Edge-touching (open) families are excluded under contained-only: the whole
+    # G* gap-fill and RX* XL-probe sets run off the canvas top/bottom.
+    for open_asset in ("G7D_lavender", "G7E_cow_vetch", "G6A_lavender", "RX01_lavender", "RX04_clematis"):
+        assert open_asset not in latex
+    # Integral open/open body assets are likewise no longer wired.
+    assert "S38BV02E_blue_vervain_integral_38lines_exact_300ppi.png" not in latex
+    # Morphology failures stay out.
     assert "RS01_lavender_sprig_tip_alpha.png" not in latex
-    assert "\\CodexRailPoolAdd{contained}{25}{" in latex
-    assert "RL01_lavender_sheaf_tall_alpha.png" in latex
+    assert "H32D_head_32lines_cow_vetch_exact_300ppi.png" not in latex
+
     assert latex.index("\\CodexRailPoolReset") < latex.index("\\CodexPataphorBegin{1}")
     assert "\\CodexRegisterRail" not in latex
+
+
+def test_codex_pataphorical_same_story_divs_merge_into_one_run_across_an_interlude(tmp_path):
+    # Story-scoped runs (Capability A, 2026-08-02): consecutive .codex-pataphorical
+    # divs sharing story= collapse to a single run. Begin fires only at the run's
+    # first div; End fires at every div so the merged [first-start, last-end] range
+    # rails through the literal interlude and ornaments between them.
+    latex = _pandoc_latex(
+        tmp_path,
+        r"""
+::: {.codex-pataphorical story="boy"}
+The first field opens.
+:::
+
+Ordinary prose interlude stays outside the field.
+
+::: {.codex-pataphorical story="boy"}
+The same story resumes.
+:::
+""",
+    )
+
+    # One run: a single Begin, two Ends, all keyed on run id 1.
+    assert latex.count("\\CodexPataphorBegin{") == 1
+    assert latex.count("\\CodexPataphorEnd{") == 2
+    assert "\\CodexPataphorBegin{1}" in latex
+    assert latex.count("\\CodexPataphorEnd{1}") == 2
+    assert "\\CodexPataphorBegin{2}" not in latex
+
+
+def test_codex_pataphorical_story_change_starts_a_new_run(tmp_path):
+    latex = _pandoc_latex(
+        tmp_path,
+        r"""
+::: {.codex-pataphorical story="girl"}
+Her telling opens the chapter.
+:::
+
+::: {.codex-pataphorical story="both"}
+The shared telling begins.
+:::
+""",
+    )
+
+    # Two runs: girl -> run 1, both -> run 2. Each run's first div emits Begin.
+    assert latex.count("\\CodexPataphorBegin{") == 2
+    assert "\\CodexPataphorBegin{1}" in latex
+    assert "\\CodexPataphorBegin{2}" in latex
+    assert latex.index("\\CodexPataphorBegin{1}") < latex.index("Her telling")
+    assert latex.index("\\CodexPataphorBegin{2}") < latex.index("The shared telling")
+
+
+def test_codex_pataphorical_run_resets_at_a_chapter_opener(tmp_path):
+    # A chapter opener (\OFSetRunningTagline raw block, as the manifest emits it)
+    # resets the run state, so same-story divs on opposite sides of a chapter
+    # boundary do NOT merge -- a run can never cross a chapter boundary.
+    latex = _pandoc_latex(
+        tmp_path,
+        r"""
+::: {.codex-pataphorical story="boy"}
+The boy's tale, chapter one.
+:::
+
+\OFSetRunningTagline{Chapter Two}
+
+::: {.codex-pataphorical story="boy"}
+The boy's tale, chapter two, must not merge with chapter one.
+:::
+""",
+    )
+
+    # Two distinct runs despite the identical story, because the opener reset ran.
+    assert latex.count("\\CodexPataphorBegin{") == 2
+    assert "\\CodexPataphorBegin{1}" in latex
+    assert "\\CodexPataphorBegin{2}" in latex
+
+
+def test_codex_pataphorical_run_resets_at_a_part_divider(tmp_path):
+    latex = _pandoc_latex(
+        tmp_path,
+        r"""
+::: {.codex-pataphorical story="realm"}
+Realm telling before the part divider.
+:::
+
+\OFSetRunningDivision{Part XII}
+
+::: {.codex-pataphorical story="realm"}
+Realm telling after the part divider must not merge.
+:::
+""",
+    )
+
+    assert latex.count("\\CodexPataphorBegin{") == 2
+
+
+def test_codex_pataphorical_untagged_div_falls_back_to_its_own_run(tmp_path):
+    # An untagged div must never silently merge into a neighbor; it gets a
+    # standalone run (Begin + End) and does not merge with the tagged div beside
+    # it, nor with a second untagged div.
+    latex = _pandoc_latex(
+        tmp_path,
+        r"""
+::: {.codex-pataphorical story="boy"}
+Tagged boy telling.
+:::
+
+::: {.codex-pataphorical}
+Untagged div one.
+:::
+
+::: {.codex-pataphorical}
+Untagged div two.
+:::
+""",
+    )
+
+    # Three runs: boy (1), untagged (2), untagged (3) -- none merge.
+    assert latex.count("\\CodexPataphorBegin{") == 3
+    assert latex.count("\\CodexPataphorEnd{") == 3
+    for run in ("1", "2", "3"):
+        assert f"\\CodexPataphorBegin{{{run}}}" in latex
 
 
 def test_codex0_template_exposes_composition_macros_and_environments():
@@ -426,6 +540,15 @@ def test_codex0_template_wires_pataphor_ranges_to_page_local_role_rails():
     assert "\\codex_rail_select_role:" in template
     assert "\\codex_rail_select_band:" in template
     assert "\\codex_rail_select_seed:" in template
+    # Contained-only: the role is fixed, so pool membership is decided purely by
+    # the measured line length. The endpoint/body branch on page position is gone.
+    assert "\\tl_set:Nn \\l_codex_rail_role_tl {head}" not in template
+    assert "\\tl_set:Nn \\l_codex_rail_role_tl {tail}" not in template
+    assert "\\tl_set:Nn \\l_codex_rail_role_tl {body}" not in template
+    # Rungs are 2-line and the measured segment rounds UP, so a selected asset
+    # is always at least as slender as its slot and can never be width-capped.
+    assert "\\fp_to_int:n" in template
+    assert "ceil" in template
     # Height-only scaling: width floats proportionally, staying at or under
     # the design width. This eliminates the aspect-ratio cap that left gaps
     # on full-page head/tail segments.
@@ -439,7 +562,13 @@ def test_codex0_template_wires_pataphor_ranges_to_page_local_role_rails():
     assert "l_codex_rail_span_int" not in template
     # The shipout path must use physical-page parity and the already trim-shifted
     # margin separation, rather than a one-direction hspace that breaks versos.
-    assert "\\int_if_odd:nTF { \\l_codex_rail_page_int }" in template
+    # Fore-edge parity must key off the page counter -- the same counter LaTeX
+    # uses to pick \oddsidemargin vs \evensidemargin -- NOT the physical
+    # abspage. Keying off abspage silently throws every rail into the gutter as
+    # soon as the frontmatter page count shifts by one (2026-08-02: the Edition
+    # Notice spilling to a second leaf did exactly that).
+    assert "\\int_if_odd:nTF { \\value{page} }" in template
+    assert "\\int_if_odd:nTF { \\l_codex_rail_page_int }" not in template
     assert "\\marginparsep" in template
     assert "\\CodexTrimAllowance" in template
     assert "\\CodexRailTextClearance" in template
