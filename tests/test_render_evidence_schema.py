@@ -18,3 +18,8 @@ def test_render_evidence_schema_declares_status_and_validation_surface():
     assert "pdf_written" in validation["checks"]["properties"]
     assert "raw_latex_leakage" in validation["checks"]["properties"]
     assert validation["warning_count"]["type"] == "integer"
+
+    resource_resolution = props["resource_resolution"]["properties"]
+    assert resource_resolution["effective_roots"]["type"] == "array"
+    assert resource_resolution["resolved_resources"]["type"] == "array"
+    assert resource_resolution["warnings"]["type"] == "array"

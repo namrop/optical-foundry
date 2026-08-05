@@ -39,6 +39,9 @@ class LayoutImagePreprocessResult:
 
 _BLOCK_RE = re.compile(r"^```of-image\s*\n(?P<body>.*?)^```\s*$", re.MULTILINE | re.DOTALL)
 _INITIAL_BLOCK_RE = re.compile(r"^```of-initial\s*\n(?P<body>.*?)^```\s*\n?", re.MULTILINE | re.DOTALL)
+_RAW_LATEX_RESOURCE_RE = re.compile(
+    r"\\(?:includegraphics|OFSectionDividerBackground|OFOuterRail|OFBottomRail|OFEdgeOrnament)\b"
+)
 _SAFE_DIMENSION_RE = re.compile(
     r"^-?(?:\\(?:linewidth|textwidth|textheight|paperwidth|paperheight|baselineskip)|(?:0(?:\.0+)?|0?\.\d+|[1-9]\d*(?:\.\d+)?)(?:\\(?:linewidth|textwidth|textheight|paperwidth|paperheight|baselineskip)|in|cm|mm|pt|em|ex))$"
 )
@@ -109,13 +112,21 @@ _IMAGE_INITIAL_HEADER_INCLUDES = [
 
 
 def preprocess_layout_image_blocks(
-    source: Path, output_dir: Path, render_id: str, graphicspath_extra_roots: list[Path] | None = None
+    source: Path,
+    output_dir: Path,
+    render_id: str,
+    graphicspath_extra_roots: list[Path] | None = None,
+    *,
+    force_graphicspath: bool = False,
 ) -> LayoutImagePreprocessResult:
     """Rewrite fenced `of-image` blocks into render-only raw LaTeX.
 
-    The original source is never mutated. The returned source path is either the
-    original path (when no blocks are present) or a generated Markdown copy under
-    `output_dir`.
+    The original source is never mutated. The returned source path is the original
+    path when the source has neither Foundry image blocks nor raw LaTeX image
+    controls. Raw supported image macros receive the supplied ``\\graphicspath``
+    ordering. ``force_graphicspath`` lets manifest-backed PDF renders propagate
+    their effective roots for template resources even when the body has no image
+    controls, without changing the default image-free no-op.
     """
 
     if not source.exists():
@@ -124,7 +135,8 @@ def preprocess_layout_image_blocks(
     text = source.read_text(encoding="utf-8", errors="ignore")
     image_matches = list(_BLOCK_RE.finditer(text))
     initial_matches = list(_INITIAL_BLOCK_RE.finditer(text))
-    if not image_matches and not initial_matches:
+    raw_latex_resources = _RAW_LATEX_RESOURCE_RE.search(text) is not None
+    if not image_matches and not initial_matches and not raw_latex_resources and not force_graphicspath:
         return LayoutImagePreprocessResult(changed=False, rewritten_source=source)
 
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -395,7 +407,9 @@ def _graphicspath_roots(source: Path, output_dir: Path, extra_roots: list[Path] 
     """
 
     roots: list[str] = []
-    for path in (source.parent, output_dir, *(extra_roots or [])):
+    # Callers that supply a complete effective chain own precedence. The source
+    # and output roots remain appended compatibility fallbacks for direct calls.
+    for path in (*(extra_roots or []), source.parent, output_dir):
         resolved = path.resolve()
         text = resolved.as_posix().rstrip("/") + "/"
         if not _safe_graphicspath_root(text):

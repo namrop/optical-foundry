@@ -96,6 +96,11 @@ class ProjectionPlan:
     # source-local image roots for raw LaTeX / layout-image asset lookup.
     source_resource_roots: list[Path] = field(default_factory=list)
 
+    # Work-owned render resource directories declared explicitly by a document-
+    # or bundle-family manifest. Kept distinct from inferred source roots so
+    # evidence can preserve ownership and lookup precedence.
+    manifest_resource_roots: list[Path] = field(default_factory=list)
+
     # Manifest-owned delivery/use-context controls. Profiles remain visual /
     # semantic identity; delivery records physical output requirements such as
     # bound geometry, page-number strategy, and colophon behavior.

@@ -27,6 +27,7 @@ from typing import Any
 from engine.render_planner import RenderPlan, plan_manifest_render
 from engine.projection_plan import AssemblyView, ProjectionPlan
 from engine.profile_resolver import resolve_profile
+from engine.resource_roots import resolve_manifest_resource_roots
 from engine.page_size import (
     PageMarginError,
     PageSizeError,
@@ -98,6 +99,35 @@ def _sha256_hex(path: Path) -> str:
         for chunk in iter(lambda: f.read(65536), b""):
             h.update(chunk)
     return h.hexdigest()
+
+
+def _validate_manifest_resource_root_shape(manifest: dict[str, Any]) -> list[str]:
+    """Validate the additive v1 root declaration before path resolution."""
+    if "resource_roots" not in manifest:
+        return []
+    roots = manifest.get("resource_roots")
+    if not isinstance(roots, list):
+        return ["resource_roots must be a list of directory paths"]
+    if not roots:
+        return ["resource_roots must contain at least one directory path when present"]
+    errors: list[str] = []
+    for index, value in enumerate(roots):
+        if not isinstance(value, str) or not value.strip():
+            errors.append(f"resource_roots[{index}] must be a non-empty path string")
+        elif "://" in value:
+            errors.append(f"resource_roots[{index}] must be a filesystem path, not a URL")
+    return errors
+
+
+def _stable_source_parent_roots(paths: list[str]) -> list[Path]:
+    roots: list[Path] = []
+    seen: set[Path] = set()
+    for value in paths:
+        root = Path(value).resolve().parent
+        if root not in seen:
+            seen.add(root)
+            roots.append(root)
+    return roots
 
 
 def _profile_default_page_size_for(profile_id: str) -> tuple[str, str]:
@@ -949,6 +979,9 @@ class MarkdownDocumentCompiler(ManifestCompiler):
         if errors:
             raise ValueError(f"manifest validation failed: {'; '.join(errors)}")
 
+        manifest_resource_roots = resolve_manifest_resource_roots(
+            manifest, manifest_path=kwargs.get("manifest_path")
+        )
         source_cfg = manifest.get("source", {})
         source_path = Path(source_cfg["path"])
         profile = manifest["profile"]
@@ -1103,7 +1136,8 @@ class MarkdownDocumentCompiler(ManifestCompiler):
                     "manifest_lane": self.kind,
                 }
             ],
-            source_resource_roots=[source_path.parent],
+            source_resource_roots=[source_path.parent.resolve()],
+            manifest_resource_roots=manifest_resource_roots,
             boundary_assertions=boundary_assertions,
         )
 
@@ -1172,6 +1206,7 @@ class MarkdownDocumentCompiler(ManifestCompiler):
             errors.append("variables must be a mapping")
         elif isinstance(variables, dict):
             errors.extend(_validate_document_variables(variables))
+        errors.extend(_validate_manifest_resource_root_shape(manifest))
         return errors
 
 
@@ -1191,6 +1226,9 @@ class CompositeBundleCompiler(ManifestCompiler):
         if errors:
             raise ValueError(f"manifest validation failed: {'; '.join(errors)}")
 
+        manifest_resource_roots = resolve_manifest_resource_roots(
+            manifest, manifest_path=kwargs.get("manifest_path")
+        )
         bundle_id = manifest["bundle_id"]
         profile = manifest["profile"]
         pres = manifest.get("presentation", {})
@@ -1542,6 +1580,10 @@ class CompositeBundleCompiler(ManifestCompiler):
                 {"path": f.get("path"), "caption": f.get("caption"), "placement": f.get("placement")}
                 for f in figures
             ],
+            source_resource_roots=_stable_source_parent_roots(
+                [path for path in assembly.source_paths.values() if path]
+            ),
+            manifest_resource_roots=manifest_resource_roots,
             boundary_assertions={
                 **_manifest_boundary_assertions(render_plan),
                 "emit_visible_provenance": emit_visible_provenance,
@@ -1606,6 +1648,7 @@ class CompositeBundleCompiler(ManifestCompiler):
             errors.append("variables must be a mapping")
         elif isinstance(variables, dict):
             errors.extend(_validate_document_variables(variables))
+        errors.extend(_validate_manifest_resource_root_shape(manifest))
 
         pres = manifest.get("presentation", {})
         if pres is not None and not isinstance(pres, dict):

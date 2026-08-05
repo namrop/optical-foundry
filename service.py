@@ -43,5 +43,5 @@ def render_manifest(manifest_path: str | Path, output_dir: str | None = None) ->
     if errors:
         raise ValueError("manifest validation failed: " + "; ".join(errors))
 
-    plan = compiler.compile(raw)
+    plan = compiler.compile(raw, manifest_path=manifest_path.resolve())
     return PandocRenderer().render(plan, output_dir=output_dir)

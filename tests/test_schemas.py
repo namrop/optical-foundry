@@ -1,5 +1,12 @@
 """Tests for engine.schemas — subtype detection and classification."""
+from pathlib import Path
+
+import yaml
+
 from engine.schemas import detect_subtype, is_single_document, MANIFEST_CLASS_NAMES
+
+
+ROOT = Path(__file__).resolve().parents[1]
 
 
 def test_detect_bundle_manifest():
@@ -35,3 +42,12 @@ def test_class_names():
     assert MANIFEST_CLASS_NAMES["bundle"] == "Composite Bundle"
     assert MANIFEST_CLASS_NAMES["label"] == "Label Run"
     assert MANIFEST_CLASS_NAMES["sticker"] == "Sticker Sheet"
+
+
+def test_document_and_bundle_reference_schemas_declare_resource_roots():
+    for filename in ("document_manifest_v1.yaml", "bundle_manifest_v1.yaml"):
+        schema = yaml.safe_load((ROOT / "schemas" / filename).read_text(encoding="utf-8"))
+        resource_roots = schema["properties"]["resource_roots"]
+        assert resource_roots["type"] == "array"
+        assert resource_roots["minItems"] == 1
+        assert resource_roots["items"]["type"] == "string"

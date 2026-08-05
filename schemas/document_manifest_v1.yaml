@@ -34,6 +34,18 @@ properties:
     type: string
     description: Profile ID from the profile registry.
 
+  resource_roots:
+    type: array
+    minItems: 1
+    description: >
+      Optional ordered work-owned resource roots. Relative paths resolve from
+      this manifest's directory. Roots must exist, be directories, and be safe
+      for raw LaTeX graphicspath injection. Effective precedence is run-local,
+      source-local, these manifest roots, then profile compatibility roots.
+    items:
+      type: string
+      minLength: 1
+
   source:
     type: object
     required: [path]

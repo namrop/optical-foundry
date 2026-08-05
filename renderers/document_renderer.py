@@ -155,6 +155,7 @@ class DocumentRenderer:
                     "render_lane": "direct_markdown",
                 }
             ],
+            source_resource_roots=[source.parent.resolve()],
             boundary_assertions={
                 "document_manifest_lane": False,
                 "manifest_family": "document",

@@ -195,7 +195,11 @@ def cmd_manifest(args: argparse.Namespace) -> int:
             print(f"VALIDATION ERROR: {err}", file=sys.stderr)
         return 1
 
-    plan = compiler.compile(raw)
+    try:
+        plan = compiler.compile(raw, manifest_path=manifest_path.resolve())
+    except ValueError as exc:
+        print(f"VALIDATION ERROR: {exc}", file=sys.stderr)
+        return 1
     renderer = PandocRenderer()
     evidence = renderer.render(plan, output_dir=args.output)
     success = evidence.get("status") != "error"

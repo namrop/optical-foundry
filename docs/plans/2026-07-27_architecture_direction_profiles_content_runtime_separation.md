@@ -5,7 +5,7 @@ note_role: architecture_note
 validation_profile: standard
 status: active
 created: 2026-07-27T12:45:00-04:00
-updated: 2026-07-27T13:10:00-04:00
+updated: 2026-08-03T03:15:26-04:00
 beam_home: 42_optical_foundry
 title: "Optical Foundry — Architecture Direction: profiles, content, and runtime separation"
 tags:
@@ -28,6 +28,8 @@ deliberately does **not** propose a target architecture.
 
 Companion: `2026-07-25_of_book_rendering_issue_register_bounded_fix_session.md` (23 issues,
 ordered by leverage — the right ordering for a fix session, the wrong one for this).
+
+Proposed implementation design: `2026-08-03_manifest_resource_roots_and_work_owned_asset_extraction.md`.
 
 ---
 

@@ -17,7 +17,7 @@ import time
 import uuid
 from dataclasses import replace
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterable
 
 from engine.codex_editions import (
     CodexEditionRenderError,
@@ -54,6 +54,12 @@ from engine.page_size import (
 )
 from engine.profile_resolver import LOCAL_IMPORT, ResolvedProfile, resolve_profile
 from engine.projection_plan import ProjectionPlan
+from engine.resource_roots import (
+    ResolvedResourceRoot,
+    effective_resource_roots,
+    resource_resolution_evidence,
+    resource_root_paths,
+)
 from renderers.base import Renderer
 
 
@@ -109,6 +115,8 @@ class PandocRenderer(Renderer):
             )
 
         render_source = plan.render_source.resolve()
+        resource_roots = effective_resource_roots(plan, resolved_profile, out_dir)
+        resource_resolution = resource_resolution_evidence(plan, resource_roots)
 
         # profile defaults/template/resource environment: single-object profile
         # resolution is centralized in engine.profile_resolver. Manifest-family
@@ -186,9 +194,11 @@ class PandocRenderer(Renderer):
         env = os.environ.copy()
         env.update(resolved_profile.render_environment.env_overrides())
 
-        for resource_path in resolved_profile.render_environment.resource_paths:
-            if resource_path.exists():
-                cmd += ["--resource-path", str(resource_path)]
+        cmd += self._resource_path_options(
+            resource_roots,
+            manifest_resource_roots=plan.manifest_resource_roots,
+            legacy_profile_paths=resolved_profile.render_environment.resource_paths,
+        )
 
         # Page geometry is lowered through a final defaults overlay so imported
         # templates that rely on `$geometry$` receive both the requested paper
@@ -358,6 +368,7 @@ class PandocRenderer(Renderer):
             list(plan.boundary_assertions.get("warnings", []))
             + defaults_meta.get("warnings", [])
             + resolved_profile.warnings
+            + resource_resolution["warnings"]
         )
         validation = self._validation_success(
             pdf_written=compile_pdf.exists(),
@@ -444,6 +455,7 @@ class PandocRenderer(Renderer):
             },
             "source_inventory": plan.source_inventory,
             "figure_inventory": plan.figure_inventory,
+            "resource_resolution": resource_resolution,
             "assembly": self._assembly_evidence(plan),
             "render_metadata": {
                 "profile": plan.profile_id,
@@ -501,6 +513,24 @@ class PandocRenderer(Renderer):
 
         evidence_file.write_text(json.dumps(evidence, indent=2) + "\n")
         return evidence
+
+    @staticmethod
+    def _resource_path_options(
+        roots: list[ResolvedResourceRoot],
+        *,
+        manifest_resource_roots: list[Path] | None = None,
+        legacy_profile_paths: Iterable[Path] = (),
+    ) -> list[str]:
+        """Lower resource roots while preserving the absent-field runtime."""
+        if manifest_resource_roots is not None and not manifest_resource_roots:
+            options: list[str] = []
+            for resource_path in legacy_profile_paths:
+                if resource_path.exists():
+                    options += ["--resource-path", str(resource_path)]
+            return options
+        if not roots:
+            return []
+        return ["--resource-path", os.pathsep.join(str(root.path) for root in roots)]
 
     @staticmethod
     def _document_settings_options(plan: ProjectionPlan) -> list[str]:
@@ -872,11 +902,26 @@ class PandocRenderer(Renderer):
         if not self._layout_images_supported(plan, resolved_profile):
             return plan
 
+        if plan.manifest_resource_roots:
+            roots = effective_resource_roots(plan, resolved_profile, out_dir)
+            layout_roots = resource_root_paths(roots)
+        else:
+            # Preserve the clean-HEAD layout search order when the additive
+            # manifest field is absent: authored source, render output, then the
+            # profile/source compatibility roots used by the prior runtime.
+            layout_roots = [
+                plan.render_source.resolve().parent,
+                Path(out_dir).resolve(),
+                LOCAL_IMPORT,
+                *resolved_profile.asset_roots,
+                *plan.source_resource_roots,
+            ]
         result = preprocess_layout_image_blocks(
             plan.render_source,
             out_dir,
             plan.render_id,
-            [LOCAL_IMPORT, *resolved_profile.asset_roots, *plan.source_resource_roots],
+            layout_roots,
+            force_graphicspath=bool(plan.manifest_resource_roots),
         )
         if not result.changed:
             return plan

@@ -59,6 +59,39 @@ properties:
         placement: { type: string }
         present_in_pdf: { type: boolean }
 
+  resource_resolution:
+    type: object
+    description: >
+      Ordered render resource roots plus engine-visible and raw-LaTeX resource
+      winners. Shadowed matches are retained so compatibility fallback
+      collisions remain explicit during migrations.
+    properties:
+      effective_roots:
+        type: array
+        items:
+          type: object
+          properties:
+            path: { type: string }
+            origin:
+              type: string
+              enum: [run, source, manifest, profile]
+            order: { type: integer }
+      resolved_resources:
+        type: array
+        items:
+          type: object
+          properties:
+            reference: { type: string }
+            winner: { type: [string, "null"] }
+            winner_origin:
+              type: [string, "null"]
+            shadowed:
+              type: array
+              items: { type: string }
+      warnings:
+        type: array
+        items: { type: string }
+
   render_metadata:
     type: object
     properties:
