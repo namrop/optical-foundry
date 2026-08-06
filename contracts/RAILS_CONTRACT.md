@@ -60,7 +60,7 @@ Existing prose, unchanged.
 - `story=` is **required**. An untagged div emits a loud filter warning and falls back to its
   own isolated run — it will render, but it silently loses story continuity, so the warning
   must be treated as an error in review.
-- Current story vocabulary (125 divs across 69 files, canon commit `bf0846339`):
+- Current story vocabulary (census 2026-08-06: 104 divs across 71 files, post gradient-band de-rails and breath-merge sweep; originally 125/69 at canon `bf0846339`):
   `boy` (67), `girl` (23), `both` (22), `realm` (7), `keeper-mythos` (6).
 - `register="pataphorical"` is inert for rails. It survives only for the edition preprocessor's
   `_wrap_register` path (see *Edition interaction*).
