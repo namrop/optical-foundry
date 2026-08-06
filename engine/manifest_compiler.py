@@ -192,7 +192,19 @@ _CX0_MARKER_RE = re.compile(r"^\s*<!--\s*cx0:([\w-]+).*?-->\s*$")
 # — they do NOT count as an authored separator, so a passage opening with one
 # still receives its injected boundary mark.
 _CX0_ORNAMENT_MARKERS = frozenset(
-    {"breath", "hinge", "major-hinge", "tailpiece", "threshold", "landing", "rule"}
+    {
+        "breath",
+        # `whisper` joined the visible-ornament set with the 2026-08-06 ornament
+        # taxonomy re-ruling (in-passage breaths -> whispers); a body opening
+        # with one must suppress the injected passage separator like any other.
+        "whisper",
+        "hinge",
+        "major-hinge",
+        "tailpiece",
+        "threshold",
+        "landing",
+        "rule",
+    }
 )
 
 

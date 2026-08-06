@@ -625,6 +625,60 @@ def test_codex_pataphor_begin_enters_horizontal_mode_before_saving_first_positio
     )
 
 
+def test_every_inline_ornament_marker_lowers_to_its_own_pool(tmp_path):
+    """Each in-passage cx0 ornament marker must reach its own asset pool.
+
+    Regression guard for the 2026-08-06 ornament-taxonomy re-ruling. The sweep
+    rewrote every in-passage `cx0:breath` to `cx0:whisper` in the spine, but the
+    filter's `inline_ornament_by_marker` table had no `whisper` entry — and
+    unknown cx0 markers fail QUIET (pandoc drops the HTML comment), so all 192
+    spine whispers rendered as nothing at all in build 48. A marker that names a
+    real pool must never silently render as nothing.
+    """
+    latex = _pandoc_latex(
+        tmp_path,
+        """
+Opening paragraph.
+
+<!-- cx0:whisper -->
+
+After the whisper.
+
+<!-- cx0:breath -->
+
+After the breath.
+
+<!-- cx0:hinge -->
+
+After the hinge.
+""",
+    )
+
+    # whisper — copperplate penwork, the lightest in-passage pause post-re-ruling
+    assert "style_map_v2_pools_2026-07-19/selected/whisper/WH05_alpha.png" in latex
+    # breath — Aldine leaf-fleuron family, now the ex-hinge in-passage tier
+    assert "style_map_v2_pools_2026-07-19/selected/breath/BR02_alpha.png" in latex
+    # hinge — Rococo Fournier, now the mechanical between-passage separator only
+    assert "style_map_v2_pools_2026-07-19/selected/hinge/HN04_alpha.png" in latex
+    assert latex.count("\\CodexBreakOrnament") == 3
+
+
+def test_inline_ornament_marker_table_covers_every_height_tuned_pool():
+    """Any pool with a `*_ornament_height` default must be reachable inline.
+
+    The whisper regression was invisible because the pool, the gap default and
+    the height default all existed — only the marker-table entry was missing.
+    Tie the three together so the next tier added cannot half-land.
+    """
+    lua = FILTER.read_text(encoding="utf-8")
+    table = lua.split("local inline_ornament_by_marker = {", 1)[1].split("\n}", 1)[0]
+    import re
+
+    tuned = set(re.findall(r"^\s*(\w+)_ornament_height\s*=", lua, re.MULTILINE))
+    wired = set(re.findall(r"^\s*(\w+)\s*=\s*\{", table, re.MULTILINE))
+    assert tuned <= wired, f"height-tuned pools with no inline marker: {tuned - wired}"
+
+
 def test_codex_inline_rule_marker_lowers_to_wh10_flourish(tmp_path):
     latex = _pandoc_latex(
         tmp_path,
