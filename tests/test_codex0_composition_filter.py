@@ -572,6 +572,15 @@ def test_codex0_template_wires_pataphor_ranges_to_page_local_role_rails():
     assert "\\tl_set:Nn \\l_codex_rail_role_tl {head}" not in template
     assert "\\tl_set:Nn \\l_codex_rail_role_tl {tail}" not in template
     assert "\\tl_set:Nn \\l_codex_rail_role_tl {body}" not in template
+    # Stub floor (Keeper-ratified 2026-08-06, audit verdict f.478): a page-local
+    # segment below the smallest promoted asset band (04 lines) must draw
+    # nothing rather than pull the 2L rung and leave a vestigial stub.
+    assert "\\int_new:N \\g_codex_rail_min_lines_int" in template
+    assert "\\int_gset:Nn \\g_codex_rail_min_lines_int {4}" in template
+    assert "\\NewDocumentCommand{\\CodexRailSetMinLines}{m}" in template
+    assert (
+        "< { \\int_use:N \\g_codex_rail_min_lines_int \\baselineskip }" in template
+    )
     # Rungs are 2-line and the measured segment rounds UP, so a selected asset
     # is always at least as slender as its slot and can never be width-capped.
     assert "\\fp_to_int:n" in template
