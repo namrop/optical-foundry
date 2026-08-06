@@ -2,7 +2,7 @@
 uid: 019fc5d5-15c0-7e59-a091-9ad9d895fa9b
 title: Pataphorical Register Rails Contract — Optical Foundry
 status: current
-updated: 2026-08-03
+updated: 2026-08-06
 ---
 
 # Pataphorical Register Rails Contract — Optical Foundry
@@ -127,8 +127,27 @@ Rails are chosen by **measured length**, from a 19-rung ladder at 2-line spacing
   frontmatter page count keeps them in step; a single added front leaf desyncs them and throws
   every rail into the gutter. (Observed 2026-08-02 when the Edition Notice spilled to a second
   page.)
-- The 2.5 mm inward `\marginparsep` shift is a composition/printer-safety inset, held on both
-  parities.
+- **Horizontal seat is BALANCE-relative, not text-relative** (Luis-ruled 2026-08-06, from the
+  corrected rail sheets: *"the gap between the text and the rail is bigger than the gap between
+  the rail and the fore-edge"*). `\codex_rail_shipout_place:` measures the outer-margin white
+  left over after the art — from the text block to the **trim line**
+  (`\paperwidth - \CodexTrimAllowance` on recto, `\CodexTrimAllowance` on verso) — and splits it
+  by `\CodexRailInnerShare`, the fraction placed on the text side. `0.5` = centred (the setting
+  of record); `<0.5` seats the rail nearer the text with a larger fore-edge gap. The text-side
+  gap is floored at `\CodexRailTextClearance` (1 mm) so a fat specimen can never crowd prose.
+  One knob; retune with `\renewcommand`.
+- Why it changed: the seat used to be `text edge + \marginparsep` on both parities, pinning the
+  inner gap at 7 pt while the outer gap absorbed every margin change. When the 2026-08-05
+  no-trim ruling narrowed the outer margin 0.75in → 0.60in, the whole 0.15in loss came out of
+  the fore-edge. Measured over Volume II's 111 rails: build 44 (outer 0.75in) read
+  inner 0.0969in / outer 0.1746in; build 48 (outer 0.60in) read inner 0.0968in / outer 0.0247in,
+  with eight rails whose box crossed the stock edge outright.
+- The 2.5 mm inward `\marginparsep` shift remains a composition/printer-safety inset for
+  `\marginpar` edge companions, held on both parities. Rails no longer key off `\marginparsep`;
+  they apply `\CodexTrimAllowance` themselves so the balance split is measured to the trim line.
+- Placement is pagination-neutral: rails are drawn in the shipout overlay and occupy no vertical
+  space in the galley. A seat change must not move a folio (A/B verified 2026-08-06: same page
+  count, same rails on the same pages, byte-identical `y`, height and box width).
 
 ## Invariants
 
@@ -136,6 +155,9 @@ These are the properties a build must not violate. Each is cheaply checkable fro
 
 1. **No rail beside literal prose.** Rails appear only on pages a real div occupies.
 2. **No rail exceeds the 0.50in slot.** Measured placed width ≤ ~0.51in (rounding slack).
+2a. **No rail box crosses the trim line, and the two margin gaps agree with
+   `\CodexRailInnerShare`.** At the 0.5 setting, `text-block → rail box` and
+   `rail box → trim edge` are equal on every rail, both parities, to within rounding.
 3. **No same-page duplicate.** Two divs landing on one physical page must not draw the same
    asset. Enforced by `\g_codex_rail_page_used_seq`, which records paths placed on the current
    page and walks the pool forward on collision (cleared per shipout pass). Without it, a
