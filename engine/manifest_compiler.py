@@ -856,6 +856,22 @@ _CHAPTER_OPENER_FALLBACK_DEFS = [
     # context line, register-inverted body); this fallback keeps any other
     # profile safe with a best-effort italic body + em-dash attribution.
     # Args: {register}{text}{speaker}{context}{author}{source}{date}
+    #
+    # ⚠ THIS FALLBACK IS THE LIVE PATH for the codex0 book, and has been since
+    # the grammar landed (found 2026-08-06, print-eve A/B: template hook at 20em
+    # produced byte-identical geometry). Pandoc's latex_macros extension reads
+    # this providecommand and EXPANDS \CodexOpenerEpigraph calls at READ time,
+    # so the template's \NewDocumentCommand (codex0.tex:857) never sees a call.
+    # Same mechanism as the 2026-07-25 \OFChapterOpener detection note. That is
+    # why the 2026-08-03 gap ruling (2.2em) and the 2026-08-06 doubling (4.4em)
+    # were both inert, and why witness epigraphs print italic against the
+    # template contract. The \ifdefined guard below survives pandoc's textual
+    # expansion into the emitted .tex and evaluates at COMPILE time, so the
+    # template-side \CodexEpigraphToBodyGap hook (Luis-ruled 2026-08-06:
+    # doubled) is now honoured on the live path while any template-less profile
+    # still degrades to \smallskip. Full grammar activation (register inversion,
+    # smallcaps, gold context line) remains a separate decision — it would
+    # restyle 78 openers sight-unseen and is NOT taken here.
     "\\providecommand{\\CodexSmallCaps}[1]{\\textsc{#1}}",
     "\\providecommand{\\CodexOpenerEpigraph}[7]{{\\par\\smallskip"
     "\\begin{quote}\\itshape #2\\end{quote}"
@@ -867,7 +883,8 @@ _CHAPTER_OPENER_FALLBACK_DEFS = [
     "\\if\\relax\\detokenize{#5}\\relax\\else#5\\fi"
     "\\if\\relax\\detokenize{#6}\\relax\\else\\space\\textperiodcentered\\space\\emph{#6}\\fi"
     "\\if\\relax\\detokenize{#7}\\relax\\else\\space\\textperiodcentered\\space#7\\fi\\par}"
-    "\\par}}}",
+    "\\par}"
+    "\\ifdefined\\CodexEpigraphToBodyGap\\CodexEpigraphToBodyGap\\fi}}",
 ]
 
 
