@@ -238,9 +238,11 @@ A threshold opens.
     # member (BR02, mirrored ivy pair); height-driven sizing.
     assert "style_map_v2_pools_2026-07-19/selected/breath/BR02_alpha.png" in latex
     assert "\\CodexBreakOrnament[height=1.7em][1\\baselineskip]" in latex
-    # Whisper opens with the lightest copperplate flourish (WH05).
+    # Whisper opens with the lightest copperplate flourish (WH05). Retuned
+    # 2026-08-06 (Luis-blessed) from 2.0em/1.5bl: the taxonomy re-ruling made
+    # whisper the LIGHTEST tier, so it now sits below the breath, not above it.
     assert "style_map_v2_pools_2026-07-19/selected/whisper/WH05_alpha.png" in latex
-    assert "\\CodexBreakOrnament[height=2.0em][1.5\\baselineskip]" in latex
+    assert "\\CodexBreakOrnament[height=1.0em][0.5\\baselineskip]" in latex
     assert "\\begin{CodexWhisper}" in latex
     # Tailpiece opens with the lightest cul-de-lampe (TL05).
     assert "style_map_v2_pools_2026-07-19/selected/tailpiece/TL05_alpha.png" in latex
@@ -677,6 +679,42 @@ def test_inline_ornament_marker_table_covers_every_height_tuned_pool():
     tuned = set(re.findall(r"^\s*(\w+)_ornament_height\s*=", lua, re.MULTILINE))
     wired = set(re.findall(r"^\s*(\w+)\s*=\s*\{", table, re.MULTILINE))
     assert tuned <= wired, f"height-tuned pools with no inline marker: {tuned - wired}"
+
+
+def test_in_passage_ornament_ladder_reads_hinge_over_breath_over_whisper():
+    """The three pause tiers must stay ordered in BOTH dimensions.
+
+    Luis-blessed 2026-08-06. The ornament-taxonomy re-ruling made whisper the
+    lightest in-passage pause, but it was still carrying the weights it got on
+    2026-07-07 when whisper meant "a soft turn rather than a pause" — heavier
+    than the breath. That shipped the ex-breath sites MORE space than the state
+    the re-ruling exists to fix. Lock the ordering so it cannot silently invert
+    again when a tier is retuned.
+    """
+    import re
+
+    lua = FILTER.read_text(encoding="utf-8")
+
+    def default(key):
+        m = re.search(rf'^\s*{key}\s*=\s*"([^"]+)"', lua, re.MULTILINE)
+        assert m, f"missing default: {key}"
+        return m.group(1)
+
+    def number(value):
+        return float(re.match(r"^([\d.]+)", value).group(1))
+
+    heights = {t: number(default(f"{t}_ornament_height")) for t in ("whisper", "breath", "hinge")}
+    gaps = {t: number(default(f"{t}_ornament_gap")) for t in ("whisper", "breath", "hinge")}
+
+    assert heights["whisper"] < heights["breath"] < heights["hinge"], heights
+    assert gaps["whisper"] < gaps["breath"] < gaps["hinge"], gaps
+
+    # The blessed values themselves, so a retune is a deliberate edit here too.
+    # Note the doubled backslash: these are read as Lua source literals.
+    assert default("whisper_ornament_height") == "1.0em"
+    assert default("whisper_ornament_gap") == "0.5\\\\baselineskip"
+    assert default("breath_ornament_height") == "1.7em"
+    assert default("hinge_ornament_height") == "2.9em"
 
 
 def test_codex_inline_rule_marker_lowers_to_wh10_flourish(tmp_path):
