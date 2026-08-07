@@ -111,3 +111,58 @@ def test_client_footer_default_is_security():
     text = CLIENT_TEMPLATE.read_text()
     assert "$if(footer_center)$\\renewcommand{\\ClientDivision}{$footer_center$}$endif$" in text
     assert "$if(classification_label)$\\renewcommand{\\ClientConfidentiality}{$classification_label$}$endif$" in text
+
+
+# --- Ornament page-position law (Luis-ruled 2026-08-07) ---------------------
+
+
+def test_codex0_template_registers_the_ornament_page_position_callback():
+    """The law lives in a pre_output_filter, on the live LuaTeX page list.
+
+    Anything less than a page-builder callback is guesswork: only the output
+    routine knows where the page actually broke.
+    """
+    text = CODEX0_TEMPLATE.read_text()
+
+    assert "\\usepackage{luacode}" in text
+    assert 'luatexbase.new_attribute("codex0ornamentband")' in text
+    assert 'luatexbase.add_to_callback("pre_output_filter"' in text
+    assert "\\NewDocumentCommand{\\CodexOrnamentBand}{m +m}" in text
+    assert "\\attributedef\\CodexOrnamentBandAttr" in text
+
+
+def test_codex0_ornament_band_wrapper_is_never_a_body_providecommand():
+    """\\CodexOrnamentBand must be template-only.
+
+    A \\providecommand fallback in the body would let pandoc's latex_macros
+    extension expand the wrapper at read time and strip the attribute before it
+    ever reached the node list — the same failure mode that once ate
+    \\CodexOpenerEpigraph.
+    """
+    compiler = (
+        Path(__file__).resolve().parents[1] / "engine" / "manifest_compiler.py"
+    ).read_text()
+    layout = (
+        Path(__file__).resolve().parents[1] / "engine" / "layout_images.py"
+    ).read_text()
+
+    assert "CodexOrnamentBand" not in compiler
+    assert "CodexOrnamentBand" not in layout
+
+
+def test_codex0_ornament_law_never_empties_a_page():
+    """A page whose whole body is ornament is deliberate, not a stranding."""
+    text = CODEX0_TEMPLATE.read_text()
+    block = text[text.index("% --- Ornament page-position law") :]
+
+    assert "if #doomed >= #bx then" in block
+    assert "no other content -- left alone" in block
+
+
+def test_codex0_ornament_law_keeps_the_first_structural_ornament_at_a_page_foot():
+    """Tailpieces and thresholds may sit at a page foot — either/or, not both."""
+    text = CODEX0_TEMPLATE.read_text()
+    block = text[text.index("% --- Ornament page-position law") :]
+
+    assert "kept_structural" in block
+    assert "either/or" in block

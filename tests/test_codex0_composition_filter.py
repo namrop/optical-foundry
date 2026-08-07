@@ -756,3 +756,141 @@ def test_codex_inline_rule_marker_suppressed_by_asset_none(tmp_path):
 
     assert "CodexBreakOrnament" not in latex
     assert "WH10_alpha.png" not in latex
+
+
+# --- Ornament page-position law (Luis-ruled 2026-08-07) ---------------------
+# Every ornament this filter places must carry a band class so the render-time
+# page-position law in codex0.tex can police it. An ornament emitted without the
+# wrapper is invisible to the law and will strand at a page top forever.
+
+
+def test_inline_tier_ornaments_carry_the_tier_band_class(tmp_path):
+    latex = _pandoc_latex(
+        tmp_path,
+        """
+Opening paragraph.
+
+<!-- cx0:whisper -->
+
+After the whisper.
+
+<!-- cx0:breath -->
+
+After the breath.
+
+<!-- cx0:hinge -->
+
+After the hinge.
+
+<!-- cx0:rule -->
+
+After the rule.
+""",
+    )
+
+    assert latex.count("\\CodexOrnamentBand{1}{\\CodexBreakOrnament") == 4
+    # The wrapper adds no geometry: the ornament call itself is unchanged.
+    assert "\\CodexOrnamentBand{1}{\\CodexBreakOrnament[height=1.0em]" in latex
+
+
+def test_inline_tailpiece_and_threshold_carry_their_own_band_classes(tmp_path):
+    latex = _pandoc_latex(
+        tmp_path,
+        """
+<!-- cx0:tailpiece -->
+
+Between.
+
+<!-- cx0:threshold -->
+""",
+    )
+
+    assert "\\CodexOrnamentBand{2}{\\CodexBreakOrnament" in latex
+    assert "\\CodexOrnamentBand{3}{\\CodexBreakOrnament" in latex
+
+
+def test_div_form_ornaments_carry_band_classes(tmp_path):
+    latex = _pandoc_latex(
+        tmp_path,
+        """
+::: {.codex-whisper}
+Whispered.
+:::
+
+::: {.codex-tailpiece}
+:::
+
+::: {.codex-threshold}
+Door.
+:::
+""",
+    )
+
+    assert "\\CodexOrnamentBand{1}{\\CodexBreakOrnament" in latex
+    assert "\\CodexOrnamentBand{2}{\\CodexBreakOrnament" in latex
+    assert "\\CodexOrnamentBand{3}{\\CodexBreakOrnament" in latex
+
+
+def test_every_break_ornament_emission_is_band_wrapped(tmp_path):
+    """No ornament may reach the page unpoliced.
+
+    Counted over a document that exercises the inline-marker path, the div
+    path and the passage-rule path at once, so a future emission site added
+    without a band_wrap() call fails here rather than in a proof read.
+    """
+    latex = _pandoc_latex(
+        tmp_path,
+        """
+Prose.
+
+<!-- cx0:whisper -->
+
+::: {.codex-hinge-break}
+:::
+
+<!-- cx0:rule -->
+
+::: {.codex-tailpiece}
+:::
+
+<!-- cx0:threshold -->
+""",
+    )
+
+    assert latex.count("\\CodexBreakOrnament") == 5
+    assert latex.count("\\CodexOrnamentBand{") == 5
+
+
+def test_band_class_map_covers_every_inline_ornament_marker():
+    """Ornament markers and band classes must stay in lockstep.
+
+    `landing` is spacing-only and has no ornament, so it is the one marker
+    exempt from a band class.
+    """
+    import re
+
+    lua = FILTER.read_text(encoding="utf-8")
+    markers = lua.split("local inline_ornament_by_marker = {", 1)[1].split("\n}", 1)[0]
+    bands = lua.split("local ornament_band_by_marker = {", 1)[1].split("\n}", 1)[0]
+
+    # Top-level keys only (exactly one indent level); nested spec keys such as
+    # landing's gap_before_key sit deeper and are not markers.
+    wired = set(re.findall(r"^  (\w+)\s*=", markers, re.MULTILINE))
+    banded = set(re.findall(r"^  (\w+)\s*=", bands, re.MULTILINE))
+
+    assert wired - banded == {"landing"}, (
+        f"ornament markers with no band class: {sorted(wired - banded - {'landing'})}"
+    )
+
+
+def test_band_class_map_covers_every_ornament_bearing_div_class():
+    import re
+
+    lua = FILTER.read_text(encoding="utf-8")
+    visuals = lua.split("local default_visual_by_class = {", 1)[1].split("\n}", 1)[0]
+    bands = lua.split("local ornament_band_by_div_class = {", 1)[1].split("\n}", 1)[0]
+
+    wired = set(re.findall(r'\["([\w-]+)"\]', visuals))
+    banded = set(re.findall(r'\["([\w-]+)"\]', bands))
+
+    assert wired == banded, f"div classes with no band class: {sorted(wired - banded)}"
