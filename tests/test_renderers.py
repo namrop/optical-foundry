@@ -27,6 +27,33 @@ def test_pandoc_renderer_creates_evidence_on_error():
     assert evidence["validation"]["errors"] == [evidence["error"]]
 
 
+def test_pdf_compile_budget_is_generous_and_env_overridable(monkeypatch):
+    """The compile budget must be a wedged-process backstop, not a perf budget.
+
+    Regression guard for 2026-08-06. The budget was a bare `timeout=300` with no
+    stated basis, and Canto 0 Vol II -- a ~380 MB volume whose single LaTeX pass
+    is already ~100s, rerun until cross-references settle -- had drifted to
+    within ~10% of it. Restoring the 421 ruled whisper ornaments cost ~13%
+    render time and tipped it over, and the resulting "pandoc timed out after
+    300s" was investigated as a hang. Nothing was hanging: every render
+    involved completes. A budget this tight converts normal growth into a
+    phantom infrastructure failure, so it must stay well clear of real cost.
+    """
+    assert PandocRenderer.DEFAULT_COMPILE_TIMEOUT_S >= 1200, (
+        "compile budget is back in the range where a legitimately heavy volume "
+        "reads as a hang"
+    )
+    assert PandocRenderer._compile_timeout_s() == PandocRenderer.DEFAULT_COMPILE_TIMEOUT_S
+
+    monkeypatch.setenv("CODEX_COMPILE_TIMEOUT_S", "45")
+    assert PandocRenderer._compile_timeout_s() == 45
+
+    # A malformed or nonsensical override must not silently disable the backstop.
+    for bad in ("nonsense", "0", "-1", ""):
+        monkeypatch.setenv("CODEX_COMPILE_TIMEOUT_S", bad)
+        assert PandocRenderer._compile_timeout_s() == PandocRenderer.DEFAULT_COMPILE_TIMEOUT_S
+
+
 def test_pandoc_renderer_success_evidence_has_explicit_validation_surface(tmp_path):
     import shutil
 

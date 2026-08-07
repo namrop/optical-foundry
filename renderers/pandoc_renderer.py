@@ -210,14 +210,30 @@ class PandocRenderer(Renderer):
                 cmd,
                 capture_output=True,
                 text=True,
-                timeout=300,
+                timeout=self._compile_timeout_s(),
                 env=env,
                 cwd=resolved_profile.render_environment.cwd,
             )
         except subprocess.TimeoutExpired:
             elapsed = time.monotonic() - start
+            budget = self._compile_timeout_s()
             return self._evidence_error(
-                plan, compile_pdf, evidence_file, elapsed, "pandoc timed out after 300s", cmd
+                plan,
+                compile_pdf,
+                evidence_file,
+                elapsed,
+                # Name the real stage. This subprocess is pandoc, but pandoc is
+                # only the parent -- what actually burns the budget is the LaTeX
+                # engine it drives, which pandoc reruns until cross-references
+                # settle. "pandoc timed out" has sent at least one investigation
+                # after the wrong process; say what to look at instead.
+                f"PDF compile exceeded {budget}s (pandoc + {pdf_engine} reruns). "
+                f"This is a BUDGET timeout, not necessarily a hang -- a heavy "
+                f"volume can legitimately need several minutes. Check whether "
+                f"{pdf_engine} was still making progress (ps/CPU, the .log tail) "
+                f"before treating it as a defect; raise CODEX_COMPILE_TIMEOUT_S "
+                f"if the render simply needs longer.",
+                cmd,
             )
 
         elapsed = time.monotonic() - start
@@ -2016,6 +2032,36 @@ class PandocRenderer(Renderer):
             "warning_count": 0,
             "errors": [message],
         }
+
+    # PDF compile budget. Was a bare `timeout=300` literal with no stated basis.
+    #
+    # Canto 0 Vol II is a ~380 MB, 200+ page volume carrying full-resolution
+    # witness plates, and pandoc reruns the LaTeX engine until cross-references
+    # settle -- so the real cost is (engine passes x per-pass seconds), and a
+    # single pass on that volume is already ~100s. It had been sitting inside
+    # ~10% of the old 300s ceiling, which meant ANY legitimate addition read as
+    # an infrastructure failure: restoring the 421 ruled whisper ornaments on
+    # 2026-08-06 cost ~13% render time and tipped it over, and the resulting
+    # "pandoc timed out" was investigated as a hang for hours. It was never a
+    # hang -- every render involved completes, just slowly.
+    #
+    # 1800s is deliberately generous: this is a backstop against a genuinely
+    # wedged process, NOT a performance budget. A real infinite loop still gets
+    # caught; a heavy book no longer gets misreported as one. Override with
+    # CODEX_COMPILE_TIMEOUT_S.
+    DEFAULT_COMPILE_TIMEOUT_S = 1800
+
+    @classmethod
+    def _compile_timeout_s(cls) -> int:
+        raw = os.environ.get("CODEX_COMPILE_TIMEOUT_S")
+        if raw:
+            try:
+                value = int(raw)
+                if value > 0:
+                    return value
+            except ValueError:
+                pass
+        return cls.DEFAULT_COMPILE_TIMEOUT_S
 
     def _evidence_error(
         self, plan, output_pdf, evidence_file, elapsed, message, cmd
