@@ -314,8 +314,16 @@ class PandocRenderer(Renderer):
         publication_text_file = compile_text_file
         publication_extra_artifacts: tuple[tuple[Path, Path], ...] = ()
         divider_inventory = (plan.boundary_assertions or {}).get("section_dividers") or []
+        # Marker coverage is driven by what the compile-stage PDF actually
+        # CONTAINS, not by what the bundle declared. A source may carry a
+        # hand-authored divider ritual in raw LaTeX (codex0 v5's encore
+        # witnesses quad does) while the bundle's `section_dividers` list is
+        # empty; gating extraction on the declared inventory left those markers
+        # unsanitized in the reader-facing PDF and skipped the divider-page
+        # sidecar entirely. The declared inventory remains an assertion on top:
+        # every uid the bundle promised must still be found.
+        divider_page_map = extract_divider_page_map(compile_pdf)
         if divider_inventory:
-            divider_page_map = extract_divider_page_map(compile_pdf)
             expected_uids = {
                 str(item.get("uid", "")).strip()
                 for item in divider_inventory
@@ -327,7 +335,7 @@ class PandocRenderer(Renderer):
                 return self._evidence_error(
                     plan, compile_pdf, evidence_file, elapsed, message, cmd
                 )
-
+        if divider_page_map:
             page_map_path = out_dir / f"{plan.render_id}.divider_pages.json"
             page_map_stage_path = out_dir / (
                 f".{plan.render_id}.divider-pages-stage-{compile_token}.json"
@@ -379,6 +387,16 @@ class PandocRenderer(Renderer):
                 "final_pdf_marker_count": sanitization.final_pdf_marker_count,
                 "page_map_path": str(page_map_path),
             }
+
+        # Fail closed on any surviving marker, including the case where
+        # extract_divider_page_map came back empty because its own pdftotext
+        # subprocess failed (it returns {} rather than raising). Without this an
+        # unsanitized `[[OFDIV:...]]` token could still reach a published PDF.
+        if "[[OFDIV:" in text_extract:
+            message = "OFDIV marker survived render finalization"
+            return self._evidence_error(
+                plan, compile_pdf, evidence_file, elapsed, message, cmd
+            )
 
         warnings = (
             list(plan.boundary_assertions.get("warnings", []))
