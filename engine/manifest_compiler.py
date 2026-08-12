@@ -1433,7 +1433,22 @@ class CompositeBundleCompiler(ManifestCompiler):
             # break is suppressed, emit the requested passage separator unless
             # the body already opens with an authored cx0 ornament marker (the
             # author's explicit marker wins, so we don't double the ornament).
-            if src.get("page_break_before", True):
+            # A passage that CARRIES a chapter opener always starts a new page,
+            # whatever page_break_before says (Luis-ruled 2026-08-12: "each
+            # chapter start should be on a new page. that's the convention
+            # everywhere else"). This was also the original design contract —
+            # _inline_chapter_opener_lines' docstring already assumed "the
+            # first passage's own \newpage" — which the flow flag had quietly
+            # overridden; the build-70 folio-30 strand (Bodies in the World's
+            # title at the foot of the previous chapter's last page) was this
+            # drift made visible. The \newpage precedes the running-text
+            # override lines, so the previous page ships under its own tagline.
+            _opener_cfg_early = src.get("chapter_opener")
+            has_chapter_opener = (
+                isinstance(_opener_cfg_early, dict)
+                and bool(str(_opener_cfg_early.get("title") or "").strip())
+            )
+            if src.get("page_break_before", True) or has_chapter_opener:
                 lines.append("\\newpage")
             else:
                 separator = src.get("passage_separator")
