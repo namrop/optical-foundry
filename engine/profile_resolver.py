@@ -63,6 +63,7 @@ ALIASES: dict[str, str] = {
     "generic_report": "generic-report",
     "mythic_letter": "mythic-letter",
     "mythic_letter_johannah": "mythic-letter-johannah",
+    "mythic_letter_johannah_halfletter": "mythic-letter-johannah-halfletter",
     "codex0_a5": "codex0-a5",
     "codex_0": "codex0",
     "codex-0": "codex0",
@@ -122,6 +123,19 @@ PROFILE_SPECS: dict[str, dict[str, Any]] = {
         "family": "stationery_art",
         "defaults": ["yugenbase.yaml", "personal_letter.yaml", "mythic_letter_johannah.yaml"],
         "template": "mythic_letter_johannah.tex",
+    },
+    # Bound-object lane: same stationery identity at Codex 0's trim and measure.
+    # Additive fork — the letterpaper parent above is load-bearing for Codex 0
+    # Vol III witness plate 28 and must not be parameterized in place.
+    "mythic-letter-johannah-halfletter": {
+        "family": "stationery_art",
+        "defaults": [
+            "yugenbase.yaml",
+            "personal_letter.yaml",
+            "mythic_letter_johannah.yaml",
+            "mythic_letter_johannah_halfletter.yaml",
+        ],
+        "template": "mythic_letter_johannah_halfletter.tex",
     },
     "resume": {"family": "resume", "defaults": ["resume_resume.yaml"], "template": "resume.tex"},
     "elian-packet": {"family": "campaign_art", "defaults": ["elian_packet.yaml"], "template": "elian_packet.tex"},

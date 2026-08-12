@@ -87,6 +87,7 @@ KNOWN_TEMPLATES = {
     "generic_report.tex", "client_report.tex", "keeper.tex",
     "label_sheet.tex", "mythic.tex",
     "mythic_letter_johannah.tex",
+    "mythic_letter_johannah_halfletter.tex",
     "personal_letter.tex", "resume.tex",
 }
 
