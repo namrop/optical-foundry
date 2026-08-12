@@ -48,7 +48,7 @@ class LayoutImagePreprocessResult:
 _BLOCK_RE = re.compile(r"^```of-image\s*\n(?P<body>.*?)^```\s*$", re.MULTILINE | re.DOTALL)
 _INITIAL_BLOCK_RE = re.compile(r"^```of-initial\s*\n(?P<body>.*?)^```\s*\n?", re.MULTILINE | re.DOTALL)
 _RAW_LATEX_RESOURCE_RE = re.compile(
-    r"\\(?:includegraphics|OFSectionDividerBackground|OFOuterRail|OFBottomRail|OFEdgeOrnament)\b"
+    r"\\(?:includegraphics|OFSectionDividerBackground|CodexFloatingPlate|OFOuterRail|OFBottomRail|OFEdgeOrnament)\b"
 )
 _SAFE_DIMENSION_RE = re.compile(
     r"^-?(?:\\(?:linewidth|textwidth|textheight|paperwidth|paperheight|baselineskip)|(?:0(?:\.0+)?|0?\.\d+|[1-9]\d*(?:\.\d+)?)(?:\\(?:linewidth|textwidth|textheight|paperwidth|paperheight|baselineskip)|in|cm|mm|pt|em|ex))$"

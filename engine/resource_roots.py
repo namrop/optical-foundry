@@ -147,7 +147,7 @@ _TYPED_RESOURCE_KEYS = {
 }
 _RESOURCE_SUFFIXES = {".gif", ".jpeg", ".jpg", ".pdf", ".png", ".svg", ".webp"}
 _SUPPORTED_RAW_RESOURCE_MACROS = (
-    r"(?:includegraphics|OFSectionDividerBackground|OFOuterRail|OFBottomRail|OFEdgeOrnament)"
+    r"(?:includegraphics|OFSectionDividerBackground|CodexFloatingPlate|OFOuterRail|OFBottomRail|OFEdgeOrnament)"
 )
 _RAW_RESOURCE_PREFIX = (
     rf"\\{_SUPPORTED_RAW_RESOURCE_MACROS}\b\s*(?:\[[^\]\r\n]*\]\s*)?"
