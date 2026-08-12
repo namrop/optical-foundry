@@ -708,7 +708,14 @@ def _section_divider_inventory_entry(
 
 
 def _section_divider_start_lines(divider: dict[str, Any]) -> list[str]:
-    lines = ["\\OFEnsureRightPage" if divider.get("force_right_page", True) is not False else "\\clearpage"]
+    # Ritual no-inject zone (2026-08-12): the floating-plate injector must
+    # never displace a divider page — build 71's Movement III quad landed on
+    # the wrong parity when a plate took the cut leaf's recto. The Begin mark
+    # rides BEFORE the parity clearpage so the zone covers the quad's first
+    # page whichever side it lands on; End is emitted by
+    # _section_divider_end_lines after the closing clearpage.
+    lines = ["\\CodexPlateRitualBegin{}"]
+    lines.append("\\OFEnsureRightPage" if divider.get("force_right_page", True) is not False else "\\clearpage")
     # Compile-stage furnish marker. engine/furnish.py extracts
     # `[[OFDIV:<uid>]]` from the unsanitized renderer intermediate to know which
     # PDF page each divider lands on; the renderer preserves that map as a
@@ -767,6 +774,8 @@ def _section_divider_end_lines(divider: dict[str, Any]) -> list[str]:
     lines = ["\\clearpage"]
     if divider.get("blank_after", False) is True:
         lines.append("\\OFIntentionalBlankPage")
+    # closes the ritual no-inject zone opened in _section_divider_start_lines
+    lines.append("\\CodexPlateRitualEnd{}")
     return lines
 
 
@@ -865,6 +874,9 @@ _CHAPTER_OPENER_FALLBACK_DEFS = [
     # `[[OFDIV:...]]` token. Tagged templates define the real wrappers first.
     "\\providecommand{\\OFDivMarkerHideBegin}{}",
     "\\providecommand{\\OFDivMarkerHideEnd}{}",
+    # Ritual no-inject zone marks (codex0 defines the Lua-backed versions).
+    "\\providecommand{\\CodexPlateRitualBegin}{}",
+    "\\providecommand{\\CodexPlateRitualEnd}{}",
     "\\providecommand{\\OFChapterOpener}[1]{{\\par\\bigskip\\begingroup\\centering\\Large #1\\par\\endgroup\\medskip}}",
     "\\providecommand{\\OFChapterOpenerEpigraph}[2]{{\\par\\bigskip\\begingroup\\centering\\Large #1\\par\\smallskip\\small\\itshape #2\\par\\endgroup\\medskip}}",
     # Fallbacks so a non-codex0 profile can still render a codex-quote epigraph
