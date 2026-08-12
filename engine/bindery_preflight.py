@@ -31,6 +31,7 @@ def generate_bindery_preflight(
     out_dir: str | Path,
     plan: ProjectionPlan,
     imposition: dict[str, Any] | None = None,
+    content_resolution_declarations: dict[str, Any] | None = None,
 ) -> dict[str, Any] | None:
     """Inspect a successful bound render and write bindery preflight sidecars."""
 
@@ -61,6 +62,7 @@ def generate_bindery_preflight(
         delivery=plan.delivery,
         imposition=imposition,
         safe_area_guide=safe_area_guide,
+        content_resolution_declarations=content_resolution_declarations,
     )
     report_path = dest / f"{plan.render_id}.bindery_preflight.json"
     report["report_json"] = str(report_path)
@@ -79,6 +81,7 @@ def build_bindery_preflight_report(
     delivery: dict[str, Any],
     imposition: dict[str, Any] | None,
     safe_area_guide: dict[str, Any] | None,
+    content_resolution_declarations: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Build an advisory print/bindery report from preflight command output."""
 
@@ -102,6 +105,22 @@ def build_bindery_preflight_report(
         blocking.append("rgb_images_present")
     if images["below_300ppi"] > 0:
         blocking.append("images_below_300ppi")
+
+    # Content resolution — the check placed PPI cannot make. An asset upscaled to the
+    # target pixel count passes `images_below_300ppi` while carrying far less real
+    # detail; the Eichenberg facsimile is the standing example (2200 px placed, 1394 px
+    # real, 253 PPI). Declared shortfalls block; missing declarations are surfaced as an
+    # advisory so the gap reads as a gap rather than as a pass.
+    content = content_resolution_report(content_resolution_declarations)
+    if content["below_floor"]:
+        blocking.append("images_content_ppi_below_300")
+    advisory: list[str] = []
+    if content["status"] == "not_supplied":
+        advisory.append("content_ppi_unverified_no_declarations")
+    elif content["unverified"]:
+        advisory.append("content_ppi_unverified_for_some_assets")
+    if content["ruled_exceptions"]:
+        advisory.append("content_ppi_below_floor_by_ruling")
 
     single_pages = _is_single_page_pdf(trim_inches, expected_width, expected_height)
     prototype_ready = single_pages and fonts["all_embedded"] and not bool(_tool_error(pdfinfo_text))
@@ -135,6 +154,7 @@ def build_bindery_preflight_report(
         },
         "fonts": fonts,
         "images": images,
+        "content_resolution": content,
         "layout": {
             "page_margins": page_margins,
             "delivery": delivery,
@@ -145,6 +165,7 @@ def build_bindery_preflight_report(
             "prototype_ready": prototype_ready,
             "vendor_independent_press_ready": press_ready,
             "blocking_press_ready_issues": blocking,
+            "advisory_issues": advisory,
             "vendor_questions": [
                 "Do you want single pages or imposed signatures?",
                 "Do you require 0.125in bleed?",
@@ -328,11 +349,81 @@ def parse_pdfimages(text: str) -> dict[str, Any]:
     min_ppi = min((min(img["x_ppi"], img["y_ppi"]) for img in images), default=None)
     return {
         "count": len(images),
+        # NAMING IS LOAD-BEARING. pdfimages -list reports PLACED pixels divided by
+        # placed size. An image upscaled from 1394 px to 2200 px and then placed at
+        # 5.5 in reports 400 PPI and passes, though only 253 PPI of it is real
+        # detail. These keys therefore say "placed"; content resolution is a
+        # separate, declared measurement (see content_resolution_report).
+        "min_effective_placed_ppi": min_ppi,
+        "below_300_placed_ppi": sum(1 for img in images if min(img["x_ppi"], img["y_ppi"]) < 300),
+        # Retained under the pre-2026-08-11 names so existing consumers keep working.
         "min_effective_ppi": min_ppi,
         "below_300ppi": sum(1 for img in images if min(img["x_ppi"], img["y_ppi"]) < 300),
+        "measures": "placed pixels / placed size — CANNOT see upscaling",
         "rgb_images": sum(1 for img in images if img["color"] == "rgb"),
         "colors": sorted({img["color"] for img in images}),
         "images": images[:50],
+    }
+
+
+def content_resolution_report(
+    declarations: dict[str, Any] | None,
+    *,
+    floor_ppi: int = 300,
+) -> dict[str, Any]:
+    """Audit DECLARED content resolution for placed assets.
+
+    Placed PPI (what ``pdfimages -list`` reports) is blind to upscaling, so a plate
+    interpolated up to the target pixel count passes a gate it should fail. Content
+    resolution cannot be recovered blind from a rendered page either: the book's
+    plates are composites, and a synthetic border or flat ground carries full
+    bandwidth no matter how soft the photograph inside it is. Two spectral and
+    decimation heuristics were tried on 2026-08-11 and both ranked the known-
+    upscaled Eichenberg facsimile ABOVE a native render, so neither shipped.
+
+    So content resolution is *declared*, from the custody receipt that already
+    records ``source_dimensions_px`` for every deterministically cropped asset, and
+    this function audits those declarations. Assets with no declaration are reported
+    as ``unverified`` rather than assumed good — the blind spot stays visible instead
+    of silently reading as a pass.
+
+    ``declarations`` maps asset name -> {content_px, placed_inches, [ruled_exception]}.
+    """
+    if not declarations:
+        return {
+            "status": "not_supplied",
+            "floor_ppi": floor_ppi,
+            "note": "No content-resolution declarations supplied; placed PPI alone cannot "
+                    "prove any image clears the floor.",
+            "below_floor": [],
+            "ruled_exceptions": [],
+            "unverified": [],
+        }
+
+    below, exceptions, unverified, ok = [], [], [], []
+    for name, decl in sorted(declarations.items()):
+        content_px = decl.get("content_px")
+        placed_in = decl.get("placed_inches")
+        if not content_px or not placed_in:
+            unverified.append({"asset": name, "reason": decl.get("reason", "no declaration")})
+            continue
+        ppi = float(content_px) / float(placed_in)
+        row = {"asset": name, "content_px": content_px, "placed_inches": placed_in,
+               "content_ppi": round(ppi, 1)}
+        if ppi >= floor_ppi:
+            ok.append(row)
+        elif decl.get("ruled_exception"):
+            row["ruled_exception"] = decl["ruled_exception"]
+            exceptions.append(row)
+        else:
+            below.append(row)
+    return {
+        "status": "audited",
+        "floor_ppi": floor_ppi,
+        "clears_floor": ok,
+        "below_floor": below,
+        "ruled_exceptions": exceptions,
+        "unverified": unverified,
     }
 
 

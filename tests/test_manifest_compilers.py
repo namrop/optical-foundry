@@ -1144,7 +1144,7 @@ def test_inline_chapter_opener_dict_epigraph_uses_layered_grammar():
     assert "\\OFChapterOpener{Alpha One}" in body
     assert (
         "\\CodexOpenerEpigraph{literary}{You are the room I keep returning to.}"
-        "{}{}{}{Letter, first winter}{2019}" in body
+        "{}{}{}{Letter, first winter}{}{2019}" in body
     )
     # The generic body-prose quote grammar is not used for openers anymore.
     assert "CodexQuoteBlock" not in body
@@ -1167,7 +1167,7 @@ def test_inline_chapter_opener_epigraph_witness_register_and_speaker_context():
     body = "\n".join(lines)
     assert (
         "\\CodexOpenerEpigraph{witness}{see you soon}{A. Friend}{at the harbor}"
-        "{Junot Diaz}{Oscar Wao}{2007}" in body
+        "{Junot Diaz}{Oscar Wao}{}{2007}" in body
     )
 
 
@@ -1178,7 +1178,7 @@ def test_inline_chapter_opener_epigraph_defaults_to_literary_register():
     })
     body = "\n".join(lines)
     # Missing / unknown register renders literary (italic body).
-    assert "\\CodexOpenerEpigraph{literary}{a line}{}{}{Someone}{}{}" in body
+    assert "\\CodexOpenerEpigraph{literary}{a line}{}{}{Someone}{}{}{}" in body
 
 
 def test_inline_chapter_opener_string_epigraph_uses_macro():

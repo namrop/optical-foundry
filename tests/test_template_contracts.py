@@ -40,7 +40,7 @@ def test_codex0_defines_layered_opener_epigraph_grammar():
     the register-inverted body, the small-caps speaker line, the middot
     bibliographic line, and the gold context line."""
     text = CODEX0_TEMPLATE.read_text()
-    assert "\\NewDocumentCommand{\\CodexOpenerEpigraph}{m m m m m m m}" in text
+    assert "\\NewDocumentCommand{\\CodexOpenerEpigraph}{m m m m m m m m}" in text
     # Register inversion: witness -> upright, else italic.
     assert "\\ifx\\CodexEpiReg\\CodexEpiWitnessName\\upshape\\else\\itshape\\fi" in text
     # Speaker line uses real small caps (Iowan Old Style carries smcp).
@@ -166,3 +166,39 @@ def test_codex0_ornament_law_keeps_the_first_structural_ornament_at_a_page_foot(
 
     assert "kept_structural" in block
     assert "either/or" in block
+
+
+def test_codex0_held_object_centres_between_its_anchors_by_construction():
+    """A held object shorter than the measure must sit centred between the two
+    anchors (Luis, build-64 proof, folios 115 and 137), and one that fills the
+    measure must keep its justified full-measure setting.
+
+    The construction — not a tuned offset — is: natural-width block (varwidth,
+    capped at the measure) centred inside the measure, with the anchor seats
+    pinned to the measure rather than to the block's own width."""
+    text = CODEX0_TEMPLATE.read_text()
+    block = text[
+        text.index("\\newenvironment{CodexHeldObject}") : text.index(
+            "\\newenvironment{CodexVowBlock}"
+        )
+    ]
+
+    # The measure is a shared register, set from the live \linewidth.
+    assert "\\usepackage{varwidth}" in text
+    assert (
+        "\\setlength{\\CodexHeldMeasure}{\\dimexpr\\linewidth-2\\CodexHeldIndent\\relax}"
+        in block
+    )
+    # Natural-width block, capped at the measure — no fixed-width minipage.
+    assert "\\begin{varwidth}{\\CodexHeldMeasure}" in block
+    assert "\\begin{minipage}" not in block
+    # ...centred inside the measure.
+    assert "\\makebox[\\CodexHeldMeasure][c]{\\usebox{\\CodexHeldObjectBox}}" in block
+    # The anchors stay in the gutters: seated off the measure, not the block.
+    seat = text[
+        text.index("\\newcommand{\\CodexManiculeSeat}") : text.index(
+            "\\newenvironment{CodexVow}"
+        )
+    ]
+    assert "\\hspace{\\dimexpr\\CodexHeldIndent+\\CodexHeldMeasure\\relax}" in seat
+    assert "\\wd\\CodexHeldObjectBox" not in seat

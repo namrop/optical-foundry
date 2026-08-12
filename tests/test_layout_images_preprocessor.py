@@ -598,3 +598,218 @@ def test_layout_image_preserves_existing_header_includes(tmp_path):
     assert "- \\usepackage{graphicx}" in rewritten
     assert "- \\usepackage{tikz}" in rewritten
     assert rewritten.index("- \\usepackage{microtype}") < rewritten.index("- \\usepackage{graphicx}")
+
+
+# --- Displayed-image whitespace contract (Luis-ruled 2026-08-11, folios 168/204) ---
+#
+# "there is too much whitespace around the image. it should be comparable to a
+# hinge. across the whole work." A displayed image must carry the hinge ornament's
+# own envelope, and must not smuggle extra air in as blank canvas inside the asset.
+
+
+def _write_png(path: Path, size, ink_box, *, transparent_margin=True):
+    """A PNG with a solid ink rectangle and a blank margin around it."""
+    Image = pytest.importorskip("PIL.Image", reason="Pillow drives margin measurement")
+    fill = (0, 0, 0, 0) if transparent_margin else (255, 255, 255, 255)
+    image = Image.new("RGBA", size, fill)
+    for x in range(ink_box[0], ink_box[2]):
+        for y in range(ink_box[1], ink_box[3]):
+            image.putpixel((x, y), (0, 0, 0, 255))
+    path.parent.mkdir(parents=True, exist_ok=True)
+    image.save(path)
+    return path
+
+
+def test_block_placement_uses_the_hinge_envelope_not_bare_center(tmp_path):
+    src = tmp_path / "block-envelope.md"
+    src.write_text(
+        "---\ntitle: Block Envelope\n---\n\n"
+        "Prose above.\n\n"
+        "```of-image\n"
+        "path: assets/vignette.png\n"
+        "placement: block\n"
+        "width: 2.4in\n"
+        "```\n\n"
+        "Prose below.\n"
+    )
+
+    result = preprocess_layout_image_blocks(src, tmp_path, "block-envelope")
+    rewritten = result.rewritten_source.read_text()
+
+    # 2\baselineskip is codex0_composition.lua's hinge_ornament_gap, verbatim.
+    assert "\\begin{OFDisplayedFigure}[2\\baselineskip]" in rewritten
+    assert "\\end{OFDisplayedFigure}" in rewritten
+    assert "\\begin{center}" not in rewritten
+    assert "\\newenvironment{OFDisplayedFigure}" in rewritten
+    assert result.figure_inventory[0]["gap"] == "2\\baselineskip"
+
+
+def test_block_placement_gap_is_tunable_per_image(tmp_path):
+    src = tmp_path / "block-gap.md"
+    src.write_text(
+        "```of-image\n"
+        "path: assets/vignette.png\n"
+        "placement: block\n"
+        "width: 2.4in\n"
+        "gap: 1\\baselineskip\n"
+        "```\n"
+    )
+
+    result = preprocess_layout_image_blocks(src, tmp_path, "block-gap")
+
+    assert "\\begin{OFDisplayedFigure}[1\\baselineskip]" in result.rewritten_source.read_text()
+
+
+def test_block_placement_crops_the_blank_margin_the_asset_ships(tmp_path):
+    # 40% blank down each side, 25% across the top and bottom: the shape two object
+    # vignette extracts actually have.
+    _write_png(tmp_path / "assets" / "object-a.png", (100, 100), (40, 25, 60, 75))
+    src = tmp_path / "trimmed.md"
+    src.write_text(
+        "```of-image\n"
+        "path: assets/object-a.png\n"
+        "placement: block\n"
+        "width: 2in\n"
+        "```\n"
+    )
+
+    result = preprocess_layout_image_blocks(src, tmp_path, "trimmed")
+    rewritten = result.rewritten_source.read_text()
+    entry = result.figure_inventory[0]
+
+    assert entry["auto_trim"] is not None
+    assert entry["auto_trim"]["source"].endswith("object-a.png")
+    # 40% margin less the 2% bleed on each side leaves 24% of the width retained...
+    assert entry["auto_trim"]["retained_width"] == pytest.approx(0.24, abs=0.02)
+    # ...and the declared width shrinks by exactly that, so the VISIBLE object keeps
+    # the size it had. This removes whitespace; it must never resize artwork.
+    assert entry["width"].endswith("in")
+    assert float(entry["width"][:-2]) == pytest.approx(2 * 0.24, abs=0.04)
+    assert entry["auto_trim"]["authored_width"] == "2in"
+    # The inventory keeps auditing the authored reference; the render-local twin
+    # is recorded under auto_trim and is what the emitted LaTeX points at.
+    assert entry["path"] == "assets/object-a.png"
+    assert "__oftrim_" in entry["auto_trim"]["trimmed"]
+    assert (tmp_path / entry["auto_trim"]["trimmed"]).is_file()
+    assert entry["auto_trim"]["trimmed"] in rewritten
+
+
+def test_auto_trim_is_deterministic_across_runs(tmp_path):
+    _write_png(tmp_path / "assets" / "object-a.png", (100, 100), (40, 25, 60, 75))
+    src = tmp_path / "stable.md"
+    src.write_text(
+        "```of-image\npath: assets/object-a.png\nplacement: block\nwidth: 2in\n```\n"
+    )
+
+    first = preprocess_layout_image_blocks(src, tmp_path, "stable")
+    second = preprocess_layout_image_blocks(src, tmp_path, "stable")
+
+    assert first.figure_inventory[0]["auto_trim"]["trimmed"] == second.figure_inventory[0]["auto_trim"]["trimmed"]
+
+
+def test_auto_trim_leaves_a_full_bleed_asset_alone(tmp_path):
+    _write_png(tmp_path / "assets" / "plate.png", (100, 100), (0, 0, 100, 100))
+    src = tmp_path / "fullbleed.md"
+    src.write_text(
+        "```of-image\npath: assets/plate.png\nplacement: block\nwidth: 2in\n```\n"
+    )
+
+    result = preprocess_layout_image_blocks(src, tmp_path, "fullbleed")
+    entry = result.figure_inventory[0]
+
+    assert entry["auto_trim"] is None
+    assert entry["path"] == "assets/plate.png"
+    assert entry["width"] == "2in"
+
+
+def test_auto_trim_defers_to_an_authored_trim_and_to_opt_out(tmp_path):
+    _write_png(tmp_path / "assets" / "object-a.png", (100, 100), (40, 25, 60, 75))
+    for body, label in (
+        ("trim: 1pt 1pt 1pt 1pt\nclip: true\n", "authored-trim"),
+        ("auto_trim: false\n", "opted-out"),
+    ):
+        src = tmp_path / f"{label}.md"
+        src.write_text(
+            "```of-image\npath: assets/object-a.png\nplacement: block\nwidth: 2in\n" + body + "```\n"
+        )
+        result = preprocess_layout_image_blocks(src, tmp_path, label)
+        assert result.figure_inventory[0]["auto_trim"] is None, label
+        assert result.figure_inventory[0]["path"] == "assets/object-a.png", label
+
+
+def test_wrap_placement_is_left_alone(tmp_path):
+    # A wrap has prose beside it rather than above and below it; its space is
+    # \intextsep / \columnsep, and the wrapped vignette reads correctly today.
+    # Neither the hinge envelope nor the crop belongs to it.
+    _write_png(tmp_path / "assets" / "can.png", (100, 100), (40, 25, 60, 75))
+    src = tmp_path / "wrap-untouched.md"
+    src.write_text(
+        "```of-image\n"
+        "path: assets/can.png\n"
+        "placement: wrap\n"
+        "align: right\n"
+        "width: 1.5in\n"
+        "lines: 10\n"
+        "```\n"
+    )
+
+    result = preprocess_layout_image_blocks(src, tmp_path, "wrap-untouched")
+    rewritten = result.rewritten_source.read_text()
+    entry = result.figure_inventory[0]
+
+    assert entry["auto_trim"] is None
+    assert entry["width"] == "1.5in"
+    assert entry["gap"] is None
+    assert "\\begin{wrapfigure}[10]{r}{1.5in}" in rewritten
+    assert "\\begin{OFDisplayedFigure}" not in rewritten
+
+
+def test_raw_centered_vignette_gets_the_same_contract(tmp_path):
+    # Two object vignettes — both named in the folio-168 note —
+    # are raw \begin{center}\includegraphics lines in source, never of-image blocks.
+    # An of-image-only fix would have missed exactly the instances Luis cited.
+    asset = _write_png(tmp_path / "media" / "object-b.png", (100, 100), (40, 25, 60, 75))
+    src = tmp_path / "raw-vignette.md"
+    src.write_text(
+        "---\ntitle: Raw Vignette\n---\n\n"
+        "Prose above.\n\n"
+        "```{=latex}\n"
+        f"\\begin{{center}}\\includegraphics[width=1.9in]{{{asset}}}\\end{{center}}\n"
+        "```\n\n"
+        "Prose below.\n"
+    )
+
+    result = preprocess_layout_image_blocks(src, tmp_path, "raw-vignette")
+    rewritten = result.rewritten_source.read_text()
+    entry = result.figure_inventory[0]
+
+    assert entry["origin"] == "raw_centered_graphic"
+    assert entry["gap"] == "2\\baselineskip"
+    assert entry["auto_trim"] is not None
+    assert "\\begin{OFDisplayedFigure}[2\\baselineskip]" in rewritten
+    assert "\\newenvironment{OFDisplayedFigure}" in rewritten
+    assert "\\usepackage{tikz}" in rewritten
+    assert "\\begin{center}\\includegraphics" not in rewritten
+
+
+@pytest.mark.parametrize(
+    "line",
+    [
+        # Full-page plates: out of scope by Luis's framing, and excluded structurally.
+        r"\begin{center}\includegraphics[width=\textwidth,height=0.90\textheight,keepaspectratio]{\detokenize{/tmp/plate.png}}\end{center}",
+        r"\begin{center}\includegraphics[width=\textwidth]{/tmp/plate.png}\end{center}",
+        r"\begin{center}\includegraphics[height=0.95in]{/tmp/plate.png}\end{center}",
+        # Not line-initial: a quoted or commented placement directive stays prose.
+        r"> \begin{center}\includegraphics[width=3.2in]{/tmp/plate.png}\end{center}",
+    ],
+)
+def test_raw_centered_pass_leaves_full_page_plates_and_quoted_lines_alone(tmp_path, line):
+    src = tmp_path / "plate.md"
+    src.write_text("---\ntitle: Plate\n---\n\n" + line + "\n")
+
+    result = preprocess_layout_image_blocks(src, tmp_path, "plate")
+    rewritten = result.rewritten_source.read_text()
+
+    assert line in rewritten
+    assert "OFDisplayedFigure" not in rewritten
+    assert not [entry for entry in result.figure_inventory if entry.get("kind") == "layout_image"]

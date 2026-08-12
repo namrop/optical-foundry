@@ -40,9 +40,30 @@ clip: true
 
 These controls are deliberately class-level: they work for any PDF/LaTeX profile that supports source-level layout images. Codex 0 can use them, but they are not owned by Codex 0.
 
+## Displayed images: the whitespace contract
+
+`placement: block` is the *displayed* lane — the image occupies flow on its own, with prose above and below rather than beside it. Two things are handled for it automatically, so that displayed images agree with each other across a whole work instead of each inheriting whatever whitespace its asset happened to be exported with:
+
+```markdown
+```of-image
+path: assets/vignette.png
+placement: block
+width: 2.4in
+gap: 2\baselineskip   # vertical envelope above and below; this is the default
+auto_trim: true       # crop the blank margin the asset ships; this is the default
+```
+```
+
+- **`gap`** replaces LaTeX's `center`/trivlist skips with one declared, rigid envelope. In the Codex 0 profile the default deliberately equals the hinge ornament's `hinge_ornament_gap`, so a displayed image sits in the page at the same weight as a hinge. Override per image when a passage genuinely wants a different weight.
+- **`auto_trim`** measures the blank margin inside the asset's own canvas — object extracts are routinely exported on a generous canvas, and a soft vignette can fade below visibility well inside its bounding box — and crops it in a render-local twin. The declared width is scaled by the retained fraction, so the **visible** object keeps exactly the size it had: this removes whitespace, it never resizes artwork. An authored `trim:` always wins; `auto_trim: false` opts out; the source asset is never modified.
+
+`placement: wrap` gets neither. A wrap has prose beside it, its vertical space is `\intextsep`, and a crop would move the figure inside the measure — use the explicit `trim:` control if a wrapped asset needs one.
+
+Raw `\begin{center}\includegraphics[width=<absolute>]{path}\end{center}` lines written straight into source get the same displayed-image contract, so a work does not split into two spacing regimes depending on whether a given figure was wired as an `of-image` block. Full-page plates are excluded: the rewrite only fires on a line-initial match carrying a lone absolute `width=` and a brace-free literal path.
+
 ## Evidence surface
 
-Each `of-image` block records a `layout_image` entry in the render evidence `figure_inventory`, including placement, side, width, edge mode, and any tightening controls (`wrapped_lines`, `overhang`, `sep`, `intextsep`, `raise`, `trim`, `clip`). Use this inventory to audit whether a proof was rendered with generic figure-wrap controls or only with default wrapping.
+Each `of-image` block records a `layout_image` entry in the render evidence `figure_inventory`, including placement, side, width, edge mode, and any tightening controls (`wrapped_lines`, `overhang`, `sep`, `intextsep`, `raise`, `trim`, `clip`). Displayed images additionally record `gap`, an `origin` (`of_image_block` or `raw_centered_graphic`), and an `auto_trim` record with the measured margins, the fraction removed from each edge, and the authored path and width. Use this inventory to audit whether a proof was rendered with generic figure-wrap controls or only with default wrapping.
 
 ## Boundary with rails and plates
 

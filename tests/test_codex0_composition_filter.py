@@ -241,7 +241,12 @@ A threshold opens.
     # Whisper opens with the lightest copperplate flourish (WH05). Retuned
     # 2026-08-06 (Luis-blessed) from 2.0em/1.5bl: the taxonomy re-ruling made
     # whisper the LIGHTEST tier, so it now sits below the breath, not above it.
-    assert "style_map_v2_pools_2026-07-19/selected/whisper/WH05_alpha.png" in latex
+    # 2026-08-11 swell pass (Luis-ruled from a printed true-size ladder): the live
+    # whispers printed as hairlines on Mohawk Superfine — median stroke 0.024-0.155 mm
+    # against a measured gold floor of ~0.18 mm — so each kept form's coverage matte was
+    # dilated to a per-asset rung and the pool repointed. WH09 was pulled outright.
+    # See codex0_v5/generated_media/whisper_swell_ladder_2026-08-11/.
+    assert "whisper_swelled_2026-08-11/selected/whisper/WH05_swelled_L4_gold_alpha.png" in latex
     assert "\\CodexBreakOrnament[height=1.0em][0.5\\baselineskip]" in latex
     assert "\\begin{CodexWhisper}" in latex
     # Tailpiece opens with the lightest cul-de-lampe (TL05).
@@ -363,11 +368,21 @@ The second field opens.
     rungs = list(range(2, 39, 2))
     for rung in rungs:
         assert f"\\CodexRailPoolAdd{{contained}}{{{rung}}}{{" in latex
-    assert latex.count("\\CodexRailPoolAdd{") == 58
+    # 56, not 58: the 2-rung was reduced from three members to one on 2026-08-11
+    # when it was pinned to RS04 for the Purple Formula refrain (see below).
+    assert latex.count("\\CodexRailPoolAdd{") == 56
+
+    # 2-rung PINNED (Luis-ratified 2026-08-11). The rung is unreachable under the
+    # 4-line stub floor, so it is reserved for the Purple Formula, which takes a
+    # per-segment exemption via stub="allow". One member only, so the margin stays
+    # identical while the sentence is identical.
+    assert latex.count("\\CodexRailPoolAdd{contained}{2}{") == 1
+    assert "RS04_balloon_flower_bell_alpha.png" in latex             # 2L, pinned
+    assert "CL32_new_england_aster_mid_alpha.png" not in latex       # unpinned 2L
+    assert "RS02_orchid_single_bloom_alpha.png" not in latex         # unpinned 2L
 
     # Rung membership comes from the solved ladder allocation. Spot-check the
-    # two ends: the shortest bloom marks and the full-text-block rails.
-    assert "CL32_new_england_aster_mid_alpha.png" in latex          # 2L
+    # long end: the full-text-block rails.
     assert "CL15_purple_loosestrife_tall_2x_alpha.png" in latex     # 38L, venice 2x
     assert latex.count("\\CodexRailPoolAdd{contained}{38}{") == 9
 
@@ -657,7 +672,12 @@ After the hinge.
     )
 
     # whisper — copperplate penwork, the lightest in-passage pause post-re-ruling
-    assert "style_map_v2_pools_2026-07-19/selected/whisper/WH05_alpha.png" in latex
+    # 2026-08-11 swell pass (Luis-ruled from a printed true-size ladder): the live
+    # whispers printed as hairlines on Mohawk Superfine — median stroke 0.024-0.155 mm
+    # against a measured gold floor of ~0.18 mm — so each kept form's coverage matte was
+    # dilated to a per-asset rung and the pool repointed. WH09 was pulled outright.
+    # See codex0_v5/generated_media/whisper_swell_ladder_2026-08-11/.
+    assert "whisper_swelled_2026-08-11/selected/whisper/WH05_swelled_L4_gold_alpha.png" in latex
     # breath — Aldine leaf-fleuron family, now the ex-hinge in-passage tier
     assert "style_map_v2_pools_2026-07-19/selected/breath/BR02_alpha.png" in latex
     # hinge — Rococo Fournier, now the mechanical between-passage separator only
@@ -732,7 +752,10 @@ Continuation passage.
     # Passage separator (2026-07-19): the WH10 copperplate swelled-rule flourish,
     # a centered image ornament, replaces the interim plain typographic rule.
     assert "\\CodexBreakOrnament[width=0.30\\linewidth]" in latex
-    assert "style_map_v2_pools_2026-07-19/selected/rule/WH10_alpha.png" in latex
+    # WH10 rule likewise repointed to its L1 rung (Luis-ruled 2026-08-11). The rule pool
+    # is currently dormant — no cx0:rule markers exist in the book source — so this test
+    # is the only thing exercising it.
+    assert "whisper_swelled_2026-08-11/selected/rule/WH10_swelled_L1_gold_alpha.png" in latex
 
 
 def test_codex_inline_rule_marker_honors_width_override(tmp_path):
@@ -894,3 +917,36 @@ def test_band_class_map_covers_every_ornament_bearing_div_class():
     banded = set(re.findall(r'\["([\w-]+)"\]', bands))
 
     assert wired == banded, f"div classes with no band class: {sorted(wired - banded)}"
+
+
+def test_pataphorical_stub_allow_emits_per_segment_exemption(tmp_path):
+    """stub="allow" exempts one segment from the rail stub floor (2026-08-11).
+
+    The floor is read inside the output routine at shipout, so a local
+    \\CodexRailSetMinLines{0}...{4} pair around a short div is a no-op -- the
+    restore has already run by the time the page ships. Deliberately short
+    authored blocks (the Purple Formula refrain) therefore opt in by segment id.
+    """
+    latex = _pandoc_latex(
+        tmp_path,
+        """
+::: {.codex-pataphorical register="pataphorical" story="both" stub="allow"}
+Back when there was no purple in the world.
+:::
+
+::: {.codex-pataphorical register="pataphorical" story="girl"}
+An ordinary field takes no exemption.
+:::
+""",
+    )
+
+    # The opted-in segment is seg 1; it gets an allow call keyed on its own id.
+    assert "\\CodexRailAllowStub{1}" in latex
+    # The neighbouring field does not.
+    assert "\\CodexRailAllowStub{2}" not in latex
+    assert latex.count("\\CodexRailAllowStub{") == 1
+    # The exemption rides alongside the normal range markers, not instead of them.
+    assert "\\CodexPataphorBegin{1}" in latex
+    assert "\\CodexPataphorEnd{1}" in latex
+    # It is declared before the segment it exempts opens.
+    assert latex.index("\\CodexRailAllowStub{1}") < latex.index("\\CodexPataphorBegin{1}")

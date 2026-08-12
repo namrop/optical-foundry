@@ -154,12 +154,23 @@ def _split_frontmatter_and_body(text: str) -> tuple[dict[str, Any] | None, str]:
     if not text.startswith("---"):
         return None, text
 
-    idx = text.find("---", 3)
-    if idx == -1:
+    # The closing fence must be a LINE that is exactly `---` (trailing spaces ok).
+    # A bare text.find("---", 3) matches the sequence ANYWHERE, including inside a
+    # YAML string value — and these files routinely quote markdown syntax in their
+    # prose_pass.objective. On 2026-08-11 the A1 print-blocker fix recorded that it
+    # "struck the four body `---` thematic breaks"; that literal truncated its own
+    # frontmatter at line 30 instead of 33, yaml.safe_load raised, this function fell
+    # through to (None, text), and the whole file — YAML included — was emitted as
+    # body. Pandoc then read the in-body `title:` as document metadata and put a
+    # \maketitle title page at the very front of Volume I in build 65.
+    import re as _re
+    close = _re.search(r"^---[ \t]*$", text[3:], _re.MULTILINE)
+    if close is None:
         return None, text
+    idx = 3 + close.start()
 
     fm_block = text[3:idx].strip()
-    body = text[idx + 3 :]
+    body = text[idx + close.end() - close.start() :]
 
     try:
         fm = yaml.safe_load(fm_block)
@@ -343,6 +354,9 @@ DOCUMENT_VARIABLE_ALLOWLIST = {
     # at bundle time and substituted into the colophon's <<COLOPHON_WORDS>>
     # placeholder by the codex0 template's intermediate assembly step.
     "colophon_words",
+    # Bind shape, carried from the same constant the build pads to, so the
+    # printed colophon and the imposition can never describe different books.
+    "colophon_signature_size",
 }
 
 RUNNING_TEXT_KEY_ALIASES = {
@@ -885,7 +899,7 @@ _CHAPTER_OPENER_FALLBACK_DEFS = [
     # smallcaps, gold context line) remains a separate decision — it would
     # restyle 78 openers sight-unseen and is NOT taken here.
     "\\providecommand{\\CodexSmallCaps}[1]{\\textsc{#1}}",
-    "\\providecommand{\\CodexOpenerEpigraph}[7]{{\\par\\smallskip"
+    "\\providecommand{\\CodexOpenerEpigraph}[8]{{\\par\\smallskip"
     "\\begin{quote}\\itshape #2\\end{quote}"
     "{\\raggedleft"
     "\\if\\relax\\detokenize{#3}\\relax\\else{\\small\\textemdash{}~\\textsc{#3}"
@@ -894,7 +908,8 @@ _CHAPTER_OPENER_FALLBACK_DEFS = [
     "\\if\\relax\\detokenize{#3}\\relax\\textemdash{}~\\fi"
     "\\if\\relax\\detokenize{#5}\\relax\\else#5\\fi"
     "\\if\\relax\\detokenize{#6}\\relax\\else\\space\\textperiodcentered\\space\\emph{#6}\\fi"
-    "\\if\\relax\\detokenize{#7}\\relax\\else\\space\\textperiodcentered\\space#7\\fi\\par}"
+    "\\if\\relax\\detokenize{#7}\\relax\\else\\space\\textperiodcentered\\space tr.~#7\\fi"
+    "\\if\\relax\\detokenize{#8}\\relax\\else\\space\\textperiodcentered\\space#8\\fi\\par}"
     "\\par}"
     "\\ifdefined\\CodexEpigraphToBodyGap\\CodexEpigraphToBodyGap\\fi}}",
 ]
@@ -905,7 +920,10 @@ def _inline_chapter_opener_epigraph_lines(epigraph: dict[str, Any]) -> list[str]
 
     The epigraph line is pulled from the corpus (one per chapter) and rendered
     via `\\CodexOpenerEpigraph{register}{text}{speaker}{context}{author}{source}
-    {date}` (ratified 2026-07-28). The macro handles the register-inverted quote
+    {translator}{date}` (ratified 2026-07-28; translator slot added 2026-08-11 so
+    the date field can mean year-of-original everywhere instead of silently
+    meaning year-of-this-translation wherever a translator was smuggled into the
+    work title). The macro handles the register-inverted quote
     body (witness upright / literary italic), the small-caps speaker line, the
     middot bibliographic line, and the gold context line. The generic
     `CodexQuoteBlock` / `\\CodexQuoteAttribution` grammar is left untouched for
@@ -926,11 +944,12 @@ def _inline_chapter_opener_epigraph_lines(epigraph: dict[str, Any]) -> list[str]
     context = esc("context")
     author = esc("author")
     source = esc("source")
+    translator = esc("translator")
     date = esc("date")
     body = _latex_escape_text(text)
     return [
         f"\\CodexOpenerEpigraph{{{register_arg}}}{{{body}}}{{{speaker}}}"
-        f"{{{context}}}{{{author}}}{{{source}}}{{{date}}}"
+        f"{{{context}}}{{{author}}}{{{source}}}{{{translator}}}{{{date}}}"
     ]
 
 
@@ -1556,11 +1575,18 @@ class CompositeBundleCompiler(ManifestCompiler):
         # `colophon_words` variable; the colophon source leaves a
         # <<COLOPHON_WORDS>> placeholder which is substituted here, after
         # assembly, so the printed number always reflects this exact build.
-        colophon_words_value = accepted_manifest_variables.get("colophon_words")
-        if colophon_words_value is not None:
-            assembled_content = assembled_content.replace(
-                "<<COLOPHON_WORDS>>", str(colophon_words_value)
-            )
+        # Generic over every allowlisted `colophon_*` variable: `colophon_words`
+        # substitutes <<COLOPHON_WORDS>>, `colophon_signature_size` substitutes
+        # <<COLOPHON_SIGNATURE_SIZE>>, and so on. Colophon facts that drift with
+        # the build (word counts, bind shape) belong on this rail rather than
+        # hand-maintained in the prose, where they go stale silently — the
+        # printed "sixteen-page signatures" survived the 2026-08-09 sig-32
+        # ruling by two builds because nothing tied it to the actual bind.
+        for _key, _value in accepted_manifest_variables.items():
+            if _key.startswith("colophon_") and _value is not None:
+                assembled_content = assembled_content.replace(
+                    f"<<{_key.upper()}>>", str(_value)
+                )
         # Merge title-page variables and bundle-level manifest variables into a
         # single frontmatter block. Both surfaces write to top-level keys AND
         # under `variables:` so downstream readers (edition_from_source_frontmatter,
