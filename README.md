@@ -29,6 +29,19 @@ python3.14 -m cli validate manifests/<manifest>.yaml
 
 The current validated interpreter is `python3.14`. Older examples using a hypothetical `foundry` executable or `python -m cli.render` are stale.
 
+**Sol runtime note (2026-08-25):** on Sol the engine runs fine under the
+system `python3` (3.13) with the fleet-provisioned `pandoc`/`lualatex` —
+verified end-to-end with a keeper-profile render (validation passed, zero
+warnings). Two follow-ups from that run:
+
+- **CLEANUP:** the checked-in `.venv/` is an Earth-era Homebrew carcass
+  (`home = /opt/homebrew/opt/python@3.14/bin`) that can never execute on
+  Sol — delete it (venvs shouldn't be committed; recreate per-host).
+- Sol lacks Helvetica/Menlo/Times New Roman, so renders fall back to
+  DejaVu (recorded as declared runtime fallbacks in render evidence).
+  If Sol becomes a regular render host, pin the real faces into the
+  fleet environment.
+
 ## Current status
 
 **Phase:** active local implementation / migration proving ground.
