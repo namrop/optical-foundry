@@ -5,7 +5,7 @@ note_role: architecture_note
 validation_profile: standard
 status: draft
 created: 2026-08-25T12:05:00-04:00
-updated: 2026-09-01T23:36:00-04:00
+updated: 2026-09-01T23:47:00-04:00
 beam_home: 42_optical_foundry
 title: "Codex 0 → Optical Foundry — capability promotion map (post-delivery)"
 tags:
@@ -65,8 +65,8 @@ So the delivered copy is **reproducible from committed state**, on this disk.
 
 - [x] **C-A** — Push canon `master` + LFS to `origin`, and mirror to `github`. *Done 2026-09-01 (lane 1): origin, deneb and github all current, LFS 0 pending.*
 - [x] **C-B** — Merge the Foundry dev branch to `main` and push. *Ruled 2026-09-01 23:32 EDT — keeper: "we can merge into main for now, and then do the refactoring work." Done the same night: `main` fast-forwarded to the dev tip (zero commits were on `main` that the dev branch lacked) and pushed to deneb and origin.*
-- [~] **C-C** — Preserve the delivered artifacts deliberately. *Half done 2026-09-01 (lane 1, `8438ab7`): the three build-100 bundle manifests and a SHA-256 manifest of the six volume PDFs are committed under `docs/delivery/build-100/`. **Still unruled:** whether the PDFs themselves go to LFS or to an archive lane outside git.*
-- [ ] **C-D** — Adjudicate the two orphan Foundry branches: fold, tag, or delete. *Unruled.*
+- [ ] **C-C** — Preserve the delivered artifacts deliberately. *Half done 2026-09-01 (lane 1, `8438ab7`): manifests + SHA-256s committed under `docs/delivery/build-100/`. **PDF home ruled 2026-09-01 23:44 EDT** — keeper: "if it's codex 0 it should probably live in LFS. Something else I haven't agreed on yet." Reading: the six build-100 volume PDFs go to **canon** LFS (they live under `21_letters_and_creative/book/codex0_v5/generated/`, which canon's `.gitignore:220` excludes — a negation for that one build directory is needed); non-Codex-0 render artifacts are not ruled. **Not executed yet:** the six PDFs total ~2.1 GB (vol1 208 MB ×2, vol2 ~427 MB ×2, vol3 ~435 MB ×2), and canon mirrors LFS to github, whose LFS quota that would exceed — needs a decision on deneb-only LFS for this path before the add.*
+- [x] **C-D** — Adjudicate the two orphan Foundry branches. *Ruled 2026-09-01 23:44 EDT: "the foundry branches that are orphaned we should tag." Done: annotated tags `archive/failed-codex0-rail-compositor-20260801` and `archive/feature-contour-wrap-alpha-spike`, pushed to deneb and origin. Branch refs left in place; deleting them is a separate small step.*
 
 ~~None of the promotion work below should start before **C-A/C-B**.~~ C-A and C-B are closed
 as of 2026-09-01; the copy is no longer the only one. Promotion work may start once the
@@ -253,7 +253,7 @@ For each candidate, Luis rules one of:
 
 | Band | Candidates | Ruled |
 |---|---|---|
-| Custody | C-A, C-B, C-C, C-D | C-A done · C-B ruled+done · C-C half (PDF home unruled) · C-D unruled |
+| Custody | C-A, C-B, C-C, C-D | C-A done · C-B ruled+done · C-C ruled (canon LFS), add pending a github-quota decision · C-D ruled+done (tagged) |
 | A — composition | A1★ A2★ A3★ A4 A5 | — |
 | B — multi-volume | B1★ B2★ B3★ B4 | — |
 | C — edition gating | C1 C2 | — |
@@ -331,6 +331,16 @@ throwaway generator kept beside the output; that generator is exactly the hole *
 what is needed." The vendored-asset registry (`of-render-only-emoji-assets`) grows to cover what
 the corpus actually uses — starting with the thirteen code points above — rather than a
 manifest lint policy that reports instead of refusing. The fail-closed posture stays.
+
+**Keeper ruling on the amendment below, 2026-09-01 23:44 EDT.** "Selector before spine compiler is
+good. But ideally there would not be a spine compiler if possible. Manifest should be authoritative."
+*Reading:* the amendment is accepted — A2 moves ahead of A1. And A1's target changes: the goal is
+not to promote the 4,548-line spine compiler into the engine but to **dissolve it** — the selector
+emits the bundle manifest directly, the manifest is the authoritative composition record, and the
+spine as an intermediate artifact goes away where it can. Whatever of A1 survives is what a manifest
+cannot express yet; that residue is what the ratification session should look at, not the compiler
+as a unit. "Ideally … if possible" is the keeper's own grade: a direction with an escape hatch, not
+an absolute.
 
 **Suggested amendment to §5 sequencing.** Step 4 (A2) produced a PDF today without A1 moving —
 the compiler's generic path is enough for a *flat* corpus book, and the failures were template and

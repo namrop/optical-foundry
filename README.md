@@ -34,9 +34,9 @@ system `python3` (3.13) with the fleet-provisioned `pandoc`/`lualatex` —
 verified end-to-end with a keeper-profile render (validation passed, zero
 warnings). Two follow-ups from that run:
 
-- **CLEANUP:** the checked-in `.venv/` is an Earth-era Homebrew carcass
-  (`home = /opt/homebrew/opt/python@3.14/bin`) that can never execute on
-  Sol — delete it (venvs shouldn't be committed; recreate per-host).
+- **DONE 2026-09-01:** the Earth-era Homebrew `.venv/` (18 MB on disk, never
+  tracked — `.venv/` was already gitignored) was deleted by keeper ruling;
+  recreate per-host.
 - Sol lacks Helvetica/Menlo/Times New Roman, so renders fall back to
   DejaVu (recorded as declared runtime fallbacks in render evidence).
   If Sol becomes a regular render host, pin the real faces into the
