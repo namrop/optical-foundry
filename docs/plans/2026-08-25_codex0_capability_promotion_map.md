@@ -5,7 +5,7 @@ note_role: architecture_note
 validation_profile: standard
 status: draft
 created: 2026-08-25T12:05:00-04:00
-updated: 2026-09-01T22:55:00-04:00
+updated: 2026-09-01T23:36:00-04:00
 beam_home: 42_optical_foundry
 title: "Codex 0 → Optical Foundry — capability promotion map (post-delivery)"
 tags:
@@ -63,13 +63,14 @@ So the delivered copy is **reproducible from committed state**, on this disk.
 
 **Ruling wanted (custody):**
 
-- [ ] **C-A** — Push canon `master` + LFS to `origin`, and mirror to `github`.
-- [ ] **C-B** — Merge the Foundry dev branch to `main` and push, so the pin canon records is fetchable. (Or: push the dev branch as-is and defer the merge. The pin only needs *a* remote ref containing it.)
-- [ ] **C-C** — Preserve the delivered artifacts deliberately: commit the three build-100 bundle manifests + a SHA-256 manifest of the volume PDFs (small), and decide separately whether the PDFs themselves go to LFS or to an archive lane outside git.
-- [ ] **C-D** — Adjudicate the two orphan Foundry branches: fold, tag, or delete.
+- [x] **C-A** — Push canon `master` + LFS to `origin`, and mirror to `github`. *Done 2026-09-01 (lane 1): origin, deneb and github all current, LFS 0 pending.*
+- [x] **C-B** — Merge the Foundry dev branch to `main` and push. *Ruled 2026-09-01 23:32 EDT — keeper: "we can merge into main for now, and then do the refactoring work." Done the same night: `main` fast-forwarded to the dev tip (zero commits were on `main` that the dev branch lacked) and pushed to deneb and origin.*
+- [~] **C-C** — Preserve the delivered artifacts deliberately. *Half done 2026-09-01 (lane 1, `8438ab7`): the three build-100 bundle manifests and a SHA-256 manifest of the six volume PDFs are committed under `docs/delivery/build-100/`. **Still unruled:** whether the PDFs themselves go to LFS or to an archive lane outside git.*
+- [ ] **C-D** — Adjudicate the two orphan Foundry branches: fold, tag, or delete. *Unruled.*
 
-None of the promotion work below should start before **C-A/C-B**. Promotion is a refactor of
-the only copy.
+~~None of the promotion work below should start before **C-A/C-B**.~~ C-A and C-B are closed
+as of 2026-09-01; the copy is no longer the only one. Promotion work may start once the
+candidates below are ruled.
 
 ---
 
@@ -240,14 +241,19 @@ never seen. That is the point of doing it — but it means step 4 should be scop
 
 ## 6. Ratification ledger
 
-Open. No candidate is ruled. For each, Luis rules one of:
+Open for the capability bands; closed for custody. **Keeper direction 2026-09-01 23:32
+EDT:** "the codex 0 specific things are specific to it. I will have to rule on them in a new
+session." Read as: the §4 tenant/engine cut stands as the frame, and bands A–G are ruled in
+a dedicated session, not piecemeal — the merge to `main` happens first, "and then do the
+refactoring work." The §7 amendment (selector before compiler) is not yet ruled either way.
+For each candidate, Luis rules one of:
 
 **PROMOTE** (move it, this cycle) · **CONTRACT** (write the contract now, move the code later)
 · **HOLD** (real but not now) · **TENANT** (it does not promote; it is book data) · **DROP**.
 
 | Band | Candidates | Ruled |
 |---|---|---|
-| Custody | C-A, C-B, C-C, C-D | — |
+| Custody | C-A, C-B, C-C, C-D | C-A done · C-B ruled+done · C-C half (PDF home unruled) · C-D unruled |
 | A — composition | A1★ A2★ A3★ A4 A5 | — |
 | B — multi-volume | B1★ B2★ B3★ B4 | — |
 | C — edition gating | C1 C2 | — |
@@ -320,6 +326,11 @@ throwaway generator kept beside the output; that generator is exactly the hole *
   recursion rule.
 - One capture embeds a relative `_attachments/…jpg`; `resource_roots` was pointed at the beam
   directory — it resolved (3 images in the compile-stage PDF), so `resource_roots` already covers beam-relative art.
+
+**Keeper ruling on the glyph gate, 2026-09-01 23:32 EDT.** "The glyphs should grow to support
+what is needed." The vendored-asset registry (`of-render-only-emoji-assets`) grows to cover what
+the corpus actually uses — starting with the thirteen code points above — rather than a
+manifest lint policy that reports instead of refusing. The fail-closed posture stays.
 
 **Suggested amendment to §5 sequencing.** Step 4 (A2) produced a PDF today without A1 moving —
 the compiler's generic path is enough for a *flat* corpus book, and the failures were template and
