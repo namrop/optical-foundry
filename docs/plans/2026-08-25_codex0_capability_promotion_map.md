@@ -5,7 +5,7 @@ note_role: architecture_note
 validation_profile: standard
 status: draft
 created: 2026-08-25T12:05:00-04:00
-updated: 2026-09-01T23:47:00-04:00
+updated: 2026-09-02T00:09:00-04:00
 beam_home: 42_optical_foundry
 title: "Codex 0 → Optical Foundry — capability promotion map (post-delivery)"
 tags:
@@ -59,13 +59,13 @@ So the delivered copy is **reproducible from committed state**, on this disk.
 | C3 | **Foundry `54b8d29` is unreachable from every remote ref** | 126 commits ahead of `origin/main` (tip `7278b78`, 2026-07-16). A clone of canon cannot check out the renderer that made the book. The submodule pointer is dangling for anyone but this host. |
 | C4 | **The Foundry work was never merged to local `main` either** | 48 commits on `dev/codex0-contained-rail-ladder-20260802`. Two side branches hold 1 commit each not in HEAD: `failed/codex0-rail-compositor-20260801`, `feature/contour-wrap-alpha-spike`. |
 | C5 | **The delivered artifacts themselves are gitignored** | `.gitignore:219,220` exclude `codex0_v5/generated/` and `codex0_v5/manifests/generated/`. The three build-100 volume PDFs, their `_bind.pdf` twins, the exact bundle manifests, and their SHA-256s are not preserved in git. Reproducible in principle; not archived in fact. |
-| C6 | **Backup posture unverified** | No canon backup timer was visible from this session. Not asserted either way — needs a look. |
+| C6 | **Backup posture unverified** | No canon backup timer was visible from this session. Not asserted either way — needs a look. *2026-09-01 23:51 EDT, keeper: the build-100 PDFs are "the first target for backup to Sagittarius A* when that is up" — the deep-archive/LTO host in the placement future-shape spec (`20_digital_architecture/specs/pharos_host_service_placement_future_shape_v0_2026-06-04.md`), not yet built.* |
 
 **Ruling wanted (custody):**
 
 - [x] **C-A** — Push canon `master` + LFS to `origin`, and mirror to `github`. *Done 2026-09-01 (lane 1): origin, deneb and github all current, LFS 0 pending.*
 - [x] **C-B** — Merge the Foundry dev branch to `main` and push. *Ruled 2026-09-01 23:32 EDT — keeper: "we can merge into main for now, and then do the refactoring work." Done the same night: `main` fast-forwarded to the dev tip (zero commits were on `main` that the dev branch lacked) and pushed to deneb and origin.*
-- [ ] **C-C** — Preserve the delivered artifacts deliberately. *Half done 2026-09-01 (lane 1, `8438ab7`): manifests + SHA-256s committed under `docs/delivery/build-100/`. **PDF home ruled 2026-09-01 23:44 EDT** — keeper: "if it's codex 0 it should probably live in LFS. Something else I haven't agreed on yet." Reading: the six build-100 volume PDFs go to **canon** LFS (they live under `21_letters_and_creative/book/codex0_v5/generated/`, which canon's `.gitignore:220` excludes — a negation for that one build directory is needed); non-Codex-0 render artifacts are not ruled. **Not executed yet:** the six PDFs total ~2.1 GB (vol1 208 MB ×2, vol2 ~427 MB ×2, vol3 ~435 MB ×2), and canon mirrors LFS to github, whose LFS quota that would exceed — needs a decision on deneb-only LFS for this path before the add.*
+- [x] **C-C** — Preserve the delivered artifacts deliberately. *Done 2026-09-02 00:07 EDT.* Manifests + SHA-256s were committed under `docs/delivery/build-100/` (lane 1, `8438ab7`). PDF home ruled 2026-09-01 23:44 EDT — keeper: "if it's codex 0 it should probably live in LFS. Something else I haven't agreed on yet." — then 23:51: "let's do deneb only for now. I don't want to pay for that 2.1 GB. It is the first target for backup to Sagittarius A* when that is up." The six build-100 volume PDFs (reading + `_bind` per volume, ~2.1 GB) are in **canon** LFS at commit `950c4f70a`, force-added because canon's `.gitignore:220` excludes the parent directory and git cannot re-include a child of an excluded directory; all six oids match `SHA256SUMS`. *Deneb-only did not survive contact:* GitHub rejects any push carrying LFS pointers whose objects it lacks (GH008), so the mirror blocked every lane's push until the keeper chose (00:04 EDT) to push the objects to github as well — the mirror already held ~17 GB of canon LFS, so a data pack almost certainly exists and 2.1 GB more is likely within it. Both remotes now hold the objects. Non-Codex-0 render artifacts remain unruled. **Backup:** these six are the first named target for the Sagittarius A* deep-archive host when it is up (see C6).
 - [x] **C-D** — Adjudicate the two orphan Foundry branches. *Ruled 2026-09-01 23:44 EDT: "the foundry branches that are orphaned we should tag." Done: annotated tags `archive/failed-codex0-rail-compositor-20260801` and `archive/feature-contour-wrap-alpha-spike`, pushed to deneb and origin. Branch refs left in place; deleting them is a separate small step.*
 
 ~~None of the promotion work below should start before **C-A/C-B**.~~ C-A and C-B are closed
@@ -253,7 +253,7 @@ For each candidate, Luis rules one of:
 
 | Band | Candidates | Ruled |
 |---|---|---|
-| Custody | C-A, C-B, C-C, C-D | C-A done · C-B ruled+done · C-C ruled (canon LFS), add pending a github-quota decision · C-D ruled+done (tagged) |
+| Custody | C-A, C-B, C-C, C-D | all four ruled and done (2026-09-01/02) |
 | A — composition | A1★ A2★ A3★ A4 A5 | — |
 | B — multi-volume | B1★ B2★ B3★ B4 | — |
 | C — edition gating | C1 C2 | — |
