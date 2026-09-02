@@ -5,7 +5,7 @@ note_role: architecture_note
 validation_profile: standard
 status: draft
 created: 2026-08-25T12:05:00-04:00
-updated: 2026-08-25T12:05:00-04:00
+updated: 2026-09-01T22:55:00-04:00
 beam_home: 42_optical_foundry
 title: "Codex 0 → Optical Foundry — capability promotion map (post-delivery)"
 tags:
@@ -15,7 +15,8 @@ tags:
   - architecture
   - decision-survey
   - ratification-open
-summary: "Post-delivery survey answering open question 7 of the 2026-07-27 architecture direction: which capabilities filter up out of codex0, and what the promotion test is. Adds a second driver the direction doc did not have — arbitrary-Atrium-corpus books (keeper captures, convergence logs) as a review instrument, not only a print target. 25 candidates in seven bands, each with its current home, its generalization, a non-codex0 use case, and blast radius. Also records the custody audit of the delivered copy: everything that made the book is committed, and almost none of it is pushed. Ratification ledger open — no candidate is ruled."
+  - proof-render
+summary: "Post-delivery survey answering open question 7 of the 2026-07-27 architecture direction: which capabilities filter up out of codex0, and what the promotion test is. Adds a second driver the direction doc did not have — arbitrary-Atrium-corpus books (keeper captures, convergence logs) as a review instrument, not only a print target. 25 candidates in seven bands, each with its current home, its generalization, a non-codex0 use case, and blast radius. Also records the custody audit of the delivered copy: everything that made the book is committed, and almost none of it is pushed. Ratification ledger open — no candidate is ruled. §7 (2026-09-01) records the first keeper-capture proof render: compiled, final PDF withheld by the glyph lint, two engine gaps found."
 ---
 
 # Codex 0 → Optical Foundry — capability promotion map
@@ -257,3 +258,70 @@ Open. No candidate is ruled. For each, Luis rules one of:
 
 **On ratification this document is committed to `42_optical_foundry`** and the ruled set
 becomes the port queue.
+
+---
+
+## 7. Proof render findings, 2026-09-01
+
+**What was tried.** A review-instrument book composed from the capture corpus
+using only shipped Foundry surfaces — `composite_bundle`, generic `section_dividers`, per-source
+`chapter_opener`, `render.delivery: bound` with chapter running heads, the `keeper` profile —
+run on Sol under system `python3`. Manifest:
+`manifests/keeper_capture_book_2026-09-01.composite-bundle.yaml` (committed). Output:
+`generated/keeper_capture_book_2026-09-01/` (not committed). The spine was hand-authored by a
+throwaway generator kept beside the output; that generator is exactly the hole **A2** fills.
+
+**Outcome.** LaTeX completed: **the whole book** in 1m35s, with a title page, a title-verso production colophon, a **linked Contents with page numbers**, month dividers, chapter running heads and outer folios — the review instrument works as a shape. The Foundry then **withheld the final PDF**: its fail-closed missing-character lint found **84 warnings across 13 code points** DejaVu lacks, in **47 of 301 files** (🕯 U+1F56F alone: 41 warnings / 35 files — it is the corpus's sign-off glyph; also ✓ ✔ ❌ ✅ ⏩ 🪐 🧬 🧠 🛡 and three CJK characters 斩 杀 线). There is no manifest key to downgrade that lint, and the emoji lane (`engine/emoji_substitution.py`) vendors exactly one glyph (⚠️). Evidence JSON therefore reads `status: error`, `pages: null`, and `render_metadata.success` is absent; the page count comes from the renderer's own error payload and `pdfinfo`. The compile-stage PDF is readable on disk at `generated/keeper_capture_book_2026-09-01/.keeper-capture-book-2026-09-01.compile-stage-f7e6b0624b6642ce95b76295b4c16095.pdf` (6.7 MB; 13 `[[OFDIV:…]]` furnish markers still in its text layer because final sanitization never ran; the keeper profile's DRAFT overlay is on).
+
+**Three attempts to get a PDF; two engine gaps found on the way.**
+
+| # | Attempt | Result | Finding |
+|---|---|---|---|
+| 1 | dividers + compiler wrapper headings, no `chapter_opener` | LaTeX: `Undefined control sequence \CodexPlateRitualBegin` | `_section_divider_start_lines` (`engine/manifest_compiler.py:717`) emits the codex0 plate-ritual mark unconditionally, but its `\providecommand` fallback (`:878`) is only written when some source carries a `chapter_opener`. **Any non-codex0 profile with `section_dividers` and no openers fails.** A 2026-08-12 book fix regressed the generic profile set — a **P3** violation, and the sharpest **§4 / G1** boundary case in the survey: tenant macro, engine path. |
+| 2 | `chapter_opener` per source (suppresses wrapper headings; supplies the fallbacks) | LaTeX: `Undefined control sequence \st` | Two captures use `~~strikethrough~~`; pandoc lowers it to `\st{}` (`soul`). `keeper.tex`/`base.tex` carry no `$if(strikeout)$` block (pandoc's stock template does), and the manifest `variables:` allowlist has no `header-includes` ingress, so there is no manifest-side fix. Excluded both files for this proof. **Template gap for the whole document-spine family**, not a corpus defect. |
+| 3 | as 2, minus the two strikeout files | LaTeX succeeded; **final PDF withheld** by the missing-character lint (84 warnings, 13 code points, 47 files) | Roadmap item `of-render-only-emoji-assets` is the blocker for *any* Atrium-corpus book: a corpus book cannot demand corpus-clean glyphs. Either the vendored-asset registry grows (the roadmap's own design) or a manifest lint policy reports instead of refusing. Also seen: with `numbersections` on and openers unnumbered, demoted body headings count up to `0.0.63.4.2` — the sampler manifest's "desired but not honored" `numbersections: false` is still not honored. | |
+
+**Missing versus the ★ candidates.**
+
+- **A2 ★ (selection manifests)** — confirmed absent and load-bearing: 2,200 lines of YAML had to be
+  emitted by a script to say "every file in one directory, by `created`". Order fell back to the
+  filename date for 1 file and to "undated" for 1 (`FRONTIERS.md`). The `note_role` variance the
+  map predicted is real (40 distinct values across 303 files, including `keeper-capture`,
+  `capture`, and `"capture"`), which is exactly what a predicate selector has to normalise.
+- **A1 ★ (spine compiler)** — the generic compiler cannot strip a source's own `# h1` when it
+  supplies the heading itself, so every chapter opens with its title twice (opener, then the
+  demoted source h1 as `\subsubsection`). Five files open at h2 and sit one level off. The
+  `numbering_strategy: section_dividers` path was unusable for multi-source parts: it demotes only
+  the first source after a divider by one level and every other source by two
+  (`manifest_compiler.py:1502-1508`), so a file's internal heading depth would depend on its
+  position in the month.
+- **A3 ★ (epigraph harvest)** — not exercised; no capture carries `epigraph_*` fields. Nothing blocked.
+- **B1 ★ (volumes)** — One volume of that length is past any bindable extent (build 100's largest volume was 288 pages). The first real keeper-capture print needs volumes on day one, as the map predicted. Not attempted.
+- **B2 ★ (linked contents)** — the contents is flat: one `\addcontentsline{subsection}` entry per source
+  from the openers, no part entries, because a generic divider in `continuous` numbering emits no
+  TOC line. Part-level contents needs either the (broken, above) `section_dividers` numbering or B2.
+- **B3 ★ (pass orchestration)** — not needed for one volume; pandoc's own rerun handled the TOC.
+- **D1 ★ (rails)** / **D2 ★ (ornament law)** — codex0-only; no rail or ornament vocabulary reaches
+  the `keeper` profile. The review-instrument use (a rail per source or per beam) cannot be tried
+  until D1 promotes.
+- **E1 ★ (signature padding)** — not applicable to a perfect-bound proof; `_bind` twin not requested.
+- **F1 ★ (build stamp)** — absent: the PDF carries no canon head. Its evidence JSON records source
+  SHA-256s, which is the F1 raw material; the colophon line is the missing half.
+- **G1 ★** — the divider failure above *is* G1's argument: content-specific macros are still
+  reachable from the engine's generic paths.
+
+**Smaller gaps met on the way.**
+
+- `python3 -m cli validate` does not exist on this branch (README Quickstart lists it); the
+  subcommands are `doc, manifest, profiles, smoke, initial, proof, impose`.
+- README/INDEX paths still point at `~/Digital_Workspace/…`.
+- Sol font fallbacks (Helvetica/Menlo → DejaVu) apply to the keeper profile as recorded on 2026-08-25.
+- The three sub-lanes (`epistemics/`, `letters/`, `source_maps/`, 8 files) were left out; A2 needs a
+  recursion rule.
+- One capture embeds a relative `_attachments/…jpg`; `resource_roots` was pointed at the beam
+  directory — it resolved (3 images in the compile-stage PDF), so `resource_roots` already covers beam-relative art.
+
+**Suggested amendment to §5 sequencing.** Step 4 (A2) produced a PDF today without A1 moving —
+the compiler's generic path is enough for a *flat* corpus book, and the failures were template and
+macro-leak bugs, not spine-model failures. That argues for pulling **A2** ahead of **A1**: the
+selector is small, has no codex0 dependency, and its first consumer is already waiting.
