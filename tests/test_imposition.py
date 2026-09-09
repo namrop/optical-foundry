@@ -238,3 +238,16 @@ def _make_half_letter_source_pdf(tmp_path: Path, *, pages: int) -> Path:
         timeout=120,
     )
     return tex.with_suffix(".pdf")
+
+
+def test_letter_pages_impose_on_tabloid_sheet_as_folded_folio():
+    # Household paper fold form: four letter pages on one 11 x 17 duplex sheet.
+    from engine.imposition import _validate_sheet_pair
+    from engine.page_size import normalize_page_size
+
+    assert normalize_page_size("11x17") == "tabloid"
+    assert normalize_page_size("ledger") == "tabloid"
+    _validate_sheet_pair("letter", "tabloid")
+    plan = build_booklet_signature_plan(total_pages=4, signature_size=4)
+    sheet = plan.signatures[0].sheets[0]
+    assert [side.pages for side in sheet.sides] == [[4, 1], [2, 3]]

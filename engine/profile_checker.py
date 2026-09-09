@@ -116,7 +116,7 @@ TIGHTLIST_PROFILES = {
     "convergence", "keeper", "life",
     "yugen-brand", "yugen-brand-elevated", "prometheus-packet",
     "elian-packet", "resume", "labels-avery-5164", "labels-avery-15264",
-    "sticker-sheet",
+    "sticker-sheet", "household-paper",
 }
 
 # Profiles whose effective template defines \longtable.
@@ -150,6 +150,10 @@ BUNDLE_PARTIAL: dict[str, list[str]] = {
         "No TOC guard — --toc flag has no effect",
         "Missing longtable support",
         "Resume document class, not bundle-compatible",
+    ],
+    "household-paper": [
+        "Periodical page-class grammar (hp-page divs) — renders one issue, not a content bundle",
+        "No TOC guard; tables lower to tabularx inside columns, not longtable",
     ],
 }
 

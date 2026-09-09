@@ -25,6 +25,8 @@ PAGE_SIZE_INCHES: dict[str, tuple[float, float]] = {
     "half_letter": (5.5, 8.5),
     "a4": (8.27, 11.69),
     "a5": (5.83, 8.27),
+    # sheet only in practice: two letter pages side by side on a landscape 11 x 17
+    "tabloid": (11.0, 17.0),
 }
 DUPLEX_ALIASES = {
     "short_edge": "short_edge",

@@ -78,6 +78,14 @@ per-profile template). This is the biggest family.
 | `life` | `base.tex` | life & logistics documents. |
 | `prometheus-packet` | `generic_report.tex` | Prometheus packet (⚠ shares the generic template — partial). |
 
+### `periodical` — issues of a recurring printed paper
+
+| Profile | Template | Use it for |
+|---|---|---|
+| **`household-paper`** (`household_paper`, `household-newspaper`) | `household_paper.tex` + `filters/household_paper.lua` | **the household newspaper** (descriptive handle; the masthead is unminted and renders as a labelled slot). Letter pages, one grid for both bindings (head-bound pad now, folded 11 × 17 later), three columns at 10.5/12.5 with two at 11/13.5 on the feature and private classes, greyscale-only output (xcolor `gray`, no hyperref → DeviceGray, prints in black-ink-only mode). Five page classes lowered from fenced divs: `front`, `section`, `feature`, `flex`. Fonts are vendored (XCharter, Playfair Display, Chivo, Old Standard). Per-issue variables (`hp_issue_line`, `hp_issue_date_long`, `hp_issue_id`, …) are raw LaTeX: plain text, no `%`. Sample: `fixtures/sources/household_paper_sample_issue.md`. |
+
+> ⚠ `household-paper` renders one issue, not a bundle (`partial`): tables inside columns lower to `tabularx`, not longtable, and there is no TOC.
+
 ### `resume` — CVs
 
 | Profile | Template | Use it for |

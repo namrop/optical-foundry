@@ -68,6 +68,8 @@ ALIASES: dict[str, str] = {
     "codex_0": "codex0",
     "codex-0": "codex0",
     "prometheus_packet": "prometheus-packet",
+    "household_paper": "household-paper",
+    "household-newspaper": "household-paper",
 }
 
 # Explicit current mapping. Later this can be data-driven from profile YAML.
@@ -150,6 +152,13 @@ PROFILE_SPECS: dict[str, dict[str, Any]] = {
     },
     "yugen-brand": {"family": "document_spine", "defaults": ["document_spine.yaml", "yugenbase.yaml"], "template": "generic_report.tex"},
     "yugen-brand-elevated": {"family": "document_spine", "defaults": ["document_spine.yaml", "yugenbase.yaml"], "template": "generic_report.tex"},
+    # Household newspaper (descriptive handle; masthead unminted). Letter pages,
+    # page-class grammar lowered by filters/household_paper.lua, greyscale only.
+    "household-paper": {
+        "family": "periodical",
+        "defaults": ["household_paper.yaml"],
+        "template": "household_paper.tex",
+    },
 }
 
 

@@ -319,7 +319,7 @@ def test_markdown_document_validate_rejects_unsupported_page_size():
 
     errors = compiler.validate(manifest)
 
-    assert "render.page_size must be one of: a4, a5, half_letter, letter" in errors
+    assert "render.page_size must be one of: a4, a5, half_letter, letter, tabloid" in errors
 
 
 def test_markdown_document_validate_rejects_conflicting_source_matter_aliases():

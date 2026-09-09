@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Any
 
 
-SUPPORTED_PAGE_SIZES = ("a4", "a5", "half_letter", "letter")
+SUPPORTED_PAGE_SIZES = ("a4", "a5", "half_letter", "letter", "tabloid")
 
 _PAGE_SIZE_ALIASES = {
     "letter": "letter",
@@ -27,6 +27,12 @@ _PAGE_SIZE_ALIASES = {
     "statement": "half_letter",
     "statementpaper": "half_letter",
     "halfletterpaper": "half_letter",
+    # 11 x 17 sheet: the household paper's folded spread (two letter pages per
+    # side); auto-duplex ceiling on desk machines (WF-7840).
+    "tabloid": "tabloid",
+    "ledger": "tabloid",
+    "11x17": "tabloid",
+    "tabloidpaper": "tabloid",
 }
 
 _PAGE_SIZE_GEOMETRY = {
@@ -34,6 +40,7 @@ _PAGE_SIZE_GEOMETRY = {
     "a4": ["a4paper"],
     "a5": ["a5paper"],
     "half_letter": ["paperwidth=5.5in", "paperheight=8.5in"],
+    "tabloid": ["paperwidth=11in", "paperheight=17in"],
 }
 
 _PAGE_SIZE_CLASSOPTION = {
