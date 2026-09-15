@@ -116,7 +116,7 @@ TIGHTLIST_PROFILES = {
     "convergence", "keeper", "life",
     "yugen-brand", "yugen-brand-elevated", "prometheus-packet",
     "elian-packet", "resume", "labels-avery-5164", "labels-avery-15264",
-    "sticker-sheet", "household-paper",
+    "sticker-sheet", "household-paper", "daily-review",
 }
 
 # Profiles whose effective template defines \longtable.
@@ -154,6 +154,11 @@ BUNDLE_PARTIAL: dict[str, list[str]] = {
     "household-paper": [
         "Periodical page-class grammar (hp-page divs) — renders one issue, not a content bundle",
         "No TOC guard; tables lower to tabularx inside columns, not longtable",
+    ],
+    "daily-review": [
+        "Form page grammar (dr-page divs) — one printed sheet side per page, selected by source/manifest metadata",
+        "No TOC guard; no longtable — writing fields and fixed-height chart/tracker rows, not flowed prose",
+        "Renders a blank form to write on, not assembled document content",
     ],
 }
 
