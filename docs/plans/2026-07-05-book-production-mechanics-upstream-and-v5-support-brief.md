@@ -21,7 +21,7 @@ tags:
   - parindent
 recipient_ready: false
 print_ready: false
-proposal_ready: false
+publication_ready: false
 ---
 
 # Session Brief — Book-Production Mechanics Upstream + v5 Support
