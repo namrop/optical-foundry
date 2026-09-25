@@ -5,7 +5,7 @@ note_role: architecture_note
 validation_profile: standard
 status: active
 created: 2026-09-25T01:19:57-04:00
-updated: 2026-09-25T01:40:23-04:00
+updated: 2026-09-25T01:51:59-04:00
 beam_home: 42_optical_foundry
 title: "Optical Foundry — byline replaces author and authors"
 tags:
@@ -14,7 +14,7 @@ tags:
   - frontmatter
   - pandoc
   - luis-ruled
-summary: "Records Luis's 2026-09-25 direction that Optical Foundry will use `byline` across the board for the credited name it prints, instead of `author` or `authors`. In Atrium frontmatter, `author` is the originating-writer block (standard §8.4) and now also carries a `principal` entry, so it cannot double as the printed name. Inventories every place Optical Foundry reads `author` or `authors` today. No code, template, schema or manifest has been changed yet."
+summary: "Records Luis's 2026-09-25 direction that Optical Foundry will use `byline` across the board for the credited name it prints, instead of `author` or `authors`. In Atrium frontmatter, `author` is the originating-writer block (standard §8.4), so it cannot double as the printed name. Inventories every place Optical Foundry reads `author` or `authors` today. No code, template, schema or manifest has been changed yet."
 trigger:
   initiative: luis_direct
   ratification: ratified
@@ -27,7 +27,6 @@ author:
   provider: custom:primary
   voyage: discord:thread:1552371356912455721
   persona: lux-prime
-  principal: luis
   at: 2026-09-25T01:19:57-04:00
 last_touched:
   name: Lux
@@ -36,8 +35,7 @@ last_touched:
   provider: custom:primary
   voyage: discord:thread:1552371356912455721
   persona: lux-prime
-  principal: luis
-  at: 2026-09-25T01:40:23-04:00
+  at: 2026-09-25T01:51:59-04:00
 ruling_refs:
   - uid: 01a0d6fe-8d89-7ba1-a04f-df29dcf55b11
     relation: authorizing-ruling
@@ -45,6 +43,8 @@ ruling_refs:
     relation: follow-up-ruling
   - uid: 01a0d713-6c98-7ddf-9c4b-b10c60d1f210
     relation: principal-form-correction
+  - uid: 01a0d71e-4391-7b57-a2c4-aa3d93d65416
+    relation: principal-top-level
 related_refs:
   - uid: 01a08dc5-be69-7f9d-b75b-6c3e0ae524f6
     path: 20_digital_architecture/specs/atrium_frontmatter/atrium_frontmatter_standard_v2_9.md
@@ -58,17 +58,18 @@ related_refs:
     path: 20_digital_architecture/atrium_service/author_snapshot_and_writer_history_design_2026-09-07.md
     kind: note
     relation: writer-block-design
+principal: luis
 ---
 
 # Optical Foundry — byline replaces author and authors
 
 ## Pith
 
-Optical Foundry will print a document's credited name from a field called `byline`, everywhere it now reads `author` or `authors`, because in Atrium frontmatter `author` records which writer produced a file and on whose behalf.
+Optical Foundry will print a document's credited name from a field called `byline`, everywhere it now reads `author` or `authors`, because in Atrium frontmatter `author` records which writer produced a file.
 
 ## Abstract
 
-On 2026-09-25 Luis named the printed-name field `byline`, approved a `principal` entry inside the frontmatter `author` block, and asked for this note: Optical Foundry will need to use `byline` across the board instead of `author` or `authors`. Today the renderer passes frontmatter `author` to pandoc as the byline, and most of the imported LaTeX templates print pandoc's `author` variable. The frontmatter standard's `author` is a structured writer block, so the two meanings collide. This note records the direction and lists the code, templates, schemas and manifests that read `author` or `authors`. None of them has been changed yet.
+On 2026-09-25 Luis named the printed-name field `byline` and asked for this note: Optical Foundry will need to use `byline` across the board instead of `author` or `authors`. Today the renderer passes frontmatter `author` to pandoc as the byline, and most of the imported LaTeX templates print pandoc's `author` variable. The frontmatter standard's `author` is a structured writer block, so the two meanings collide. This note records the direction and lists the code, templates, schemas and manifests that read `author` or `authors`. None of them has been changed yet.
 
 ## Keeper direction
 
@@ -82,7 +83,7 @@ The ruling is recorded in the frontmatter lane's ledger, `20_digital_architectur
 
 ## Why `author` cannot stay the printed name
 
-- In the frontmatter standard (§§8.4–8.5), `author` is a block recording the originating writer: name, harness, model, provider, voyage and time, and now the principal the write was done for. `last_touched` has the same shape for the latest writer.
+- In the frontmatter standard (§§8.4–8.5), `author` is a block recording the originating writer: name, harness, model, provider, voyage and time. `last_touched` has the same shape for the latest writer.
 - Optical Foundry's single-document path reads frontmatter `author` and hands it to pandoc as `--metadata author=…`. A writer block there would be printed as the byline. This comes from reading the code; no test render was made for this note.
 - Plain-text `author` values in canon mix printed names, writer names and both (for example `Luis E. Ramirez`, `Lux`, `Luis Ramirez / Lux drafting pass`), so even where the field is plain text it is not reliably a byline.
 
@@ -107,5 +108,5 @@ Codex bundle manifests also put `author:` on epigraph and quotation entries (for
 ## Status
 
 - Optical Foundry code, templates, schemas and manifests are unchanged.
-- The frontmatter standard does not yet define `byline` or the `principal` entry.
-- The `principal` entry has not been stamped across existing files. On that, Luis said: "We can stamp them all at once no problem." The principal is written as the bare id, `principal: luis` (ruling `01a0d713-6c98-7ddf-9c4b-b10c60d1f210`, which replaced the `principal:luis` form approved minutes earlier). He asked for a dry run first, with the stamp itself run during an idle window (ruling `01a0d707-948f-792d-8bcc-a552664edb53`).
+- The frontmatter standard does not yet define `byline` or the top-level `principal` field.
+- Whose a file is lives in a separate top-level field, written as the bare id (`principal: luis`), not in `author` (rulings `01a0d713-6c98-7ddf-9c4b-b10c60d1f210` and `01a0d71e-4391-7b57-a2c4-aa3d93d65416`). It has not yet been stamped across existing files: Luis approved one pass, dry-run first, run in an idle window (ruling `01a0d707-948f-792d-8bcc-a552664edb53`).
