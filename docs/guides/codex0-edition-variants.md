@@ -16,6 +16,7 @@ tags:
   - register-rails
   - pandoc
   - preprocessing
+principal: luis
 ---
 
 # Codex 0 edition variants

@@ -15,6 +15,7 @@ tags:
   - imposition
   - bindery-preflight
 validation_profile: standard
+principal: luis
 ---
 
 # Optical Foundry — Bound Delivery Status

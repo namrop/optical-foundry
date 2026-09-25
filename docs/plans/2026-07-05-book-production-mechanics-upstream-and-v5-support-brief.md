@@ -22,6 +22,7 @@ tags:
 recipient_ready: false
 print_ready: false
 publication_ready: false
+principal: luis
 ---
 
 # Session Brief — Book-Production Mechanics Upstream + v5 Support

@@ -15,6 +15,7 @@ tags:
   - illuminated-initials
   - imposition
   - manifest-boundary
+principal: luis
 ---
 
 # Optical Foundry — Manuscript Rendering Support Boundaries

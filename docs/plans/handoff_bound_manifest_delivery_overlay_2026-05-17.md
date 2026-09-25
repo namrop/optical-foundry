@@ -16,6 +16,7 @@ tags:
   - delivery-mode
   - illumination
   - handoff
+principal: luis
 ---
 
 # Handoff — Bound Manifest Delivery Overlay

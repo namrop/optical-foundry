@@ -29,6 +29,7 @@ related:
   - path: 21_letters_and_creative/book/codex0_v5/handoffs/codex0_v6_recovered_full_page_plate_payloads_and_intended_seats_2026-08-02.md
     kind: note
     relation: migration_payload
+principal: luis
 ---
 
 # Manifest Resource Roots and Work-Owned Asset Extraction

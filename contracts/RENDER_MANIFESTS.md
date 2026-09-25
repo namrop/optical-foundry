@@ -14,6 +14,7 @@ tags:
   - render-manifest
   - architecture
   - contract
+principal: luis
 ---
 
 # Optical Foundry — Render Manifest Contract

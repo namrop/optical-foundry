@@ -16,6 +16,7 @@ tags:
   - oasis
   - pdf-fidelity
   - delta
+principal: luis
 ---
 
 # Hermes/Oasis Sampler Manifest Fidelity Delta

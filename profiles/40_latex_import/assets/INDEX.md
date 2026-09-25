@@ -7,6 +7,7 @@ validation_profile: minimal
 summary: "Asset lane for images, logos, and supporting media used by the LaTeX/Pandoc pipeline."
 status: active
 updated: 2026-03-18
+principal: luis
 ---
 
 # assets — Index

@@ -17,6 +17,7 @@ tags:
   - ratification-open
   - proof-render
 summary: "Post-delivery survey answering open question 7 of the 2026-07-27 architecture direction: which capabilities filter up out of codex0, and what the promotion test is. Adds a second driver the direction doc did not have — arbitrary-Atrium-corpus books (keeper captures, convergence logs) as a review instrument, not only a print target. 25 candidates in seven bands, each with its current home, its generalization, a non-codex0 use case, and blast radius. Also records the custody audit of the delivered copy: everything that made the book is committed, and almost none of it is pushed. Ratification ledger open — no candidate is ruled. §7 (2026-09-01) records the first keeper-capture proof render: compiled, final PDF withheld by the glyph lint, two engine gaps found."
+principal: luis
 ---
 
 # Codex 0 → Optical Foundry — capability promotion map

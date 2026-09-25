@@ -17,6 +17,7 @@ tags:
   - direction
   - luis-ruled
 summary: "Luis-ruled architecture direction (2026-07-27) ahead of a dedicated design session: profiles decouple from runtime so the engine can be released publicly with profiles as configuration; content (images/assets) decouples from profiles because it is data, not engine; and nothing in the existing profile set may regress. Establishes that 'book' is the largest format the Foundry supports, not the frame to design around. Finds that the first and third principles are already stated in DESIGN.md and have drifted, while asset location was never modeled at all — the root cause of 194MB of Codex 0 plates living inside the profile tree. Also records the standing goal of filtering cross-domain work up out of the codex0 profile (which is the reference implementation, not the outlier — the other profiles are legacy), with the client classification model named as the strongest generalization candidate, and the far-roadmap web-app target as a constraint on the renderer seam. Direction and evidence only; the design belongs to the session."
+principal: luis
 ---
 
 # Architecture Direction — profiles, content, and runtime separation

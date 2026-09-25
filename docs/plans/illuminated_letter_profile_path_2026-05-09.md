@@ -16,6 +16,7 @@ tags:
   - illuminated-profile
   - stationery-plus
   - codex-0
+principal: luis
 ---
 
 # Illuminated Letter Profile Path
