@@ -5,7 +5,7 @@ note_role: architecture_note
 validation_profile: standard
 status: active
 created: 2026-09-28T16:50:00-04:00
-updated: 2026-09-28T16:50:00-04:00
+updated: 2026-09-28T18:39:00-04:00
 beam_home: 42_optical_foundry
 title: "Codex 0 build performance — measurements and the ruled plan"
 tags:
@@ -29,7 +29,7 @@ last_touched:
   model: claude-opus-5-5
   provider: anthropic
   voyage: "claude-code:session:96cb72ec-b737-4efa-bd76-d5e173d514bf"
-  at: 2026-09-28T16:50:00-04:00
+  at: 2026-09-28T18:39:00-04:00
 ruling_refs:
   - uid: 01a0e9c7-c01e-7d0a-bcc0-4793b00abce0
     relation: authorizing-ruling
@@ -87,7 +87,7 @@ Post-processing on every render: divider-marker sanitizing (a PDF rewrite), `pdf
 
 Ruling `01a0e9c7-c01e-7d0a-bcc0-4793b00abce0` (`RULINGS.md`): "agreed. lets do your recommendation". The recommendation, in order:
 
-**Step 1 — no output change, after the refactor lands.**
+**Step 1 — no output change, after the refactor lands.** *Done 2026-09-28 (§4).*
 
 1. Render Volume I and Volume II in parallel in C2 and G2. They are independent. About 6 minutes saved.
 2. A measure mode for `cli manifest` that skips the safe-area overlay and bindery preflight on intermediate renders. About a minute saved on each of five renders.
@@ -106,3 +106,22 @@ Also noted, not yet ordered: skip re-rendering a volume whose inputs are unchang
 ## 3. Verification
 
 Every step is checked the way the 2026-09-28 refactor was: the regression lane (the build with STEP 0 skipped, so no build number is claimed and no colophon is restamped) renders from the candidate Foundry, and the result is compared with the previous run by contact sheet per volume (reading and bind PDFs), page counts, bundle manifests and resolved sources. Steps 1 and 2 must produce identical contact sheets. Step 3 is judged by the keeper against the sheets and a print sample.
+
+## 4. Step 1 — done, 2026-09-28
+
+Foundry `cli manifest --measure` (commit "build performance step 1") and the book's
+`run_full_build.sh`: passes A2, B2, C2 and D1a render in measure mode; C2 and G2 render Volumes I
+and II in parallel. D1b (Volume III) and G2 (Volumes I and II) are the only full renders, so the
+shipped artifacts still carry their bindery preflight and safe-area overlay.
+
+| Run | Foundry | Wall clock |
+|---|---|---|
+| `of-refactor-candidate-f424794-2026-09-28` (before step 1) | `f424794` | about 49 min (17:03–17:52) |
+| `of-perf-step1-9184675-2026-09-28` | step-1 branch | **42.4 min** (2,545 s) |
+
+About 7–8 minutes saved, 15%, as estimated. Verification: every gate passed with the same
+shapes (224 / 288 / 128), and contact sheets for all three volumes, reading and bind, plus bundle
+manifests and resolved sources, are identical to the pre-step-1 run.
+
+What remains is the render count itself: eight full LaTeX compiles, each re-encoding every alpha
+image. That is step 2 (B3) and step 3.
