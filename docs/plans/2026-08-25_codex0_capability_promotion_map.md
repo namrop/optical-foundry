@@ -5,7 +5,7 @@ note_role: architecture_note
 validation_profile: standard
 status: draft
 created: 2026-08-25T12:05:00-04:00
-updated: 2026-09-28T18:01:00-04:00
+updated: 2026-09-28T19:17:00-04:00
 beam_home: 42_optical_foundry
 title: "Codex 0 → Optical Foundry — capability promotion map (post-delivery)"
 tags:
@@ -31,7 +31,7 @@ last_touched:
   model: claude-opus-5-5
   provider: anthropic
   voyage: "claude-code:session:96cb72ec-b737-4efa-bd76-d5e173d514bf"
-  at: 2026-09-28T18:01:00-04:00
+  at: 2026-09-28T19:17:00-04:00
 ---
 
 # Codex 0 → Optical Foundry — capability promotion map
@@ -281,7 +281,7 @@ For each candidate, Luis rules one of:
 |---|---|---|
 | Custody | C-A, C-B, C-C, C-D | all four ruled and done (2026-09-01/02) |
 | A — composition | A1★ A2★ A3★ A4 A5 | A3 PROMOTE, done (2026-09-28); rest — |
-| B — multi-volume | B1★ B2★ B3★ B4 | B3 PROMOTE (2026-09-28, as the build-performance step 2; `2026-09-28_codex0_build_performance_plan.md`); rest — |
+| B — multi-volume | B1★ B2★ B3★ B4 | B3 PROMOTE (2026-09-28): assertion half done — draft renders + `renders-agree` in the engine; the pass order stays in the book (one consumer = contract, not code). `2026-09-28_codex0_build_performance_plan.md` §5; rest — |
 | C — edition gating | C1 C2 | — |
 | D — furniture | D1★ D2★ D3 D4 D5 | — |
 | E — physical | E1★ E2 E3 E4 | E1 PROMOTE, done (2026-09-28); rest — |

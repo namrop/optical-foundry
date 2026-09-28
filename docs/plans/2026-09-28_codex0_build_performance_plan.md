@@ -5,7 +5,7 @@ note_role: architecture_note
 validation_profile: standard
 status: active
 created: 2026-09-28T16:50:00-04:00
-updated: 2026-09-28T18:39:00-04:00
+updated: 2026-09-28T19:17:00-04:00
 beam_home: 42_optical_foundry
 title: "Codex 0 build performance — measurements and the ruled plan"
 tags:
@@ -29,7 +29,7 @@ last_touched:
   model: claude-opus-5-5
   provider: anthropic
   voyage: "claude-code:session:96cb72ec-b737-4efa-bd76-d5e173d514bf"
-  at: 2026-09-28T18:39:00-04:00
+  at: 2026-09-28T19:17:00-04:00
 ruling_refs:
   - uid: 01a0e9c7-c01e-7d0a-bcc0-4793b00abce0
     relation: authorizing-ruling
@@ -92,10 +92,10 @@ Ruling `01a0e9c7-c01e-7d0a-bcc0-4793b00abce0` (`RULINGS.md`): "agreed. lets do y
 1. Render Volume I and Volume II in parallel in C2 and G2. They are independent. About 6 minutes saved.
 2. A measure mode for `cli manifest` that skips the safe-area overlay and bindery preflight on intermediate renders. About a minute saved on each of five renders.
 
-**Step 2 — the B3 promotion (pass orchestration).**
+**Step 2 — the B3 promotion (pass orchestration).** *Done 2026-09-28 (§5).*
 
 3. Draft mode for the passes that only need page labels. Graphicx `draft` keeps every image's box dimensions, so pagination is unchanged and no image data is processed. The existing gates (C3, D1c, G3) become the proof: the final render's labels must equal the draft's, or the build stops.
-4. Restructure the passes: draft Volume I, draft Volume II seated, draft Volume III, emit every final bundle with every locator known, then render all three final volumes at once. One full-render wave instead of eight. Estimate: about 50 minutes to about 10–12. The roman-frontmatter invariant the script already relies on (a Contents row cannot move an arabic body folio) is what makes this sound, and it stays asserted rather than assumed. This belongs in the engine as a pass planner, which is candidate B3 on the promotion map.
+4. Restructure the passes: draft Volume I, draft Volume II seated, draft Volume III, emit every final bundle with every locator known, then render all three final volumes at once. One full-render wave instead of eight. Estimate: about 50 minutes to about 10–12. The roman-frontmatter invariant the script already relies on (a Contents row cannot move an arabic body folio) is what makes this sound, and it stays asserted rather than assumed. This is candidate B3 on the promotion map. *As built (§5), the engine carries B3's assertion half — draft renders and the draft-versus-final gate — and the pass order stays in the book's build script: by the promotion map's own test a pass planner with one consumer is a contract, not yet code. It moves when the corpus book needs multiple passes.*
 
 **Step 3 — images.**
 
@@ -125,3 +125,51 @@ manifests and resolved sources, are identical to the pre-step-1 run.
 
 What remains is the render count itself: eight full LaTeX compiles, each re-encoding every alpha
 image. That is step 2 (B3) and step 3.
+
+## 5. Step 2 — done, 2026-09-28
+
+Engine (Foundry commit "build performance step 2"): `cli manifest --draft` (implies `--measure`;
+pandoc `--include-in-header` with `\setkeys{Gin}{draft=true}`; evidence `render_mode: draft`) and
+`cli renders-agree <reference> <candidate>` (`engine/pass_gates.py`: page count, the label of every
+page, the outline by level, title, page and destination height; exit 66 naming the first
+difference).
+
+Proved before wiring, each volume's draft against its full render from the step-1 run: identical
+page count, every page label, every page's text (the draft's own image-box labels aside) and the
+outline.
+
+| Volume | Full compile | Draft compile |
+|---|---|---|
+| I | 129 s | 26.7 s |
+| II | 149 s | 27.1 s |
+| III | 322 s | 14.3 s |
+
+Book (`run_full_build.sh`): every render before the final wave is a draft into
+`vol{1,2,3}_draft/`; PASS W renders the three final bundles full and in parallel into
+`vol{1,2,3}/`; the new PASS H proves each final against the draft of the same bundle with
+`renders-agree`; D1d (the Volume III parity law) moved onto the final; C3, D1c and G3 still gate
+the drafts; PASS F reads only the finals' resolved sources. Every `say` line carries a timestamp and
+the build prints its total.
+
+Measured, run `of-perf-step2-cab52d1-2026-09-28`, **827 s (13.8 min)**:
+
+| Pass | Seconds | | Pass | Seconds |
+|---|---|---|---|---|
+| A1 emit | <1 | | D1b emit + draft III | 17 |
+| A2 draft I | 63 | | G1 emit | 3 |
+| B1 emit | <1 | | G2 draft I + II (parallel) | 36 |
+| B2 draft II | 64 | | **W final I, II, III (parallel)** | **413** |
+| C1 emit | 3 | | H renders-agree ×3 | 2 |
+| C2 draft I + II (parallel) | 34 | | D1d parity | <1 |
+| D1 emit | 3 | | **D2 plate containment** | **167** |
+| D1a draft III | 15 | | E bind shapes | 4 |
+
+Verification: every gate passed with the same shapes (224 / 288 / 128), PASS H reported the same
+shape for all three volumes, and contact sheets for all three volumes, reading and bind, plus bundle
+manifests and resolved sources, are identical to the step-1 run.
+
+**Where the time is now.** The final wave (Volume III's full render sets it, slower in parallel than
+alone) and plate containment are 70% of the build. The wave is step 3's target — every image
+re-encoded on every LaTeX run. Plate containment (`tooling/check_plate_containment.py`, three
+volumes in sequence) is new on the floor list; it reads the finals, so it can at least run its three
+volumes in parallel, or during the wave's tail. Not ordered yet.
