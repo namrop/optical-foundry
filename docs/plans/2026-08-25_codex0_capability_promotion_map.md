@@ -5,7 +5,7 @@ note_role: architecture_note
 validation_profile: standard
 status: draft
 created: 2026-08-25T12:05:00-04:00
-updated: 2026-09-02T00:09:00-04:00
+updated: 2026-09-28T18:01:00-04:00
 beam_home: 42_optical_foundry
 title: "Codex 0 → Optical Foundry — capability promotion map (post-delivery)"
 tags:
@@ -14,15 +14,38 @@ tags:
   - promotion
   - architecture
   - decision-survey
-  - ratification-open
+  - ratification-partial
   - proof-render
-summary: "Post-delivery survey answering open question 7 of the 2026-07-27 architecture direction: which capabilities filter up out of codex0, and what the promotion test is. Adds a second driver the direction doc did not have — arbitrary-Atrium-corpus books (keeper captures, convergence logs) as a review instrument, not only a print target. 25 candidates in seven bands, each with its current home, its generalization, a non-codex0 use case, and blast radius. Also records the custody audit of the delivered copy: everything that made the book is committed, and almost none of it is pushed. Ratification ledger open — no candidate is ruled. §7 (2026-09-01) records the first keeper-capture proof render: compiled, final PDF withheld by the glyph lint, two engine gaps found."
+summary: "Post-delivery survey answering open question 7 of the 2026-07-27 architecture direction: which capabilities filter up out of codex0, and what the promotion test is. Adds a second driver the direction doc did not have — arbitrary-Atrium-corpus books (keeper captures, convergence logs) as a review instrument, not only a print target. 25 candidates in seven bands, each with its current home, its generalization, a non-codex0 use case, and blast radius. Also records the custody audit of the delivered copy: everything that made the book is committed, and almost none of it is pushed. Ratification partial: G1, A3, F1 and E1 were ruled PROMOTE on 2026-09-28 and done the same day (§8); the rest are unruled. §7 (2026-09-01) records the first keeper-capture proof render: compiled, final PDF withheld by the glyph lint, two engine gaps found."
 principal: luis
+ruling_refs:
+  - uid: 01a0e9ab-077c-7836-b986-8cb968ad2155
+    relation: authorizing-ruling
+  - uid: 01a0e9c7-c01e-7d0a-bcc0-4793b00abce0
+    relation: b3-promotion
+  - uid: 01a0ea08-7757-7f0f-9176-4316debc18d6
+    relation: part01-plate-intended
+last_touched:
+  name: Claude Opus 5.5
+  harness: claude_code
+  model: claude-opus-5-5
+  provider: anthropic
+  voyage: "claude-code:session:96cb72ec-b737-4efa-bd76-d5e173d514bf"
+  at: 2026-09-28T18:01:00-04:00
 ---
 
 # Codex 0 → Optical Foundry — capability promotion map
 
-**Status: survey, open for ratification. Nothing here is ruled.**
+## Pith
+
+Which Codex 0 capabilities move up into Optical Foundry, by what test, in what order, and which have moved.
+
+## Abstract
+
+This survey answers the 2026-07-27 direction note's question 7: which capabilities filter up out of the Codex 0 book into the engine, and what test a capability has to pass to move. It adds a second driver beside print, the corpus book used as a review instrument, and lists 25 candidates in seven bands with their current home, generalization, second consumer and blast radius. It also records the custody audit of the delivered copy and the first keeper-capture proof render. The keeper ruled the sequencing for its first two steps on 2026-09-28: the Foundry and canon were tagged at the Codex 0-compatible state, and G1, A3, F1 and E1 were promoted the same day; every other candidate is still unruled.
+
+**Status: survey, partly ratified.** G1, A3, F1, E1 ruled PROMOTE and done 2026-09-28 (§8,
+ruling `01a0e9ab-077c-7836-b986-8cb968ad2155` in `RULINGS.md`). Everything else is unruled.
 
 Companion / parent: `2026-07-27_architecture_direction_profiles_content_runtime_separation.md`.
 This document answers that one's **open question 7** — *"Which capabilities filter up out of
@@ -128,7 +151,7 @@ The band that makes "compose a book out of arbitrary Atrium files" possible at a
 
 - [ ] **A2 ★ — Selection manifests (query-driven source sets). NEW, not a promotion.** *Now:* does not exist. Codex 0's spine is 682 lines of hand-authored YAML naming every file. *Wanted:* select sources by predicate — beam + `note_role` + tag + date range + status — and order them (chronological by `created`, by beam, by uid, by explicit override), emitting a spine A1 then compiles. *Second consumer:* this **is** the keeper-capture book; there is no other way to build it. *Note:* this is the one candidate that is genuinely new construction rather than relocation, and it is the gate on the whole new-use-case.
 
-- [ ] **A3 ★ — Frontmatter-driven epigraph harvest + layered attribution grammar.** *Now:* split — harvest in `spine_to_bundle_manifest.py::_read_divider_epigraph`, lowering in `engine/manifest_compiler.py` (`_inline_chapter_opener_epigraph_lines`), typography in `codex0.tex` (`\CodexOpenerEpigraph`, ratified 2026-07-28), with a generic `\OFChapterOpenerEpigraph` fallback already present. *Generalization:* any Atrium file may carry `epigraph_*` fields; the engine harvests them; the profile decides how they set. The layered model — dramatic line (speaker/context) over bibliographic line (author/source/translator/date), with `epigraph_register` inverting upright/italic — is already general, and its hardest-won rule (**`epigraph_date` means when the work was authored, which is why the translator slot exists**) is a corpus rule, not a book rule. *Blast radius:* low; the fallback macro already exists. **Closest to ready of anything in this survey.**
+- [x] **A3 ★ — Frontmatter-driven epigraph harvest + layered attribution grammar.** *Now:* split — harvest in `spine_to_bundle_manifest.py::_read_divider_epigraph`, lowering in `engine/manifest_compiler.py` (`_inline_chapter_opener_epigraph_lines`), typography in `codex0.tex` (`\CodexOpenerEpigraph`, ratified 2026-07-28), with a generic `\OFChapterOpenerEpigraph` fallback already present. *Generalization:* any Atrium file may carry `epigraph_*` fields; the engine harvests them; the profile decides how they set. The layered model — dramatic line (speaker/context) over bibliographic line (author/source/translator/date), with `epigraph_register` inverting upright/italic — is already general, and its hardest-won rule (**`epigraph_date` means when the work was authored, which is why the translator slot exists**) is a corpus rule, not a book rule. *Blast radius:* low; the fallback macro already exists. **Closest to ready of anything in this survey.** *PROMOTE, ruled 2026-09-28 (`RULINGS.md` 01a0e9ab-077c); done the same day — §8.*
 
 - [ ] **A4 ○ — Deterministic source UIDs and provenance comment.** `_source_uid`, `_provenance_comment`. Stable identity for a composed source, derived from its position; the manifest carries a comment naming spine, edition, parts, delivery mode. Generic. *Second consumer:* every composed document.
 
@@ -164,7 +187,7 @@ The band that makes "compose a book out of arbitrary Atrium files" possible at a
 
 ### Band E — Physical object
 
-- [ ] **E1 ★ — Signature padding to bind shape.** *Now:* `run_full_build.sh` PASS E. *Generalization:* pad a rendered PDF to a whole signature, emit a `_bind.pdf` beside the reading artifact, and hard-error on an **odd** rendered page count (a final leaf with no verso cannot be folded — do not let the pad absorb it). *Also generic:* pad leaves carry the ruled blank-leaf mark, because a bound-in blank with a mark reads as deliberate at collation and a bare blank reads as a printing error. The *choice* of mark is tenant data; the rule is not.
+- [x] **E1 ★ — Signature padding to bind shape.** *Now:* `run_full_build.sh` PASS E. *Generalization:* pad a rendered PDF to a whole signature, emit a `_bind.pdf` beside the reading artifact, and hard-error on an **odd** rendered page count (a final leaf with no verso cannot be folded — do not let the pad absorb it). *Also generic:* pad leaves carry the ruled blank-leaf mark, because a bound-in blank with a mark reads as deliberate at collation and a bare blank reads as a printing error. The *choice* of mark is tenant data; the rule is not. *PROMOTE, ruled 2026-09-28 (`RULINGS.md` 01a0e9ab-077c); done the same day — §8.*
 
 - [ ] **E2 ○ — Fold the codex0-learned gates into `bindery_preflight.py` / `imposition.py`.** Both already live in `engine/`. The book taught them creep, trim, duplex parity and collation lessons that are still expressed as book-side scripts (`build_punching_guide.py`, `build_press_sheet_map.py`, `check_vol3_folio_run.py`).
 
@@ -174,13 +197,13 @@ The band that makes "compose a book out of arbitrary Atrium files" possible at a
 
 ### Band F — Build identity and provenance
 
-- [ ] **F1 ★ — Build stamping and the build ledger.** *Now:* `build/stamp_colophon.py` (532 lines) + `build_ledger.yaml`. *Generalization:* a bound artifact claims a build number, stamps a git head into its colophon sources once, and **`--final` refuses a dirty tree by design** while a proof reports `-dirty` loudly rather than refusing. *And the gate that exists for exactly one failure mode:* PASS F / **CC14** — every volume of one build must carry a byte-identical stamp, because build 84 rendered body text from one tree state and apparatus from another and looked healthy. *Second consumer:* a keeper-capture book printed for review is worthless without knowing which tree state it shows. **High value, low blast radius, small code.**
+- [x] **F1 ★ — Build stamping and the build ledger.** *Now:* `build/stamp_colophon.py` (532 lines) + `build_ledger.yaml`. *Generalization:* a bound artifact claims a build number, stamps a git head into its colophon sources once, and **`--final` refuses a dirty tree by design** while a proof reports `-dirty` loudly rather than refusing. *And the gate that exists for exactly one failure mode:* PASS F / **CC14** — every volume of one build must carry a byte-identical stamp, because build 84 rendered body text from one tree state and apparatus from another and looked healthy. *Second consumer:* a keeper-capture book printed for review is worthless without knowing which tree state it shows. **High value, low blast radius, small code.** *PROMOTE, ruled 2026-09-28 (`RULINGS.md` 01a0e9ab-077c); done the same day — §8.*
 
 - [ ] **F2 ○ — Render evidence extension.** `schemas/render_evidence_v1.yaml` exists; extend it with `resource_roots.py`'s origin proof so evidence names which physical file supplied each logical reference.
 
 ### Band G — The tenant split (P1/P2 execution)
 
-- [ ] **G1 ★ — Move content out of the profile tree. The mechanism landed; the content did not.** `engine/resource_roots.py` (302 lines) and manifest-owned asset precedence shipped on this branch (`dd891d5`, plan doc `2026-08-03_...`). The four ownership lanes exist. **And `profiles/40_latex_import/assets/codex0/` is still 307 MB / 39 tracked files** — the direction doc measured 194 MB on 2026-07-27; it grew. The engine can now be told where content lives; nobody has told it. *This is the highest-leverage item in the survey that requires no new design.*
+- [x] **G1 ★ — Move content out of the profile tree. The mechanism landed; the content did not.** `engine/resource_roots.py` (302 lines) and manifest-owned asset precedence shipped on this branch (`dd891d5`, plan doc `2026-08-03_...`). The four ownership lanes exist. **And `profiles/40_latex_import/assets/codex0/` is still 307 MB / 39 tracked files** — the direction doc measured 194 MB on 2026-07-27; it grew. The engine can now be told where content lives; nobody has told it. *This is the highest-leverage item in the survey that requires no new design.* *PROMOTE, ruled 2026-09-28 (`RULINGS.md` 01a0e9ab-077c); done the same day — §8.*
 
 - [ ] **G2 ○ — Profile package boundary.** Direction doc **Q3**, still open. A profile declares its asset dependencies without carrying them; tenant profiles (`codex0`, `mythic_letter_johannah`, the client brand set) resolve from outside the engine repo. `client_report` is the existing proof case that this can work — its assets are third-party property and can never enter this repo (direction doc §5). *This is the client/tenant split, and G1 is its precondition.*
 
@@ -214,7 +237,9 @@ promotion, and it is not mechanical.
 
 ## 5. Proposed sequencing
 
-Not ruled. Ordered so that nothing is refactored twice.
+Ordered so that nothing is refactored twice. **Steps 0–2 ruled** (custody 2026-09-01; steps 1–2
+on 2026-09-28: "starting with G1 and the small moves is right"). Steps 3 onward are not ruled,
+and step 3 is already amended by the 2026-09-01 selector-first ruling (§7).
 
 0. **Custody** — C-A, C-B. Before anything.
 1. **G1** — content out of the profile tree. No new design, mechanism already shipped, and it
@@ -255,13 +280,13 @@ For each candidate, Luis rules one of:
 | Band | Candidates | Ruled |
 |---|---|---|
 | Custody | C-A, C-B, C-C, C-D | all four ruled and done (2026-09-01/02) |
-| A — composition | A1★ A2★ A3★ A4 A5 | — |
-| B — multi-volume | B1★ B2★ B3★ B4 | — |
+| A — composition | A1★ A2★ A3★ A4 A5 | A3 PROMOTE, done (2026-09-28); rest — |
+| B — multi-volume | B1★ B2★ B3★ B4 | B3 PROMOTE (2026-09-28, as the build-performance step 2; `2026-09-28_codex0_build_performance_plan.md`); rest — |
 | C — edition gating | C1 C2 | — |
 | D — furniture | D1★ D2★ D3 D4 D5 | — |
-| E — physical | E1★ E2 E3 E4 | — |
-| F — build identity | F1★ F2 | — |
-| G — tenant split | G1★ G2 G3 | — |
+| E — physical | E1★ E2 E3 E4 | E1 PROMOTE, done (2026-09-28); rest — |
+| F — build identity | F1★ F2 | F1 PROMOTE, done (2026-09-28); F2 — |
+| G — tenant split | G1★ G2 G3 | G1 PROMOTE, done (2026-09-28); G2, G3 — |
 
 **On ratification this document is committed to `42_optical_foundry`** and the ruled set
 becomes the port queue.
@@ -347,3 +372,76 @@ an absolute.
 the compiler's generic path is enough for a *flat* corpus book, and the failures were template and
 macro-leak bugs, not spine-model failures. That argues for pulling **A2** ahead of **A1**: the
 selector is small, has no codex0 dependency, and its first consumer is already waiting.
+
+---
+
+## 8. 2026-09-28 — the tag, G1, and the small moves
+
+Ruled at 16:04 EDT (`RULINGS.md` `01a0e9ab-077c-7836-b986-8cb968ad2155`): tag the state that
+renders Codex 0, then start the refactor at G1 and the small moves, across the Foundry and the
+book's tooling in the Atrium.
+
+### 8.1 The tag
+
+`codex0-compatible-2026-09-28`, annotated, in both repositories: Foundry `aa3bd9e`, canon
+`18926ac07` (which pins it). Pushed to deneb; not to GitHub, whose mirrors lag. The claim is
+proved by a full three-volume build at that pair — run `of-refactor-baseline-aa3bd9e-2026-09-28`,
+the regression lane (the book's `run_full_build.sh` with STEP 0 removed, so no build number is
+claimed and no colophon is restamped) — which passed every gate: C3, D1c, D1d, G3, D2 plate
+containment, E bind shapes (224 / 288 / 128 = 7, 9, 4 × 32), F one stamp.
+
+### 8.2 What moved (Foundry `f424794`)
+
+| Candidate | Engine surface | What stays with the book |
+|---|---|---|
+| **G1** | `profiles/40_latex_import/assets/codex0/` removed (39 files, 307 MB) and its `.gitattributes` LFS rule | the assets, under `codex0_v5/assets/codex0/v5/` (already the declared resource root) |
+| **A3** | `engine/epigraph.py` (`epigraph_from_frontmatter`, `epigraph_from_file`); compiler `chapter_opener.epigraph_from: <path>` and `epigraph_from_source: true` | `_read_divider_epigraph` is now a wrapper naming the book's epigraph surface (`<chapter>/00_divider.md`) |
+| **F1** | `engine/build_stamp.py` (`BuildLedger`, run-id guard, a new refusal to issue a number the ledger already records, scoped `git_head_short` with `-dirty` / `require_clean`, managed regions, `distinct_stamps`); CLI `stamps-agree` | `build/stamp_colophon.py` keeps which sources carry the stamp, the proof and final stamp lines, the registry block, and the spelled proof count |
+| **E1** | `engine/bind_shape.py` (`pad_to_signature`, odd page count is an error, optional centred blank-leaf mark); CLI `bind-shape` | the endless-knot mark and its 0.2 width fraction, passed by `run_full_build.sh` PASS E |
+
+The book's tooling imports the engine from the Foundry checkout named by `OPTICAL_FOUNDRY`
+(exported by `run_full_build.sh` from `FOUNDRY`, which is now overridable), defaulting to the
+canon submodule.
+
+Equivalence before landing: the rewritten `stamp_colophon.py` wrote byte-identical ledger and
+colophon files to the original in sandboxed runs (new run, idempotent re-run, `--notes`,
+`--volumes single`, `--final`, `--dry-run`); the engine epigraph harvest matched the book's old
+harvester on all 514 Markdown files in the book (76 carry epigraphs); book tooling tests 120 pass;
+30 new engine tests pass.
+
+### 8.3 Verification — by contact sheet
+
+Candidate run `of-refactor-candidate-f424794-2026-09-28` (Foundry `f424794`, the book tooling as
+refactored) passed every gate with the same shapes. Compared with the baseline by per-volume
+contact sheet (reading and bind PDFs), page counts, bundle manifests and resolved sources:
+everything identical except **one page, Volume I page 21 (folio 3), the Part I reveal plate**.
+
+That page exposed a latent defect, not a regression. The manuscript's copy of the plate had been
+revised on 2026-08-07, but the divider plate reaches LaTeX as a raw relative path resolved from
+pandoc's working directory (the profile folder), so every build since — build 100 included — set
+the profile's older copy, and resolution evidence (which records only tracked references) showed
+nothing. G1 removed the shadow. Luis, 17:59: "The middle one was the one that I intended" (ruling
+`01a0ea08-7757-7f0f-9176-4316debc18d6`); scar
+`21_letters_and_creative/book/codex0_v5/structure/scar_codex0_part01_plate_revision_never_rendered_2026-09-28.md`.
+
+### 8.4 Found on the way
+
+- **The book's ledger held `next_build: 100` with build 100 already recorded** (hand-appended
+  2026-08-15), so the next stamp would have reused 100. Luis, 16:23: "we can lift the permanent
+  100 mark. the next build will be 101." (ruling `01a0e9b0-229b-71c2-8e4f-e4c7c45fd128`). Re-seeded
+  to 101; the engine now refuses a recorded number.
+- **Raw-LaTeX image paths bypass the resource-root chain** and are invisible in evidence. General,
+  open; see the scar's remediation plan and the press note §5.
+- **`codex0.tex` defaults three macros to book apparatus paths** (lines 172, 209, 382); the cause
+  of three pre-existing `test_body_folio_start` failures. Same class, open.
+- **Two builds must never run at once.** The spine compiler writes shared, non-run-scoped files
+  into `codex0_v5/generated/volume_apparatus/`.
+- **Six Client template tests fail on any fresh worktree**, because the client brand files are
+  gitignored and exist only in the main checkout — the permanent-external constraint of the
+  2026-07-27 direction note §5, visible in the suite.
+
+### 8.5 Next
+
+The build-performance plan (`2026-09-28_codex0_build_performance_plan.md`, ruling
+`01a0e9c7-c01e-7d0a-bcc0-4793b00abce0`): step 1 (measure renders, parallel reading volumes), then
+step 2 as the B3 promotion, then the image cache. Every other candidate in §3 is unruled.
