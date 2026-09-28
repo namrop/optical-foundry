@@ -818,3 +818,44 @@ def test_pandoc_renderer_keeps_safe_titlepage_background_frontmatter(tmp_path):
     guarded = PandocRenderer._titlepage_background_normalized_source(src, tmp_path, "safe-title-bg")
 
     assert guarded == src
+
+
+@pytest.mark.parametrize("measure", [False, True])
+def test_measure_mode_skips_imposition_and_preflight(tmp_path, monkeypatch, measure):
+    import shutil
+
+    if not shutil.which("pandoc") or not shutil.which("pdftotext"):
+        pytest.skip("pandoc/pdftotext not available")
+    if not Path("/Library/TeX/texbin/xelatex").exists() and not shutil.which("xelatex"):
+        pytest.skip("xelatex not available")
+
+    calls: list[str] = []
+    monkeypatch.setattr(
+        "renderers.pandoc_renderer.generate_bindery_preflight",
+        lambda *a, **k: calls.append("preflight") or None,
+    )
+    monkeypatch.setattr(
+        PandocRenderer, "_maybe_impose_bound_pdf", lambda self, *a, **k: calls.append("impose") or None
+    )
+
+    src = tmp_path / "measure.md"
+    src.write_text("---\nuid: measure\ntitle: Measure\ntoc: false\n---\n\n# Measure\n\nBody.\n", encoding="utf-8")
+    out = tmp_path / "out"
+    out.mkdir()
+    stale = out / "measure.safe_area_overlay.pdf"
+    stale.write_bytes(b"stale")
+    stale_json = out / "measure.bindery_preflight.json"
+    stale_json.write_text("{}")
+
+    doc = DocumentRenderer()
+    plan = doc.build_plan(src, "generic-report")
+    evidence = PandocRenderer().render(plan, output_dir=str(out), measure=measure)
+
+    assert evidence["status"] == "ok"
+    assert evidence["render_metadata"]["render_mode"] == ("measure" if measure else "full")
+    if measure:
+        assert calls == []
+        assert not stale.exists() and not stale_json.exists()
+    else:
+        assert calls == ["impose", "preflight"]
+        assert stale.exists()

@@ -203,7 +203,10 @@ def cmd_manifest(args: argparse.Namespace) -> int:
         print(f"VALIDATION ERROR: {exc}", file=sys.stderr)
         return 1
     renderer = PandocRenderer()
-    evidence = renderer.render(plan, output_dir=args.output)
+    # Pass `measure` only when asked for, so renderers written to the base
+    # signature (and callers that build their own Namespace) keep working.
+    render_kwargs = {"measure": True} if getattr(args, "measure", False) else {}
+    evidence = renderer.render(plan, output_dir=args.output, **render_kwargs)
     success = evidence.get("status") != "error"
     print(json.dumps({"status": "ok" if success else "error",
                        "render_id": evidence.get("render_id", "?"),
@@ -409,6 +412,12 @@ def main() -> int:
     mf_ap = sub.add_parser("manifest", help="Render from a manifest YAML")
     mf_ap.add_argument("input", help="Manifest YAML file path")
     mf_ap.add_argument("--output", default="generated/manifests")
+    mf_ap.add_argument(
+        "--measure",
+        action="store_true",
+        help=("Measurement render for a later pass (page labels, extent): skip imposition "
+              "and the bindery preflight / safe-area overlay; evidence records render_mode: measure"),
+    )
     mf_ap.set_defaults(func=cmd_manifest)
 
     # profiles

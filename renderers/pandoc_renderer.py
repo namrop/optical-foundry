@@ -81,7 +81,22 @@ class PandocRenderer(Renderer):
 
     name = "pandoc"
 
-    def render(self, plan: ProjectionPlan, output_dir: str | None = None) -> dict[str, Any]:
+    def render(
+        self,
+        plan: ProjectionPlan,
+        output_dir: str | None = None,
+        *,
+        measure: bool = False,
+    ) -> dict[str, Any]:
+        """Render ``plan`` to PDF and write evidence beside it.
+
+        ``measure=True`` is for renders that exist only to be measured (page
+        labels, extent) by a later pass: the PDF, text layer, glyph lint and
+        divider handling are exactly as in a full render, but imposition and the
+        bindery preflight (whose safe-area overlay typesets a second copy of the
+        whole PDF) are skipped, and the evidence records ``render_mode:
+        measure`` so the artifact cannot pass for a deliverable.
+        """
         start = time.monotonic()
         out_dir = (Path(output_dir) if output_dir else Path.cwd()).resolve()
         out_dir.mkdir(parents=True, exist_ok=True)
@@ -463,18 +478,27 @@ class PandocRenderer(Renderer):
         pdf_bytes = output_pdf.stat().st_size
         pdf_sha = self._sha256_file(output_pdf)
         pages = self._count_pages(output_pdf)
-        imposition_output = self._maybe_impose_bound_pdf(
-            plan,
-            output_pdf,
-            out_dir,
-            divider_page_map=divider_page_map,
-        )
-        bindery_preflight = generate_bindery_preflight(
-            output_pdf,
-            out_dir=out_dir,
-            plan=plan,
-            imposition=imposition_output,
-        )
+        if measure:
+            imposition_output = None
+            bindery_preflight = None
+            # A preflight left by an earlier full render into this directory
+            # describes a different PDF; do not let it sit beside this one.
+            for stale in out_dir.glob(f"{plan.render_id}.safe_area_*"):
+                stale.unlink(missing_ok=True)
+            (out_dir / f"{plan.render_id}.bindery_preflight.json").unlink(missing_ok=True)
+        else:
+            imposition_output = self._maybe_impose_bound_pdf(
+                plan,
+                output_pdf,
+                out_dir,
+                divider_page_map=divider_page_map,
+            )
+            bindery_preflight = generate_bindery_preflight(
+                output_pdf,
+                out_dir=out_dir,
+                plan=plan,
+                imposition=imposition_output,
+            )
 
         # --- evidence ---
         evidence = {
@@ -507,6 +531,7 @@ class PandocRenderer(Renderer):
                 "page_margin_options": plan.page_margins if page_geometry_options else [],
                 "delivery": plan.delivery,
                 "render_duration_ms": int(elapsed * 1000),
+                "render_mode": "measure" if measure else "full",
                 "rendered_at": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
                 "success": success,
                 "profile_version": defaults_meta.get("profile_version", "unknown"),
