@@ -34,6 +34,7 @@ from renderers.document_renderer import DocumentRenderer
 from engine.imposition import ImpositionError, impose_pdf
 from engine.bind_shape import BindShapeError, pad_to_signature
 from engine.build_stamp import distinct_stamps
+from engine.pass_gates import compare_renders
 from engine.profile_checker import check_all_profiles, check_all_profiles_json, check_profile
 from engine.profile_smoke import DEFAULT_DOCUMENT_SMOKE_PROFILES, run_profile_smoke_matrix
 from engine.visual_proof import build_visual_proof
@@ -205,7 +206,11 @@ def cmd_manifest(args: argparse.Namespace) -> int:
     renderer = PandocRenderer()
     # Pass `measure` only when asked for, so renderers written to the base
     # signature (and callers that build their own Namespace) keep working.
-    render_kwargs = {"measure": True} if getattr(args, "measure", False) else {}
+    render_kwargs = {}
+    if getattr(args, "measure", False):
+        render_kwargs["measure"] = True
+    if getattr(args, "draft", False):
+        render_kwargs["draft"] = True
     evidence = renderer.render(plan, output_dir=args.output, **render_kwargs)
     success = evidence.get("status") != "error"
     print(json.dumps({"status": "ok" if success else "error",
@@ -397,6 +402,18 @@ def cmd_stamps_agree(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_renders_agree(args: argparse.Namespace) -> int:
+    """Two renders of one bundle must have the same shape (count, labels, outline)."""
+    diffs = compare_renders(Path(args.reference), Path(args.candidate))
+    if diffs:
+        print(f"ERROR: {Path(args.candidate).name} does not match {Path(args.reference).name}:", file=sys.stderr)
+        for d in diffs:
+            print(f"    {d}", file=sys.stderr)
+        return 66
+    print(f"  same shape: {Path(args.candidate).name} == {Path(args.reference).name} (pages, every label, outline)")
+    return 0
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(prog="foundry", description="Optical Foundry CLI")
     sub = ap.add_subparsers(dest="command")
@@ -417,6 +434,12 @@ def main() -> int:
         action="store_true",
         help=("Measurement render for a later pass (page labels, extent): skip imposition "
               "and the bindery preflight / safe-area overlay; evidence records render_mode: measure"),
+    )
+    mf_ap.add_argument(
+        "--draft",
+        action="store_true",
+        help=("Draft render (implies --measure): graphicx draft, image boxes without image data. "
+              "Same pagination, labels, text and outline; not a deliverable"),
     )
     mf_ap.set_defaults(func=cmd_manifest)
 
@@ -496,6 +519,12 @@ def main() -> int:
     sa_ap.add_argument("input", nargs="+", help="Files to scan (e.g. resolved sources of every volume)")
     sa_ap.add_argument("--pattern", required=True, help="Regex matching the stamp line")
     sa_ap.set_defaults(func=cmd_stamps_agree)
+
+    # renders-agree
+    ra_ap = sub.add_parser("renders-agree", help="Fail unless two renders of one bundle have the same pages, labels and outline")
+    ra_ap.add_argument("reference", help="The render a later pass read (e.g. the draft)")
+    ra_ap.add_argument("candidate", help="The render that ships")
+    ra_ap.set_defaults(func=cmd_renders_agree)
 
     args = ap.parse_args()
     if args.command is None:

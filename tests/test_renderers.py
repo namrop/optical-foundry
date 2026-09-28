@@ -859,3 +859,29 @@ def test_measure_mode_skips_imposition_and_preflight(tmp_path, monkeypatch, meas
     else:
         assert calls == ["impose", "preflight"]
         assert stale.exists()
+
+
+def test_draft_mode_sets_graphicx_draft_and_implies_measure(tmp_path, monkeypatch):
+    import shutil
+
+    if not shutil.which("pandoc") or not shutil.which("pdftotext"):
+        pytest.skip("pandoc/pdftotext not available")
+    if not Path("/Library/TeX/texbin/xelatex").exists() and not shutil.which("xelatex"):
+        pytest.skip("xelatex not available")
+
+    calls: list[str] = []
+    monkeypatch.setattr(
+        "renderers.pandoc_renderer.generate_bindery_preflight",
+        lambda *a, **k: calls.append("preflight") or None,
+    )
+    src = tmp_path / "draft.md"
+    src.write_text("---\nuid: draft\ntitle: Draft\ntoc: false\n---\n\n# Draft\n\nBody.\n", encoding="utf-8")
+    out = tmp_path / "out"
+    plan = DocumentRenderer().build_plan(src, "generic-report")
+    evidence = PandocRenderer().render(plan, output_dir=str(out), draft=True)
+
+    assert evidence["status"] == "ok"
+    assert evidence["render_metadata"]["render_mode"] == "draft"
+    assert "--include-in-header" in evidence["render_metadata"]["command"]
+    assert "\\setkeys{Gin}{draft=true}" in (out / "draft.draft_header.tex").read_text()
+    assert calls == []

@@ -87,6 +87,7 @@ class PandocRenderer(Renderer):
         output_dir: str | None = None,
         *,
         measure: bool = False,
+        draft: bool = False,
     ) -> dict[str, Any]:
         """Render ``plan`` to PDF and write evidence beside it.
 
@@ -96,7 +97,17 @@ class PandocRenderer(Renderer):
         bindery preflight (whose safe-area overlay typesets a second copy of the
         whole PDF) are skipped, and the evidence records ``render_mode:
         measure`` so the artifact cannot pass for a deliverable.
+
+        ``draft=True`` implies ``measure`` and also sets graphicx to draft
+        (``\\setkeys{Gin}{draft=true}``): every image keeps its box but no image
+        data is read, decoded or embedded. Pagination, page labels, text and
+        outline destinations are unchanged (proved on all three Codex 0 volumes,
+        2026-09-28), at a fifth to a twentieth of the compile time. Evidence
+        records ``render_mode: draft``; prove a final against its draft with
+        ``engine.pass_gates.compare_renders``.
         """
+        if draft:
+            measure = True
         start = time.monotonic()
         out_dir = (Path(output_dir) if output_dir else Path.cwd()).resolve()
         out_dir.mkdir(parents=True, exist_ok=True)
@@ -218,6 +229,15 @@ class PandocRenderer(Renderer):
         # Page geometry is lowered through a final defaults overlay so imported
         # templates that rely on `$geometry$` receive both the requested paper
         # size and their existing margin/profile geometry options.
+
+        if draft:
+            draft_header = out_dir / f"{plan.render_id}.draft_header.tex"
+            draft_header.write_text(
+                "% Optical Foundry draft render: image boxes, no image data.\n"
+                "\\setkeys{Gin}{draft=true}\n",
+                encoding="utf-8",
+            )
+            cmd += ["--include-in-header", str(draft_header)]
 
         # --- execute ---
         try:
@@ -531,7 +551,7 @@ class PandocRenderer(Renderer):
                 "page_margin_options": plan.page_margins if page_geometry_options else [],
                 "delivery": plan.delivery,
                 "render_duration_ms": int(elapsed * 1000),
-                "render_mode": "measure" if measure else "full",
+                "render_mode": "draft" if draft else ("measure" if measure else "full"),
                 "rendered_at": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
                 "success": success,
                 "profile_version": defaults_meta.get("profile_version", "unknown"),

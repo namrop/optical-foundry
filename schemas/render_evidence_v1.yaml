@@ -111,8 +111,8 @@ properties:
       render_duration_ms: { type: integer }
       render_mode:
         type: string
-        enum: [full, measure]
-        description: "measure = a render made only to be measured by a later pass; imposition and bindery preflight were skipped. Not a deliverable."
+        enum: [full, measure, draft]
+        description: "measure = a render made only to be measured by a later pass; imposition and bindery preflight were skipped. draft = measure, plus graphicx draft (image boxes, no image data). Neither is a deliverable."
       rendered_at: { type: string }
 
   output:
