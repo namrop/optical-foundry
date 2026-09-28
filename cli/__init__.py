@@ -32,6 +32,8 @@ from engine.manifest_compiler import (
 from renderers.pandoc_renderer import PandocRenderer
 from renderers.document_renderer import DocumentRenderer
 from engine.imposition import ImpositionError, impose_pdf
+from engine.bind_shape import BindShapeError, pad_to_signature
+from engine.build_stamp import distinct_stamps
 from engine.profile_checker import check_all_profiles, check_all_profiles_json, check_profile
 from engine.profile_smoke import DEFAULT_DOCUMENT_SMOKE_PROFILES, run_profile_smoke_matrix
 from engine.visual_proof import build_visual_proof
@@ -361,6 +363,37 @@ def _print_profile_table_row(cap: "ProfileCapability") -> None:
             print(f"  ⚠  {w}")
 
 
+def cmd_bind_shape(args: argparse.Namespace) -> int:
+    """Pad rendered PDFs to whole signatures, writing <name>_bind.pdf beside each."""
+    status = 0
+    for item in args.input:
+        try:
+            result = pad_to_signature(
+                Path(item),
+                args.signature_size,
+                blank_mark=Path(args.blank_mark) if args.blank_mark else None,
+                mark_width_fraction=args.mark_width,
+            )
+        except BindShapeError as exc:
+            print(f"ERROR: {exc}", file=sys.stderr)
+            status = 1
+            continue
+        print(f"  {result.summary()}")
+    return status
+
+
+def cmd_stamps_agree(args: argparse.Namespace) -> int:
+    """One build, one stamp: every file must carry the same stamp line."""
+    stamps = distinct_stamps([Path(p) for p in args.input], args.pattern)
+    if len(stamps) != 1:
+        print(f"ERROR: the artifacts do not share one render stamp ({len(stamps)} distinct):", file=sys.stderr)
+        for line in stamps:
+            print(f"    {line}", file=sys.stderr)
+        return 65
+    print(stamps[0])
+    return 0
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(prog="foundry", description="Optical Foundry CLI")
     sub = ap.add_subparsers(dest="command")
@@ -440,6 +473,20 @@ def main() -> int:
               "fore-edges. Use for plate/divider sheets (e.g. 1.0); 0 (default) for text sheets."),
     )
     im_ap.set_defaults(func=cmd_impose)
+
+    # bind-shape
+    bs_ap = sub.add_parser("bind-shape", help="Pad rendered PDFs to whole signatures (<name>_bind.pdf)")
+    bs_ap.add_argument("input", nargs="+", help="Rendered PDF path(s)")
+    bs_ap.add_argument("--signature-size", required=True, type=int, help="Pages per folded signature; multiple of 4")
+    bs_ap.add_argument("--blank-mark", help="Image placed centred on every pad leaf")
+    bs_ap.add_argument("--mark-width", type=float, default=0.2, help="Mark width as a fraction of page width (default 0.2)")
+    bs_ap.set_defaults(func=cmd_bind_shape)
+
+    # stamps-agree
+    sa_ap = sub.add_parser("stamps-agree", help="Fail unless every file carries one identical build-stamp line")
+    sa_ap.add_argument("input", nargs="+", help="Files to scan (e.g. resolved sources of every volume)")
+    sa_ap.add_argument("--pattern", required=True, help="Regex matching the stamp line")
+    sa_ap.set_defaults(func=cmd_stamps_agree)
 
     args = ap.parse_args()
     if args.command is None:

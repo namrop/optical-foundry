@@ -965,6 +965,43 @@ def _inline_chapter_opener_epigraph_lines(epigraph: dict[str, Any]) -> list[str]
     ]
 
 
+def _resolve_opener_epigraph(
+    opener: dict[str, Any],
+    *,
+    source_frontmatter: dict[str, Any] | None,
+    manifest_path: str | Path | None,
+) -> dict[str, Any]:
+    """Harvest a chapter opener's epigraph from frontmatter when the manifest asks.
+
+    An explicit ``epigraph`` always wins. Otherwise:
+
+    - ``epigraph_from: <path>`` harvests the ``epigraph_*`` fields of that file
+      (relative paths resolve against the manifest's directory). The file must
+      exist — a declared reference that does not resolve is a manifest error —
+      but a file with no ``epigraph_line`` leaves the opener a bare heading.
+    - ``epigraph_from_source: true`` harvests them from the source's own
+      frontmatter.
+    """
+    from engine.epigraph import epigraph_from_file, epigraph_from_frontmatter
+
+    if opener.get("epigraph"):
+        return opener
+    harvested = None
+    ref = opener.get("epigraph_from")
+    if ref:
+        path = Path(str(ref))
+        if not path.is_absolute() and manifest_path:
+            path = Path(manifest_path).resolve().parent / path
+        if not path.is_file():
+            raise ValueError(f"chapter_opener.epigraph_from does not resolve: {ref} ({path})")
+        harvested = epigraph_from_file(path)
+    elif opener.get("epigraph_from_source"):
+        harvested = epigraph_from_frontmatter(source_frontmatter)
+    if not harvested:
+        return opener
+    return {**opener, "epigraph": harvested}
+
+
 def _inline_chapter_opener_lines(opener: dict[str, Any]) -> list[str]:
     """Render a chapter's inline opener at the top of its first passage page.
 
@@ -1470,6 +1507,9 @@ class CompositeBundleCompiler(ManifestCompiler):
             lines.extend(_running_text_override_lines(src))
             opener_cfg = src.get("chapter_opener")
             if isinstance(opener_cfg, dict):
+                opener_cfg = _resolve_opener_epigraph(
+                    opener_cfg, source_frontmatter=fm, manifest_path=kwargs.get("manifest_path")
+                )
                 opener_lines = _inline_chapter_opener_lines(opener_cfg)
                 if opener_lines:
                     lines.extend(opener_lines)
