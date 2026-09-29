@@ -75,3 +75,58 @@ def test_build_visual_proof_writes_metadata_and_contact_sheet_with_injected_rast
     on_disk = json.loads(metadata_path.read_text(encoding="utf-8"))
     assert on_disk["page_images"] == proof["page_images"]
     assert Path(proof["contact_sheet_svg"]).exists()
+
+
+def _proof_pdf(path, texts):
+    import fitz
+
+    doc = fitz.open()
+    for t in texts:
+        doc.new_page(width=396, height=612).insert_text((72, 300), t, fontsize=40)
+    doc.save(str(path))
+    doc.close()
+    return path
+
+
+def test_compare_contact_sheets_identical(tmp_path):
+    pytest = __import__("pytest")
+    pytest.importorskip("fitz")
+    pytest.importorskip("PIL")
+    from engine.visual_proof import compare_contact_sheets
+
+    a = _proof_pdf(tmp_path / "a.pdf", ["one", "two", "three"])
+    b = _proof_pdf(tmp_path / "b.pdf", ["one", "two", "three"])
+    result = compare_contact_sheets(a, b, output_dir=tmp_path / "out", label="vol")
+    assert result["identical"] is True
+    assert result["differing_pages"] == []
+    assert (tmp_path / "out" / "vol_baseline.png").exists()
+    assert (tmp_path / "out" / "vol_candidate.png").exists()
+    assert "diff_sheet" not in result
+
+
+def test_compare_contact_sheets_marks_the_changed_page(tmp_path):
+    pytest = __import__("pytest")
+    pytest.importorskip("fitz")
+    pytest.importorskip("PIL")
+    from engine.visual_proof import compare_contact_sheets
+
+    a = _proof_pdf(tmp_path / "a.pdf", ["one", "two", "three"])
+    b = _proof_pdf(tmp_path / "b.pdf", ["one", "TWO", "three"])
+    result = compare_contact_sheets(a, b, output_dir=tmp_path / "out", label="vol")
+    assert result["identical"] is False
+    assert result["differing_pages"] == [2]
+    assert (tmp_path / "out" / "vol_diff.png").exists()
+
+
+def test_compare_contact_sheets_page_count_mismatch(tmp_path):
+    pytest = __import__("pytest")
+    pytest.importorskip("fitz")
+    pytest.importorskip("PIL")
+    from engine.visual_proof import compare_contact_sheets
+
+    result = compare_contact_sheets(
+        _proof_pdf(tmp_path / "a.pdf", ["one"]), _proof_pdf(tmp_path / "b.pdf", ["one", "two"]),
+        output_dir=tmp_path / "out", label="vol",
+    )
+    assert result["identical"] is False
+    assert (result["baseline_pages"], result["candidate_pages"]) == (1, 2)

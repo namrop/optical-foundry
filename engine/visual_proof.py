@@ -178,3 +178,105 @@ def build_visual_proof(
     proof["metadata_path"] = str(metadata_path)
     metadata_path.write_text(json.dumps(proof, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     return proof
+
+
+# ---------------------------------------------------------------------------
+# Contact-sheet comparison (2026-09-28)
+#
+# The regression method for multi-pass builds: render the same work before and
+# after a change, and compare one thumbnail contact sheet per PDF pixel for pixel
+# (Luis-ruled 2026-09-28: "don't compare every page, do a contact sheet for
+# efficiency"; saved to the repo the same night). Identical sheets are the pass
+# condition; a differing sheet gets a third sheet with the changed cells outlined
+# in red, so the change can be looked at rather than hunted for.
+# ---------------------------------------------------------------------------
+
+CONTACT_COLUMNS = 16
+CONTACT_THUMB_WIDTH = 96
+CONTACT_PAD = 4
+
+
+def contact_sheet_image(pdf_path: str | Path, *, columns: int = CONTACT_COLUMNS, thumb_width: int = CONTACT_THUMB_WIDTH):
+    """Every page of ``pdf_path`` as one thumbnail grid (a PIL image).
+
+    Returns ``(image, page_count, thumb_height)``. Thumbnails are scaled from the
+    first page's width; cells are separated by a grey gutter.
+    """
+    import fitz
+    from PIL import Image
+
+    doc = fitz.open(str(pdf_path))
+    try:
+        first = doc[0].rect
+        scale = thumb_width / first.width
+        thumb_height = int(round(first.height * scale))
+        rows = -(-doc.page_count // columns)
+        sheet = Image.new(
+            "RGB",
+            (columns * (thumb_width + CONTACT_PAD) + CONTACT_PAD, rows * (thumb_height + CONTACT_PAD) + CONTACT_PAD),
+            (90, 90, 90),
+        )
+        for i, page in enumerate(doc):
+            pix = page.get_pixmap(matrix=fitz.Matrix(scale, scale), alpha=False)
+            img = Image.frombytes("RGB", (pix.width, pix.height), pix.samples)
+            r, c = divmod(i, columns)
+            sheet.paste(img, (CONTACT_PAD + c * (thumb_width + CONTACT_PAD), CONTACT_PAD + r * (thumb_height + CONTACT_PAD)))
+        return sheet, doc.page_count, thumb_height
+    finally:
+        doc.close()
+
+
+def compare_contact_sheets(
+    baseline_pdf: str | Path,
+    candidate_pdf: str | Path,
+    *,
+    output_dir: str | Path,
+    label: str,
+    columns: int = CONTACT_COLUMNS,
+    thumb_width: int = CONTACT_THUMB_WIDTH,
+) -> dict:
+    """Compare two PDFs by contact sheet; write the sheets; report what differs.
+
+    Writes ``<label>_baseline.png`` and ``<label>_candidate.png`` into
+    ``output_dir``, plus ``<label>_diff.png`` (the candidate with every differing
+    cell outlined in red) when they differ. ``identical`` is true only when the
+    page counts agree and the two sheets are pixel-identical.
+    """
+    from PIL import ImageChops, ImageDraw
+
+    out = Path(output_dir)
+    out.mkdir(parents=True, exist_ok=True)
+    sa, na, th = contact_sheet_image(baseline_pdf, columns=columns, thumb_width=thumb_width)
+    sb, nb, _ = contact_sheet_image(candidate_pdf, columns=columns, thumb_width=thumb_width)
+    result = {
+        "label": label,
+        "baseline_pdf": str(baseline_pdf),
+        "candidate_pdf": str(candidate_pdf),
+        "baseline_pages": na,
+        "candidate_pages": nb,
+        "baseline_sheet": str(out / f"{label}_baseline.png"),
+        "candidate_sheet": str(out / f"{label}_candidate.png"),
+        "differing_pages": [],
+        "identical": False,
+    }
+    sa.save(result["baseline_sheet"])
+    sb.save(result["candidate_sheet"])
+    if na != nb or sa.size != sb.size:
+        return result
+    diff = ImageChops.difference(sa, sb)
+    if diff.getbbox() is None:
+        result["identical"] = True
+        return result
+    marked = sb.copy()
+    draw = ImageDraw.Draw(marked)
+    for i in range(na):
+        r, c = divmod(i, columns)
+        x0 = CONTACT_PAD + c * (thumb_width + CONTACT_PAD)
+        y0 = CONTACT_PAD + r * (th + CONTACT_PAD)
+        box = (x0, y0, x0 + thumb_width, y0 + th)
+        if diff.crop(box).getbbox() is not None:
+            result["differing_pages"].append(i + 1)
+            draw.rectangle(box, outline=(255, 0, 0), width=3)
+    result["diff_sheet"] = str(out / f"{label}_diff.png")
+    marked.save(result["diff_sheet"])
+    return result

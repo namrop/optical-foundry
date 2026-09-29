@@ -37,7 +37,7 @@ from engine.build_stamp import distinct_stamps
 from engine.pass_gates import compare_renders
 from engine.profile_checker import check_all_profiles, check_all_profiles_json, check_profile
 from engine.profile_smoke import DEFAULT_DOCUMENT_SMOKE_PROFILES, run_profile_smoke_matrix
-from engine.visual_proof import build_visual_proof
+from engine.visual_proof import build_visual_proof, compare_contact_sheets
 from engine.dropcap_assets import analyze_dropcap_alpha_bounds
 from engine.layout_images import image_initial_recipes
 
@@ -236,6 +236,19 @@ def cmd_initial(args: argparse.Namespace) -> int:
 
 def cmd_proof(args: argparse.Namespace) -> int:
     """Generate visual proof artifacts for rendered PDFs."""
+    if args.proof_command == "compare":
+        result = compare_contact_sheets(
+            Path(args.baseline), Path(args.candidate), output_dir=Path(args.output), label=args.label
+        )
+        if result["identical"]:
+            print(f"{args.label}: {result['candidate_pages']} pages, contact sheets identical")
+            return 0
+        if result["baseline_pages"] != result["candidate_pages"]:
+            print(f"{args.label}: page count {result['baseline_pages']} != {result['candidate_pages']}", file=sys.stderr)
+        else:
+            print(f"{args.label}: {len(result['differing_pages'])} page(s) differ: {result['differing_pages'][:30]} "
+                  f"(sheet: {result['diff_sheet']})", file=sys.stderr)
+        return 1
     if args.proof_command != "contact-sheet":
         print("ERROR: proof subcommand required", file=sys.stderr)
         return 1
@@ -482,6 +495,14 @@ def main() -> int:
     contact_ap.add_argument("--columns", type=int, default=3)
     contact_ap.add_argument("--dpi", type=int, default=120)
     contact_ap.set_defaults(func=cmd_proof)
+    compare_ap = proof_sub.add_parser(
+        "compare", help="Compare two PDFs by full contact sheet (every page); exit 1 unless identical"
+    )
+    compare_ap.add_argument("baseline", help="Baseline PDF")
+    compare_ap.add_argument("candidate", help="Candidate PDF")
+    compare_ap.add_argument("--output", default="generated/proofs/compare", help="Directory for the sheets")
+    compare_ap.add_argument("--label", default="compare", help="File-name prefix for the sheets")
+    compare_ap.set_defaults(func=cmd_proof)
 
     # impose
     im_ap = sub.add_parser("impose", help="Impose a rendered PDF into booklet/signature sheets")
