@@ -116,7 +116,7 @@ TIGHTLIST_PROFILES = {
     "convergence", "keeper", "life",
     "yugen-brand", "yugen-brand-elevated", "prometheus-packet",
     "elian-packet", "resume", "labels-avery-5164", "labels-avery-15264",
-    "sticker-sheet", "household-paper", "daily-review",
+    "sticker-sheet", "household-paper", "daily-review", "short-story",
 }
 
 # Profiles whose effective template defines \longtable.
@@ -159,6 +159,11 @@ BUNDLE_PARTIAL: dict[str, list[str]] = {
         "Form page grammar (dr-page divs) — one printed sheet side per page, selected by source/manifest metadata",
         "No TOC guard; no longtable — writing fields and fixed-height chart/tracker rows, not flowed prose",
         "Renders a blank form to write on, not assembled document content",
+    ],
+    "short-story": [
+        "One story per render: the title block is set from the source's own title on page one",
+        "No TOC guard — a short story has no table of contents",
+        "Scene-break and drop-cap grammar applies to top-level paragraphs of a single source",
     ],
 }
 

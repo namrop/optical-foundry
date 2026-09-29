@@ -77,6 +77,7 @@ per-profile template). This is the biggest family.
 | `keeper` | `keeper.tex` | Keeper-Order documents. |
 | `life` | `base.tex` | life & logistics documents. |
 | `prometheus-packet` | `generic_report.tex` | Prometheus packet (⚠ shares the generic template — partial). |
+| **`short-story`** (`short_story`) | `short_story.tex` + `filters/short_story.lua` | **one piece of short fiction**, set like a story in a small book. Codex 0's half-letter trim, Iowan Old Style 10.5/14.2 with old-style figures, book paragraphs (first-line indents, no space between), the title block on page one in the Iowan titling capitals rather than a separate title page, a letterspaced small-caps running head from page two, a centred folio. Source grammar: a Markdown horizontal rule (`***`) is a scene break (centred `* * *`); the first paragraph and the first after a break start flush; the first paragraph opens with a two-line `lettrine` drop cap (an opening quote is carried as `ante`) unless frontmatter sets `ss_dropcap: false`. Frontmatter: `title`, optional `subtitle`, `author` (renders "by …"), `running_title`. Sample: `fixtures/sources/short_story_sample.md`. Opened 2026-09-29 for the horror anthology seeds. |
 
 ### `periodical` — issues of a recurring printed paper
 

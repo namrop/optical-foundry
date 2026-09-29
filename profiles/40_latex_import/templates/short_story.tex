@@ -1,0 +1,118 @@
+% short-story — one piece of short fiction, set like a story in a small book.
+%
+% Half-letter trim (Codex 0's), Iowan Old Style, book-native paragraphs
+% (first-line indents, no space between), the title block on the first page
+% rather than a separate title page, a letterspaced small-caps running head,
+% a centred folio, scene breaks from Markdown horizontal rules and an opening
+% drop cap. Scene breaks, flush openings and the drop cap are lowered by
+% filters/short_story.lua; this template only defines the macros.
+%
+% Profile-owned: type, page, furniture. Source-owned: title, subtitle, author,
+% running_title, text.
+\documentclass[11pt]{article}
+
+$if(geometry)$
+\usepackage[$for(geometry)$$geometry$$sep$,$endfor$]{geometry}
+$else$
+\usepackage[paperwidth=5.5in,paperheight=8.5in,margin=0.72in]{geometry}
+$endif$
+\usepackage{fontspec}
+\usepackage{microtype}
+\usepackage{fancyhdr}
+\usepackage{graphicx}
+\usepackage{xcolor}
+\usepackage{lettrine}
+\usepackage{titlesec}
+\usepackage{longtable}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{hyperref}
+
+% Pandoc compatibility: keep the template self-contained.
+\providecommand{\tightlist}{\setlength{\itemsep}{0pt}\setlength{\parskip}{0pt}}
+\providecommand{\pandocbounded}[1]{#1}
+\setcounter{secnumdepth}{-\maxdimen}
+
+% ---------- Pandoc hooks ----------
+$for(header-includes)$
+$header-includes$
+$endfor$
+
+% ---------- Type ----------
+$if(mainfont_file)$$if(mainfont_upright_index)$\setmainfont[Path={$mainfont_dir$},Numbers=OldStyle,UprightFont={$mainfont_file$},UprightFeatures={FontIndex=$mainfont_upright_index$},BoldFont={$mainfont_file$},BoldFeatures={FontIndex=$mainfont_bold_index$},ItalicFont={$mainfont_file$},ItalicFeatures={FontIndex=$mainfont_italic_index$},BoldItalicFont={$mainfont_file$},BoldItalicFeatures={FontIndex=$mainfont_bolditalic_index$}]{$mainfont_file$}$else$\setmainfont[Path={$mainfont_dir$},Numbers=OldStyle]{$mainfont_file$}$endif$$else$$if(mainfont)$\setmainfont[Numbers=OldStyle]{$mainfont$}$endif$$endif$
+$if(mainfont_file)$$if(titlefont_index)$\newfontfamily\SSTitleFont[Path={$mainfont_dir$},FontIndex=$titlefont_index$]{$mainfont_file$}$else$\newcommand{\SSTitleFont}{\normalfont}$endif$$else$\newcommand{\SSTitleFont}{\normalfont}$endif$
+
+\renewcommand{\normalsize}{\fontsize{$if(ss_body_size)$$ss_body_size$$else$10.5$endif$}{$if(ss_body_leading)$$ss_body_leading$$else$14.2$endif$}\selectfont}
+\normalsize
+\setlength{\parindent}{$if(ss_parindent)$$ss_parindent$$else$1.2em$endif$}
+\setlength{\parskip}{0pt}
+\raggedbottom
+\widowpenalty=10000
+\clubpenalty=10000
+\hyphenpenalty=200
+
+\hypersetup{hidelinks,pdftitle={$title$}$if(author)$,pdfauthor={$for(author)$$author$$sep$, $endfor$}$endif$}
+
+% ---------- Headings inside a story (optional; most stories have none) ----------
+\titleformat{\section}{\centering\normalfont\scshape}{}{0pt}{}
+\titlespacing*{\section}{0pt}{2\baselineskip}{\baselineskip}
+\titleformat{\subsection}{\centering\normalfont\itshape}{}{0pt}{}
+\titlespacing*{\subsection}{0pt}{1.5\baselineskip}{0.5\baselineskip}
+
+% ---------- Scene break ----------
+% A Markdown horizontal rule. The filter also starts the next paragraph flush.
+\newcommand{\SSSceneBreak}{%
+  \par\vspace{0.6\baselineskip}%
+  {\centering *\hspace{1.4em}*\hspace{1.4em}*\par}%
+  \vspace{0.6\baselineskip}%
+}
+
+% ---------- Opening drop cap ----------
+\setcounter{DefaultLines}{2}
+\renewcommand{\LettrineTextFont}{\scshape}
+\setlength{\DefaultFindent}{0.08em}
+\setlength{\DefaultNindent}{0.3em}
+
+% ---------- Running head and folio ----------
+\setlength{\headheight}{14pt}
+\pagestyle{fancy}
+\fancyhf{}
+$if(ss_running_head)$
+\fancyhead[C]{{\small\scshape\addfontfeature{LetterSpace=6}\MakeLowercase{$if(running_title)$$running_title$$else$$title$$endif$}}}
+$endif$
+\fancyfoot[C]{{\small\thepage}}
+\renewcommand{\headrulewidth}{0pt}
+\renewcommand{\footrulewidth}{0pt}
+% First page: the title block is its own head, so only the folio prints.
+\fancypagestyle{ssfirst}{%
+  \fancyhf{}%
+  \fancyfoot[C]{{\small\thepage}}%
+  \renewcommand{\headrulewidth}{0pt}%
+  \renewcommand{\footrulewidth}{0pt}%
+}
+
+\title{}
+\author{}
+\date{}
+
+\begin{document}
+\thispagestyle{ssfirst}
+
+\begin{center}
+\vspace*{0.55in}
+% Iowan Titling (face 6) is a capitals-only cut: the title is set uppercase.
+{\SSTitleFont\addfontfeature{LetterSpace=8}\fontsize{19}{25}\selectfont\MakeUppercase{$title$}\par}
+$if(subtitle)$
+\vspace{0.12in}
+{\itshape\large $subtitle$\par}
+$endif$
+$if(author)$
+\vspace{0.2in}
+{\scshape\addfontfeature{LetterSpace=4}by $for(author)$$author$$sep$ and $endfor$\par}
+$endif$
+\vspace{0.42in}
+\end{center}
+
+$body$
+
+\end{document}

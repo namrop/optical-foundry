@@ -70,6 +70,7 @@ ALIASES: dict[str, str] = {
     "prometheus_packet": "prometheus-packet",
     "household_paper": "household-paper",
     "household-newspaper": "household-paper",
+    "short_story": "short-story",
 }
 
 # Explicit current mapping. Later this can be data-driven from profile YAML.
@@ -158,6 +159,15 @@ PROFILE_SPECS: dict[str, dict[str, Any]] = {
         "family": "periodical",
         "defaults": ["household_paper.yaml"],
         "template": "household_paper.tex",
+    },
+    # One piece of short fiction at Codex 0's half-letter trim: Iowan, book
+    # paragraphs, title block on page one, scene breaks and the opening drop cap
+    # lowered by filters/short_story.lua. Opened 2026-09-29 for the horror
+    # anthology seeds.
+    "short-story": {
+        "family": "document_spine",
+        "defaults": ["short_story.yaml"],
+        "template": "short_story.tex",
     },
 }
 

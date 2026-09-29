@@ -1,0 +1,63 @@
+from: markdown+footnotes+yaml_metadata_block+smart
+to: pdf
+# lualatex: Iowan Old Style is vendored as a TrueType collection and loaded by
+# path and face index with fontspec.
+pdf-engine: lualatex
+template: templates/short_story.tex
+standalone: true
+number-sections: false
+filters:
+  - filters/short_story.lua
+
+# short-story — one piece of short fiction, set like a story in a small book.
+# Opened 2026-09-29 for short fiction.
+#
+# The profile owns the page: trim, type, paragraph model, title block, running
+# head, folio, scene-break mark and the opening drop cap. The source owns the
+# title, optional subtitle and author, and the text. Nothing story-specific is
+# hardcoded here.
+#
+# Source grammar (filters/short_story.lua):
+#   - a Markdown horizontal rule (*** or ---) is a scene break;
+#   - the first paragraph of the story, and the first after a scene break,
+#     start flush left;
+#   - the first paragraph opens with a two-line drop cap unless the source
+#     frontmatter sets `ss_dropcap: false`;
+#   - `running_title:` in frontmatter replaces the title in the running head.
+variables:
+  profile_version: "short-story/0.1 (2026-09-29)"
+  page_size: half_letter
+  documentclass: article
+
+  # Codex 0's trim, so a story can be bound as the same object as the book.
+  # Slightly deeper top and foot margins than the book body make room for the
+  # running head and folio.
+  geometry:
+    - paperwidth=5.5in
+    - paperheight=8.5in
+    - top=0.78in
+    - bottom=0.82in
+    - left=0.72in
+    - right=0.72in
+    - headsep=0.2in
+    - footskip=0.38in
+
+  # Codex 0's face. Iowan carries small caps, old-style figures and a titling
+  # cut (face 6 of the collection), which the title block uses. The titling cut
+  # has capitals only, so the template sets the title uppercase.
+  mainfont: "Iowan Old Style"
+  mainfont_dir: "assets/fonts/iowan/"
+  mainfont_file: "Iowan Old Style.ttc"
+  mainfont_upright_index: 0
+  mainfont_bold_index: 1
+  mainfont_italic_index: 2
+  mainfont_bolditalic_index: 3
+  titlefont_index: 6
+
+  # Book-native fiction paragraphs: first-line indent, no space between.
+  ss_body_size: "10.5"
+  ss_body_leading: "14.2"
+  ss_parindent: "1.2em"
+
+  # Running head: the title in letterspaced small caps from page 2 on.
+  ss_running_head: true
