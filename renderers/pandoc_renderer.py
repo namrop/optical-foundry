@@ -41,6 +41,12 @@ from engine.furnish import (
 )
 from engine.imposition import ImpositionError, impose_pdf
 from engine.bindery_preflight import generate_bindery_preflight
+from engine.image_bake import (
+    bake_paths as bake_image_paths,
+    cache_dir as image_bake_cache_dir,
+    discover_png_references,
+    lua_callback_source as image_bake_lua,
+)
 from engine.emoji_substitution import preprocess_emoji_substitutions
 from engine.layout_images import LayoutImageRenderError, preprocess_layout_image_blocks
 from engine.mermaid import MermaidRenderError, preprocess_mermaid_blocks
@@ -88,6 +94,7 @@ class PandocRenderer(Renderer):
         *,
         measure: bool = False,
         draft: bool = False,
+        bake_images: bool = False,
     ) -> dict[str, Any]:
         """Render ``plan`` to PDF and write evidence beside it.
 
@@ -105,6 +112,15 @@ class PandocRenderer(Renderer):
         2026-09-28), at a fifth to a twentieth of the compile time. Evidence
         records ``render_mode: draft``; prove a final against its draft with
         ``engine.pass_gates.compare_renders``.
+
+        ``bake_images=True`` turns on the lossless image bake
+        (``engine.image_bake``): a LuaTeX ``find_image_file`` callback redirects
+        each alpha PNG already in the bake cache to its pre-split PDF, which
+        LuaTeX embeds by copy instead of decoding and recompressing the PNG on
+        every run. The PNGs this render names are baked before the compile, so
+        the first render benefits too. The embedded image data is the same either
+        way. LuaLaTeX only; evidence records what was referenced and baked under
+        ``render_metadata.image_bake``.
         """
         if draft:
             measure = True
@@ -239,6 +255,40 @@ class PandocRenderer(Renderer):
             )
             cmd += ["--include-in-header", str(draft_header)]
 
+        image_bake_report = None
+        if bake_images:
+            # Bake BEFORE the compile, from what this render can name: the pandoc
+            # input, the template and the defaults, resolved against the roots
+            # LaTeX searches. The callback then only reads; see engine/image_bake.
+            bake_texts = [cmd_source.read_text(encoding="utf-8", errors="ignore")]
+            for text_path in [template_path, *resolved_profile.defaults_stack]:
+                if text_path and Path(text_path).is_file():
+                    bake_texts.append(Path(text_path).read_text(encoding="utf-8", errors="ignore"))
+            bake_roots = [
+                *(root.path for root in resource_roots),
+                *resolved_profile.render_environment.resource_paths,
+                resolved_profile.render_environment.cwd,
+            ]
+            referenced = discover_png_references(bake_texts, bake_roots)
+            baked = bake_image_paths(referenced)
+            image_bake_report = {
+                "mode": "lossless",
+                "cache": str(image_bake_cache_dir()),
+                "referenced_png": len(referenced),
+                "baked_now": baked.baked,
+                "already_baked": baked.reused,
+                "not_bakeable": baked.skipped,
+            }
+            bake_lua = out_dir / f"{plan.render_id}.image_bake.lua"
+            bake_lua.write_text(image_bake_lua(), encoding="utf-8")
+            bake_header = out_dir / f"{plan.render_id}.image_bake_header.tex"
+            bake_header.write_text(
+                "% Optical Foundry lossless image bake (engine/image_bake.py).\n"
+                f"\\directlua{{dofile(\"{bake_lua}\")}}\n",
+                encoding="utf-8",
+            )
+            cmd += ["--include-in-header", str(bake_header)]
+
         # --- execute ---
         try:
             result = subprocess.run(
@@ -273,6 +323,7 @@ class PandocRenderer(Renderer):
 
         elapsed = time.monotonic() - start
         success = result.returncode == 0 and compile_pdf.exists()
+
 
         # log
         render_log = result.stdout + "\n--- STDERR ---\n" + result.stderr
@@ -552,6 +603,7 @@ class PandocRenderer(Renderer):
                 "delivery": plan.delivery,
                 "render_duration_ms": int(elapsed * 1000),
                 "render_mode": "draft" if draft else ("measure" if measure else "full"),
+                **({"image_bake": image_bake_report} if image_bake_report else {}),
                 "rendered_at": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
                 "success": success,
                 "profile_version": defaults_meta.get("profile_version", "unknown"),

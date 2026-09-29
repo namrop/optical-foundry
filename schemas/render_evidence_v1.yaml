@@ -113,6 +113,16 @@ properties:
         type: string
         enum: [full, measure, draft]
         description: "measure = a render made only to be measured by a later pass; imposition and bindery preflight were skipped. draft = measure, plus graphicx draft (image boxes, no image data). Neither is a deliverable."
+      image_bake:
+        type: object
+        description: "Lossless image bake (engine/image_bake.py): PNGs this render names, baked before the compile or already in the cache."
+        properties:
+          mode: { type: string, enum: [lossless] }
+          cache: { type: string }
+          referenced_png: { type: integer }
+          baked_now: { type: integer }
+          already_baked: { type: integer }
+          not_bakeable: { type: integer }
       rendered_at: { type: string }
 
   output:

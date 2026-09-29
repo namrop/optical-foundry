@@ -211,6 +211,8 @@ def cmd_manifest(args: argparse.Namespace) -> int:
         render_kwargs["measure"] = True
     if getattr(args, "draft", False):
         render_kwargs["draft"] = True
+    if getattr(args, "bake_images", False):
+        render_kwargs["bake_images"] = True
     evidence = renderer.render(plan, output_dir=args.output, **render_kwargs)
     success = evidence.get("status") != "error"
     print(json.dumps({"status": "ok" if success else "error",
@@ -453,6 +455,12 @@ def main() -> int:
         action="store_true",
         help=("Draft render (implies --measure): graphicx draft, image boxes without image data. "
               "Same pagination, labels, text and outline; not a deliverable"),
+    )
+    mf_ap.add_argument(
+        "--bake-images",
+        action="store_true",
+        help=("Lossless image bake (LuaLaTeX): alpha PNGs the render names are pre-split once into a cache "
+              "and embedded by copy. Same embedded image data"),
     )
     mf_ap.set_defaults(func=cmd_manifest)
 
