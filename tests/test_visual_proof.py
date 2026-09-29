@@ -130,3 +130,29 @@ def test_compare_contact_sheets_page_count_mismatch(tmp_path):
     )
     assert result["identical"] is False
     assert (result["baseline_pages"], result["candidate_pages"]) == (1, 2)
+
+
+def _page_with(path, *, text="words", pixel=(10, 20, 30), rule_y=500):
+    import fitz
+
+    doc = fitz.open()
+    page = doc.new_page(width=396, height=612)
+    page.insert_text((72, 100), text, fontsize=20)
+    pix = fitz.Pixmap(fitz.csRGB, fitz.IRect(0, 0, 8, 8), 0)
+    pix.set_rect(pix.irect, pixel)
+    page.insert_image(fitz.Rect(100, 200, 200, 300), pixmap=pix)
+    page.draw_line((72, rule_y), (300, rule_y))
+    doc.save(str(path))
+    doc.close()
+    return path
+
+
+def test_edge_only_requires_identical_content(tmp_path):
+    __import__("pytest").importorskip("fitz")
+    from engine.visual_proof import edge_only_pages
+
+    base = _page_with(tmp_path / "base.pdf")
+    assert edge_only_pages(base, _page_with(tmp_path / "same.pdf"), [1]) == [1]
+    assert edge_only_pages(base, _page_with(tmp_path / "img.pdf", pixel=(10, 20, 31)), [1]) == []
+    assert edge_only_pages(base, _page_with(tmp_path / "txt.pdf", text="other"), [1]) == []
+    assert edge_only_pages(base, _page_with(tmp_path / "rule.pdf", rule_y=501), [1]) == []

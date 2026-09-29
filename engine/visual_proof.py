@@ -279,4 +279,55 @@ def compare_contact_sheets(
             draw.rectangle(box, outline=(255, 0, 0), width=3)
     result["diff_sheet"] = str(out / f"{label}_diff.png")
     marked.save(result["diff_sheet"])
+    edge_only = edge_only_pages(baseline_pdf, candidate_pdf, result["differing_pages"])
+    result["edge_only_pages"] = edge_only
+    result["substantive_pages"] = [p for p in result["differing_pages"] if p not in edge_only]
     return result
+
+
+def _drawing_shape(page) -> list[tuple]:
+    """Vector drawings on a page, as (kind, rounded rect, fill, stroke) — so a moved
+    or recoloured rule is never mistaken for an edge-only difference."""
+    shape = []
+    for d in page.get_drawings():
+        r = d.get("rect")
+        rect = tuple(round(v, 1) for v in (r.x0, r.y0, r.x1, r.y1)) if r is not None else None
+        shape.append((d.get("type"), rect, d.get("fill"), d.get("color")))
+    return shape
+
+
+def edge_only_pages(baseline_pdf: str | Path, candidate_pdf: str | Path, pages: list[int]) -> list[int]:
+    """Of ``pages`` (1-based), those whose difference cannot be in the content.
+
+    A page qualifies when both renders carry the same text, the same vector
+    drawings, and the same images — identical decoded image data (MuPDF's
+    digest) at identical placements. What
+    remains is rasterization: an image embedded through a Form XObject (the
+    lossless image bake, engine/image_bake.py) moves the anti-aliasing of its
+    outermost edge pixels at some scales. Accepted and marked by keeper ruling
+    01a0eb4f-849e-7e9f-979d-b666c8db0d9b (2026-09-28): "I'll accept it. But
+    mark it." Callers report these pages as marked, never silently.
+    """
+    import fitz
+
+    a, b = fitz.open(str(baseline_pdf)), fitz.open(str(candidate_pdf))
+    try:
+        found = []
+        for number in pages:
+            pa, pb = a[number - 1], b[number - 1]
+            if pa.get_text() != pb.get_text():
+                continue
+            ia, ib = pa.get_image_info(hashes=True), pb.get_image_info(hashes=True)
+            if len(ia) != len(ib) or not ia:
+                continue
+            same = all(
+                x.get("digest") == y.get("digest")
+                and [round(v, 2) for v in x["bbox"]] == [round(v, 2) for v in y["bbox"]]
+                for x, y in zip(ia, ib)
+            )
+            if same and _drawing_shape(pa) == _drawing_shape(pb):
+                found.append(number)
+        return found
+    finally:
+        a.close()
+        b.close()

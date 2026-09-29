@@ -5,7 +5,7 @@ note_role: architecture_note
 validation_profile: standard
 status: active
 created: 2026-09-28T16:50:00-04:00
-updated: 2026-09-28T19:17:00-04:00
+updated: 2026-09-29T00:07:00-04:00
 beam_home: 42_optical_foundry
 title: "Codex 0 build performance — measurements and the ruled plan"
 tags:
@@ -29,7 +29,7 @@ last_touched:
   model: claude-opus-5-5
   provider: anthropic
   voyage: "claude-code:session:96cb72ec-b737-4efa-bd76-d5e173d514bf"
-  at: 2026-09-28T19:17:00-04:00
+  at: 2026-09-29T00:07:00-04:00
 ruling_refs:
   - uid: 01a0e9c7-c01e-7d0a-bcc0-4793b00abce0
     relation: authorizing-ruling
@@ -97,7 +97,7 @@ Ruling `01a0e9c7-c01e-7d0a-bcc0-4793b00abce0` (`RULINGS.md`): "agreed. lets do y
 3. Draft mode for the passes that only need page labels. Graphicx `draft` keeps every image's box dimensions, so pagination is unchanged and no image data is processed. The existing gates (C3, D1c, G3) become the proof: the final render's labels must equal the draft's, or the build stops.
 4. Restructure the passes: draft Volume I, draft Volume II seated, draft Volume III, emit every final bundle with every locator known, then render all three final volumes at once. One full-render wave instead of eight. Estimate: about 50 minutes to about 10–12. The roman-frontmatter invariant the script already relies on (a Contents row cannot move an arabic body folio) is what makes this sound, and it stays asserted rather than assumed. This is candidate B3 on the promotion map. *As built (§5), the engine carries B3's assertion half — draft renders and the draft-versus-final gate — and the pass order stays in the book's build script: by the promotion map's own test a pass planner with one consumer is a contract, not yet code. It moves when the corpus book needs multiple passes.*
 
-**Step 3 — images.**
+**Step 3 — images.** *Done 2026-09-28, lossless (§6), with an accepted and marked deviation (§6.4).*
 
 5. Pre-bake images once into a content-addressed cache: convert alpha PNGs to a form LuaTeX embeds by copy, and downsample each image to what its placed size needs at print resolution. Every compile gets cheaper, and files shrink roughly five to ten times, which speeds up everything downstream. **Downsampling changes pixels and remains the keeper's call**; a lossless variant (convert only, no downsampling) is available if he wants zero visual change.
 
@@ -173,3 +173,73 @@ alone) and plate containment are 70% of the build. The wave is step 3's target �
 re-encoded on every LaTeX run. Plate containment (`tooling/check_plate_containment.py`, three
 volumes in sequence) is new on the floor list; it reads the finals, so it can at least run its three
 volumes in parallel, or during the wave's tail. Not ordered yet.
+
+## 6. Step 3 — done, 2026-09-28: the lossless image bake
+
+Luis, 22:21: "I think the lossless path is the right move" (ruling `01a0eafa-ac65-7589-9ef9-9dd326c7cb09`)
+— no downsampling. Luis, 23:55: "I'll accept it. But mark it." (ruling
+`01a0eb4f-849e-7e9f-979d-b666c8db0d9b`), for the deviation in §6.4.
+
+### 6.1 What it does
+
+`engine/image_bake.py`, switched on by `cli manifest --bake-images` (the book's full and measure
+renders pass it; drafts never read image data). Before the compile, the renderer finds every PNG the
+render names — the pandoc input, the template, the defaults, and the Lua filters the defaults
+declare (Codex 0's ornament and rail pools are absolute paths in its filter) — resolved against the
+roots LaTeX searches. Each 8-bit RGBA or grey-plus-alpha PNG not yet cached is split once into a
+one-page PDF holding its decoded samples and its alpha as `/SMask`, Flate-compressed, at the PNG's
+natural size. A read-only LuaTeX `find_image_file` callback redirects each requested PNG to its
+baked PDF when the file on disk is the one baked (size and mtime); LuaTeX embeds a PDF by copy, so
+the per-run decode and recompress is gone. Anything not found by discovery renders as before.
+
+Cache: `$OPTICAL_FOUNDRY_IMAGE_CACHE`, else `~/.cache/optical-foundry/image-bake`, content-addressed
+by the PNG's sha256, index guarded by a file lock for parallel renders. About 0.5 GB for Codex 0.
+**No pruning yet** (open item; `~/.cache` is one of Sol's known unbounded directories).
+
+### 6.2 Two approaches that failed first
+
+- **PyMuPDF's `insert_image` is not lossless for alpha PNGs** — it altered colour under partial
+  transparency on hundreds of thousands of pixels per image. The PDF is written by hand instead;
+  the embedded samples and soft mask are then byte-identical to LuaTeX's own PNG embedding.
+- **Recording misses from inside LaTeX recorded nothing.** Pandoc runs LaTeX in a temp directory
+  and sets `TEXMFOUTPUT` to it; kpathsea's `openout_any = p` makes Lua's `io.open` return nil for
+  any other absolute path, silently. Hence discovery before the compile and a callback that only
+  reads.
+
+### 6.3 Measured
+
+Run `of-perf-step3b-c248180-2026-09-28` (warm cache), **515 s (8.6 min)**; every gate passed with the
+same shapes and PASS H reported the same shape for all three volumes.
+
+| Volume | Compile, step 2 | Compile, step 3 | PNGs named / baked |
+|---|---|---|---|
+| I | 129 s | 44 s | 216 / 203 |
+| II | 149 s | 48 s | 227 / 209 |
+| III | 322 s | 19 s | 226 / 225 |
+
+The final wave went from 6 m 53 s to 2 m 07 s. A cold build (nothing cached) bakes as it goes: about
+1–2 s per image, once. Plate containment (PASS D2, about 2 m 45 s) is now the largest single step.
+
+### 6.4 ACCEPTED DEVIATION — marked (ruling `01a0eb4f-849e-7e9f-979d-b666c8db0d9b`)
+
+**The contact sheets of a baked build are not pixel-identical to an unbaked one.** Against the step-2
+run: 48 of 636 pages differ at thumbnail scale, by at most 18 pixels on a page. On all 48, the
+embedded image data (samples and soft mask), the image placements, the vector drawings and the text
+are identical; at 300 dpi, 46 of the 48 are pixel-identical; the worst page (Vol II p. 269) differs
+by one 1-pixel column on an image's outer edge.
+
+Cause: a pre-split image can only reach LuaTeX as a PDF page, which is embedded as a Form XObject
+with its own transform and clipping box, and that moves the anti-aliasing of an image's outermost
+edge pixels at some rasterization scales. No lossless route avoids the wrapper: LuaTeX re-encodes
+alpha PNGs whenever it embeds them directly.
+
+Where it is marked:
+
+- `RULINGS.md` — the ruling entry, verbatim.
+- Every baked render's evidence: `render_metadata.image_bake.accepted_deviation`
+  (`engine/image_bake.ACCEPTED_DEVIATION`).
+- The regression check: `cli proof compare` and the book's `build/compare_runs.py` report such pages
+  as **MARKED** with the ruling uid instead of passing them silently. A page is only MARKED when its
+  text, vector drawings and images (decoded data and placement) are identical; any other difference
+  fails. The step-2 → step-3 comparison reads: CLEAN, 96 pages MARKED (48 reading + 48 bind).
+- This section.

@@ -42,6 +42,7 @@ from engine.furnish import (
 from engine.imposition import ImpositionError, impose_pdf
 from engine.bindery_preflight import generate_bindery_preflight
 from engine.image_bake import (
+    ACCEPTED_DEVIATION as IMAGE_BAKE_ACCEPTED_DEVIATION,
     bake_paths as bake_image_paths,
     cache_dir as image_bake_cache_dir,
     discover_png_references,
@@ -284,6 +285,7 @@ class PandocRenderer(Renderer):
                 "baked_now": baked.baked,
                 "already_baked": baked.reused,
                 "not_bakeable": baked.skipped,
+                "accepted_deviation": IMAGE_BAKE_ACCEPTED_DEVIATION,
             }
             bake_lua = out_dir / f"{plan.render_id}.image_bake.lua"
             bake_lua.write_text(image_bake_lua(), encoding="utf-8")

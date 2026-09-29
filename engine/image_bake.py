@@ -45,6 +45,22 @@ import zlib
 
 BAKE_VERSION = 1
 
+# The accepted deviation (keeper ruling 01a0eb4f-849e-7e9f-979d-b666c8db0d9b,
+# 2026-09-28: "I'll accept it. But mark it."). A baked image reaches LuaTeX as a
+# PDF page, which is embedded as a Form XObject with its own transform and
+# clipping box; the image data inside is byte-identical, but the anti-aliasing of
+# an image's outermost edge pixels can differ at some rasterization scales from a
+# render that embeds the PNG directly. Every render that bakes records this in
+# its evidence, and the regression check reports such pages as MARKED.
+ACCEPTED_DEVIATION = {
+    "what": "image-edge anti-aliasing may differ from a direct PNG embed at some rasterization scales",
+    "why": "baked images are embedded through a Form XObject (transform + clipping box)",
+    "unchanged": "embedded image data (samples and soft mask), placement, text",
+    "measured": "Codex 0, 2026-09-28: 48 of 636 pages differ at thumbnail scale by at most 18 px; "
+                "46 of those 48 are pixel-identical at 300 dpi; worst case one 1-px column on an image edge",
+    "ruling": "01a0eb4f-849e-7e9f-979d-b666c8db0d9b",
+}
+
 
 def cache_dir() -> Path:
     """``$OPTICAL_FOUNDRY_IMAGE_CACHE``, else ``$XDG_CACHE_HOME/optical-foundry/image-bake``."""

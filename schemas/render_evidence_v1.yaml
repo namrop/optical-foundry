@@ -123,6 +123,9 @@ properties:
           baked_now: { type: integer }
           already_baked: { type: integer }
           not_bakeable: { type: integer }
+          accepted_deviation:
+            type: object
+            description: "The marked, keeper-accepted rasterization deviation of a baked render (ruling 01a0eb4f-849e-7e9f-979d-b666c8db0d9b)."
       rendered_at: { type: string }
 
   output:

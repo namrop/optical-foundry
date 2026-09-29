@@ -248,7 +248,14 @@ def cmd_proof(args: argparse.Namespace) -> int:
         if result["baseline_pages"] != result["candidate_pages"]:
             print(f"{args.label}: page count {result['baseline_pages']} != {result['candidate_pages']}", file=sys.stderr)
         else:
-            print(f"{args.label}: {len(result['differing_pages'])} page(s) differ: {result['differing_pages'][:30]} "
+            edge = result.get("edge_only_pages", [])
+            if edge:
+                print(f"{args.label}: MARKED {len(edge)} page(s) differ only at image edges — embedded image data, "
+                      f"placement and text identical (accepted deviation, ruling 01a0eb4f-849e): {edge[:30]}")
+            substantive = result.get("substantive_pages", result["differing_pages"])
+            if not substantive:
+                return 0
+            print(f"{args.label}: {len(substantive)} page(s) differ: {substantive[:30]} "
                   f"(sheet: {result['diff_sheet']})", file=sys.stderr)
         return 1
     if args.proof_command != "contact-sheet":
