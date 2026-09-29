@@ -261,8 +261,14 @@ class PandocRenderer(Renderer):
             # input, the template and the defaults, resolved against the roots
             # LaTeX searches. The callback then only reads; see engine/image_bake.
             bake_texts = [cmd_source.read_text(encoding="utf-8", errors="ignore")]
-            for text_path in [template_path, *resolved_profile.defaults_stack]:
-                if text_path and Path(text_path).is_file():
+            text_paths: list[Path] = [p for p in [template_path, *resolved_profile.defaults_stack] if p]
+            # The Lua filters the defaults declare can name images too (codex0's
+            # ornament and rail pools are absolute paths in its filter).
+            text_paths += self._declared_lua_filters(
+                resolved_profile.defaults_stack, resolved_profile.render_environment.cwd
+            )
+            for text_path in text_paths:
+                if Path(text_path).is_file():
                     bake_texts.append(Path(text_path).read_text(encoding="utf-8", errors="ignore"))
             bake_roots = [
                 *(root.path for root in resource_roots),
@@ -644,6 +650,25 @@ class PandocRenderer(Renderer):
 
         evidence_file.write_text(json.dumps(evidence, indent=2) + "\n")
         return evidence
+
+    @staticmethod
+    def _declared_lua_filters(defaults_stack: Iterable[Path], cwd: Path) -> list[Path]:
+        """Lua filter files named under ``filters:`` in the defaults stack."""
+        import yaml
+
+        found: list[Path] = []
+        for defaults in defaults_stack:
+            try:
+                data = yaml.safe_load(Path(defaults).read_text(encoding="utf-8")) or {}
+            except (OSError, yaml.YAMLError):
+                continue
+            for entry in data.get("filters") or [] if isinstance(data, dict) else []:
+                path = entry.get("path") if isinstance(entry, dict) else entry
+                if isinstance(path, str) and path.endswith(".lua"):
+                    candidate = Path(path) if Path(path).is_absolute() else Path(cwd) / path
+                    if candidate.is_file():
+                        found.append(candidate)
+        return found
 
     @staticmethod
     def _resource_path_options(
