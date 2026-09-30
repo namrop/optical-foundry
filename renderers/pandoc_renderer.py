@@ -63,7 +63,9 @@ from engine.profile_resolver import LOCAL_IMPORT, ResolvedProfile, resolve_profi
 from engine.projection_plan import ProjectionPlan
 from engine.resource_roots import (
     ResolvedResourceRoot,
+    TEMPLATE_RESOURCE_KEYS,
     effective_resource_roots,
+    pin_render_resources,
     resource_resolution_evidence,
     resource_root_paths,
 )
@@ -76,6 +78,17 @@ class FurnishMapError(RuntimeError):
 
 class RenderArtifactPublicationError(RuntimeError):
     """Raised when validated render intermediates cannot be published safely."""
+
+
+# pandoc 3's stock LaTeX template block for `strikeout`, guarded so a template
+# that already defines \st keeps its own.
+STRIKEOUT_HEADER = (
+    "% Optical Foundry strikeout support (pandoc lowers ~~text~~ to \\st).\n"
+    "\\ifdefined\\st\\else\n"
+    "\\ifdefined\\directlua\\usepackage{luacolor}\\usepackage[soul]{lua-ul}\n"
+    "\\else\\usepackage{soul}\\fi\n"
+    "\\fi\n"
+)
 
 
 class PandocRenderer(Renderer):
@@ -168,6 +181,16 @@ class PandocRenderer(Renderer):
             render_source, out_dir, plan.render_id, resolved_profile.profile_family
         )
         cmd_source = self._titlepage_background_normalized_source(cmd_source, out_dir, plan.render_id)
+        # Pin relative image references to the files the root chain picks, so
+        # LaTeX cannot fall back to the profile folder first (engine/resource_roots.py,
+        # "Raw-LaTeX resource pinning"). Render-only copy; the source is untouched.
+        cmd_source, resource_resolution["raw_latex_pins"] = self._pinned_resource_source(
+            cmd_source, out_dir, plan.render_id, resource_roots, resolved_profile.render_environment.cwd
+        )
+        resource_resolution["warnings"] = [
+            *resource_resolution["warnings"],
+            *resource_resolution["raw_latex_pins"].pop("warnings"),
+        ]
         cmd = ["pandoc", str(cmd_source), "-o", str(compile_pdf)]
         defaults_meta: dict[str, Any] = {}
         for defaults_file in resolved_profile.defaults_stack:
@@ -246,6 +269,19 @@ class PandocRenderer(Renderer):
         # Page geometry is lowered through a final defaults overlay so imported
         # templates that rely on `$geometry$` receive both the requested paper
         # size and their existing margin/profile geometry options.
+
+        # Strikeout (2026-09-30). Pandoc lowers ~~text~~ to \\st{} (soul) and relies
+        # on its stock template's $if(strikeout)$ block to load the package; the
+        # Foundry's imported templates have none, so any document with strikeout
+        # failed with "Undefined control sequence \\st" (2026-09-01 keeper-capture
+        # proof render). Load pandoc's own package choice for every template when
+        # the source contains strikeout. A header file, not metadata: pandoc
+        # drops metadata header-includes whenever --include-in-header is given.
+        strikeout_support = self._source_contains_strikeout(cmd_source, resolved_profile.defaults_stack)
+        if strikeout_support:
+            strikeout_header = out_dir / f"{plan.render_id}.strikeout_header.tex"
+            strikeout_header.write_text(STRIKEOUT_HEADER, encoding="utf-8")
+            cmd += ["--include-in-header", str(strikeout_header)]
 
         if draft:
             draft_header = out_dir / f"{plan.render_id}.draft_header.tex"
@@ -612,6 +648,7 @@ class PandocRenderer(Renderer):
                 "render_duration_ms": int(elapsed * 1000),
                 "render_mode": "draft" if draft else ("measure" if measure else "full"),
                 **({"image_bake": image_bake_report} if image_bake_report else {}),
+                **({"strikeout_support": True} if strikeout_support else {}),
                 "rendered_at": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
                 "success": success,
                 "profile_version": defaults_meta.get("profile_version", "unknown"),
@@ -1914,6 +1951,63 @@ class PandocRenderer(Renderer):
         if isinstance(includes, list):
             return [str(item) for item in includes if item]
         return [str(includes)] if includes else []
+
+    @staticmethod
+    def _source_contains_strikeout(render_source: Path, defaults_stack: Iterable[Path]) -> bool:
+        """True when pandoc, reading ``render_source`` as the profile does, finds strikeout.
+
+        Exact rather than textual: a ``~~`` inside code, a comment, or a field the
+        document never renders must not load the strikeout packages (luacolor
+        changes how LuaTeX writes colour). Pandoc is consulted only when the text
+        contains ``~~``; if it cannot be run, fall back to including the packages.
+        """
+        if not render_source.exists():
+            return False
+        if "~~" not in render_source.read_text(encoding="utf-8", errors="ignore"):
+            return False
+        reader = "markdown"
+        for defaults_file in defaults_stack:
+            try:
+                import yaml
+
+                data = yaml.safe_load(Path(defaults_file).read_text(encoding="utf-8")) or {}
+            except Exception:
+                continue
+            if isinstance(data, dict) and isinstance(data.get("from"), str):
+                reader = data["from"]
+        try:
+            result = subprocess.run(
+                ["pandoc", "-f", reader, "-t", "json", str(render_source)],
+                capture_output=True,
+                text=True,
+                timeout=120,
+            )
+        except (OSError, subprocess.TimeoutExpired):
+            return True
+        if result.returncode != 0:
+            return True
+        return '"t":"Strikeout"' in result.stdout
+
+    @staticmethod
+    def _pinned_resource_source(
+        render_source: Path,
+        out_dir: Path,
+        render_id: str,
+        roots: list[ResolvedResourceRoot],
+        latex_cwd: Path | None,
+    ) -> tuple[Path, dict[str, Any]]:
+        """Return a render-only copy whose relative image references are absolute winners."""
+        if not render_source.exists():
+            return render_source, {"pinned": [], "unpinned": [], "warnings": []}
+        text = render_source.read_text(encoding="utf-8", errors="ignore")
+        pinned_text, record = pin_render_resources(
+            text, roots, latex_cwd=latex_cwd, template_keys=TEMPLATE_RESOURCE_KEYS
+        )
+        if pinned_text == text:
+            return render_source, record
+        path = out_dir / f"{render_id}.resources_pinned.md"
+        path.write_text(pinned_text, encoding="utf-8")
+        return path, record
 
     @staticmethod
     def _titlepage_background_normalized_source(render_source: Path, out_dir: Path, render_id: str) -> Path:

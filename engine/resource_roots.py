@@ -147,7 +147,7 @@ _TYPED_RESOURCE_KEYS = {
 }
 _RESOURCE_SUFFIXES = {".gif", ".jpeg", ".jpg", ".pdf", ".png", ".svg", ".webp"}
 _SUPPORTED_RAW_RESOURCE_MACROS = (
-    r"(?:includegraphics|OFSectionDividerBackground|CodexFloatingPlate|OFOuterRail|OFBottomRail|OFEdgeOrnament)"
+    r"(?:includegraphics|OFSectionDividerBackground|CodexFloatingPlate|OFOuterRail|OFBottomRail|OFEdgeOrnament|OFImageInitialSetup)"
 )
 _RAW_RESOURCE_PREFIX = (
     rf"\\{_SUPPORTED_RAW_RESOURCE_MACROS}\b\s*(?:\[[^\]\r\n]*\]\s*)?"
@@ -159,7 +159,16 @@ _RAW_DETOKENIZED_RESOURCE_RE = re.compile(
 _RAW_DIRECT_RESOURCE_RE = re.compile(
     _RAW_RESOURCE_PREFIX + r"\{\s*(?P<reference>[^{}\r\n]+?)\s*\}"
 )
-_TEMPLATE_RESOURCE_KEYS = ("titlepage_background_image", "logo_path")
+_TEMPLATE_RESOURCE_KEYS = (
+    "titlepage_background_image",
+    "logo_path",
+    # codex0 apparatus images, supplied by the work (2026-09-30); see
+    # RESOURCE_PATH_VARIABLES in engine/manifest_compiler.py.
+    "codex_blank_leaf_ornament",
+    "codex_compass_field_icon",
+    "codex_folio_chip_asset",
+)
+TEMPLATE_RESOURCE_KEYS: tuple[str, ...] = _TEMPLATE_RESOURCE_KEYS
 
 
 def _relative_image_reference(value: Any) -> str | None:
@@ -199,9 +208,10 @@ def _raw_latex_resource_references(source: Path) -> list[str]:
         return []
     text = source.read_text(encoding="utf-8", errors="ignore")
     references: list[str] = []
-    for pattern in (_RAW_DETOKENIZED_RESOURCE_RE, _RAW_DIRECT_RESOURCE_RE):
+    for pattern in (_RAW_DETOKENIZED_RESOURCE_RE, _RAW_DIRECT_RESOURCE_RE, _PIN_DECORATIVE_RE):
         for match in pattern.finditer(text):
-            reference = _relative_image_reference(match.group("reference"))
+            groups = match.groupdict()
+            reference = _relative_image_reference(groups.get("reference") or groups.get("ref"))
             if reference:
                 references.append(reference)
     return references
@@ -298,5 +308,199 @@ def resource_resolution_evidence(
     return {
         "effective_roots": [root.evidence() for root in roots],
         "resolved_resources": resolved_resources,
+        "warnings": warnings,
+    }
+
+
+# ──────────────────────────────────────────────
+#  Raw-LaTeX resource pinning (2026-09-30)
+# ──────────────────────────────────────────────
+#
+# Why this exists: a relative image path written as raw LaTeX never passes
+# through pandoc's resource lookup. LaTeX resolves it itself, and it tries the
+# path as given -- against the directory pandoc runs from (the profile import
+# root) and TEXINPUTS -- before any \graphicspath entry. So the profile folder
+# silently outranked the manifest's resource roots, while the evidence above
+# claimed the manifest copy won. That is how the Codex 0 Part I plate the keeper
+# chose on 2026-08-07 never rendered (canon scar
+# 21_letters_and_creative/book/codex0_v5/structure/
+# scar_codex0_part01_plate_revision_never_rendered_2026-09-28.md).
+#
+# The fix is to stop asking LaTeX to choose. Every relative image reference the
+# engine can see in the render-only source -- raw-LaTeX macro arguments and the
+# template path variables in frontmatter -- is rewritten to the absolute path of
+# its winner in the effective root chain before pandoc runs. The file the
+# evidence names is then, by construction, the file LaTeX opens. References with
+# no winner are left alone and reported, together with the file LaTeX would
+# fall back to, so a fallback is visible in the record instead of only in pixels.
+
+_PIN_MACROS = (
+    r"(?:includegraphics|OFSectionDividerBackground|CodexFloatingPlate|OFOuterRail"
+    r"|OFBottomRail|OFEdgeOrnament|OFImageInitialSetup)"
+)
+# \macro[opts]{ \detokenize{path} }  or  \macro[opts]{path}
+_PIN_FIRST_ARG_RE = re.compile(
+    r"(?P<head>\\(?P<macro>" + _PIN_MACROS + r")\b\s*(?:\[[^\]\r\n]*\]\s*)?\{\s*)"
+    r"(?:(?P<detok>\\detokenize\s*\{)(?P<dref>[^{}\r\n]+)\}"
+    r"|(?P<ref>[^{}\\\r\n]+?))"
+    r"(?P<tail>\s*\})"
+)
+# \OFDecorativeImage{opts}{path}{edge}: the path is the second argument.
+_PIN_DECORATIVE_RE = re.compile(
+    r"(?P<head>\\(?P<macro>OFDecorativeImage)\s*\{[^{}\r\n]*\}\s*\{\s*)"
+    r"(?P<ref>[^{}\\\r\n]+?)"
+    r"(?P<tail>\s*\})"
+)
+# Characters that must not appear in a path handed to LaTeX unquoted.
+_PIN_UNSAFE_CHARS = set("\\{}$`%#&^~") | {" ", "\t"}
+
+
+def _pin_winner(reference: str, roots: list[ResolvedResourceRoot]) -> tuple[ResolvedResourceRoot, Path, list[str]] | None:
+    matches: list[tuple[ResolvedResourceRoot, Path]] = []
+    for root in roots:
+        canonical_root = root.path.resolve()
+        candidate = (canonical_root / reference).resolve()
+        if candidate.is_relative_to(canonical_root) and candidate.is_file():
+            matches.append((root, candidate))
+    if not matches:
+        return None
+    return matches[0][0], matches[0][1], [str(path) for _root, path in matches[1:]]
+
+
+def _latex_lookup_fallback(reference: str, latex_cwd: Path | None) -> str | None:
+    """The file LaTeX would open for an unpinned relative reference, if any."""
+    if latex_cwd is None:
+        return None
+    candidate = (Path(latex_cwd) / reference)
+    return str(candidate.resolve()) if candidate.is_file() else None
+
+
+def pin_render_resources(
+    text: str,
+    roots: list[ResolvedResourceRoot],
+    *,
+    latex_cwd: Path | None = None,
+    template_keys: Iterable[str] = (),
+) -> tuple[str, dict[str, Any]]:
+    """Rewrite relative image references in render-only ``text`` to their winners.
+
+    Returns the rewritten text and an evidence block::
+
+        {"pinned": [{reference, macro, pinned_to, winner_origin, shadowed,
+                     latex_cwd_candidate, occurrences}],
+         "unpinned": [{reference, macro, reason, latex_would_open}],
+         "warnings": [...]}
+
+    ``latex_cwd_candidate`` records the file LaTeX would have opened had the
+    reference stayed relative, when that differs from the winner -- the exact
+    precedence inversion this pass removes.
+    """
+
+    pinned: dict[str, dict[str, Any]] = {}
+    unpinned: dict[str, dict[str, Any]] = {}
+    warnings: list[str] = []
+
+    def resolve(reference: str, macro: str) -> str | None:
+        reference = reference.strip()
+        relative = _relative_image_reference(reference)
+        if relative is None:
+            return None  # absolute, URL, macro argument like #2, or not an image
+        if relative in pinned:
+            pinned[relative]["occurrences"] += 1
+            return pinned[relative]["pinned_to"]
+        found = _pin_winner(relative, roots)
+        if found is None:
+            if relative not in unpinned:
+                fallback = _latex_lookup_fallback(relative, latex_cwd)
+                unpinned[relative] = {
+                    "reference": relative,
+                    "macro": macro,
+                    "reason": "no winner in the effective root chain",
+                    "latex_would_open": fallback,
+                }
+                warnings.append(
+                    f"raw resource {relative} has no winner in the effective root chain"
+                    + (f"; LaTeX will open {fallback}" if fallback else "; LaTeX will not find it")
+                )
+            return None
+        root, winner, shadowed = found
+        winner_text = winner.as_posix()
+        if any(ch in _PIN_UNSAFE_CHARS or ord(ch) < 32 for ch in winner_text):
+            if relative not in unpinned:
+                unpinned[relative] = {
+                    "reference": relative,
+                    "macro": macro,
+                    "reason": "winner path is not TeX-safe",
+                    "latex_would_open": _latex_lookup_fallback(relative, latex_cwd),
+                }
+                warnings.append(
+                    f"raw resource {relative} not pinned: winner path {winner_text} is not TeX-safe"
+                )
+            return None
+        cwd_candidate = _latex_lookup_fallback(relative, latex_cwd)
+        entry = {
+            "reference": relative,
+            "macro": macro,
+            "pinned_to": winner_text,
+            "winner_origin": root.origin,
+            "shadowed": shadowed,
+            "latex_cwd_candidate": cwd_candidate if cwd_candidate and cwd_candidate != winner_text else None,
+            "occurrences": 1,
+        }
+        pinned[relative] = entry
+        if entry["latex_cwd_candidate"]:
+            warnings.append(
+                f"raw resource {relative}: pinned to {root.origin} winner; unpinned, LaTeX "
+                f"would have opened {entry['latex_cwd_candidate']}"
+            )
+        return winner_text
+
+    def replace_first_arg(match: re.Match[str]) -> str:
+        macro = match.group("macro")
+        if match.group("detok"):
+            new = resolve(match.group("dref"), macro)
+            if new is None:
+                return match.group(0)
+            return f"{match.group('head')}{match.group('detok')}{new}}}{match.group('tail')}"
+        new = resolve(match.group("ref"), macro)
+        if new is None:
+            return match.group(0)
+        return f"{match.group('head')}{new}{match.group('tail')}"
+
+    def replace_decorative(match: re.Match[str]) -> str:
+        new = resolve(match.group("ref"), match.group("macro"))
+        if new is None:
+            return match.group(0)
+        return f"{match.group('head')}{new}{match.group('tail')}"
+
+    body_start = 0
+    front = ""
+    keys = tuple(template_keys)
+    if keys and text.startswith("---\n"):
+        end = text.find("\n---", 4)
+        if end != -1:
+            body_start = end
+            front = text[:end]
+    if front:
+        key_alt = "|".join(re.escape(key) for key in keys)
+        line_re = re.compile(
+            r"^(?P<head>[ \t]*(?P<key>" + key_alt + r")[ \t]*:[ \t]*)(?P<q>['\"]?)(?P<ref>[^'\"\r\n#]+?)(?P=q)[ \t]*$",
+            re.MULTILINE,
+        )
+
+        def replace_front(match: re.Match[str]) -> str:
+            new = resolve(match.group("ref"), f"template:{match.group('key')}")
+            if new is None:
+                return match.group(0)
+            q = match.group("q")
+            return f"{match.group('head')}{q}{new}{q}"
+
+        front = line_re.sub(replace_front, front)
+    text = front + text[body_start:] if front else text
+    text = _PIN_FIRST_ARG_RE.sub(replace_first_arg, text)
+    text = _PIN_DECORATIVE_RE.sub(replace_decorative, text)
+    return text, {
+        "pinned": list(pinned.values()),
+        "unpinned": list(unpinned.values()),
         "warnings": warnings,
     }

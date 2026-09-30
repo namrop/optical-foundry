@@ -88,6 +88,38 @@ properties:
             shadowed:
               type: array
               items: { type: string }
+      raw_latex_pins:
+        type: object
+        description: >
+          Relative image references the engine rewrote to absolute paths in the
+          render-only source before pandoc ran (raw-LaTeX macro arguments and
+          template path variables), so the file named here is the file LaTeX
+          opened. latex_cwd_candidate names the file LaTeX would have opened from
+          the pandoc working directory had the path stayed relative, when that
+          differs. Unpinned references stay relative and name their LaTeX
+          fallback, if any. Added 2026-09-30 (Codex 0 Part I plate scar).
+        properties:
+          pinned:
+            type: array
+            items:
+              type: object
+              properties:
+                reference: { type: string }
+                macro: { type: string }
+                pinned_to: { type: string }
+                winner_origin: { type: string, enum: [run, source, manifest, profile] }
+                shadowed: { type: array, items: { type: string } }
+                latex_cwd_candidate: { type: [string, "null"] }
+                occurrences: { type: integer }
+          unpinned:
+            type: array
+            items:
+              type: object
+              properties:
+                reference: { type: string }
+                macro: { type: string }
+                reason: { type: string }
+                latex_would_open: { type: [string, "null"] }
       warnings:
         type: array
         items: { type: string }

@@ -357,6 +357,12 @@ DOCUMENT_VARIABLE_ALLOWLIST = {
     # Bind shape, carried from the same constant the build pads to, so the
     # printed colophon and the imposition can never describe different books.
     "colophon_signature_size",
+    # codex0 apparatus images, supplied by the work (2026-09-30). The codex0
+    # template used to default all three to paths inside the Codex 0 book's own
+    # folder; now the book names them and the template draws nothing without them.
+    "codex_blank_leaf_ornament",
+    "codex_compass_field_icon",
+    "codex_folio_chip_asset",
 }
 
 RUNNING_TEXT_KEY_ALIASES = {
@@ -371,7 +377,13 @@ RUNNING_TEXT_KEY_ALIASES = {
 }
 RUNNING_TEXT_CANONICAL_ORDER = ("division", "tagline", "footeremail")
 
-RESOURCE_PATH_VARIABLES = {"logo_path", "titlepage_background_image"}
+RESOURCE_PATH_VARIABLES = {
+    "logo_path",
+    "titlepage_background_image",
+    "codex_blank_leaf_ornament",
+    "codex_compass_field_icon",
+    "codex_folio_chip_asset",
+}
 RESOURCE_IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".pdf"}
 
 LATEX_INJECTION_TOKENS = ("\\input", "\\include", "\\write", "\\openout", "\\catcode", "\\usepackage")
@@ -868,12 +880,24 @@ def _render_section_divider(divider: dict[str, Any], numbering_strategy: str = "
 
 
 _CHAPTER_OPENER_FALLBACK_DEFS = [
-    # No-op compatibility fallbacks for profiles without tagged marker macros.
-    # They allow compilation to reach evidence generation, where final-PDF
-    # sanitization fails closed rather than publishing a visible/unsanitized
-    # `[[OFDIV:...]]` token. Tagged templates define the real wrappers first.
-    "\\providecommand{\\OFDivMarkerHideBegin}{}",
-    "\\providecommand{\\OFDivMarkerHideEnd}{}",
+    # Tagged fallbacks for profiles whose template does not define the divider
+    # marker wrappers (2026-09-30). They are the same engine-guarded pair
+    # codex0.tex and base.tex define: the `[[OFDIV:...]]` furnish marker goes
+    # into an /OFDIV marked-content span in invisible render mode, which is what
+    # the final-PDF sanitizer (engine/furnish.py) looks for and removes. The
+    # earlier no-op fallbacks let such profiles compile, but the sanitizer then
+    # failed closed, so a divider could not publish on any profile outside
+    # codex0/base. Templates that define the wrappers keep theirs (\providecommand
+    # yields). Fenced as raw LaTeX: outside a fence pandoc mangles the literal's
+    # space-separated keyword (`literal{3 Tr}` -> `literal\{`).
+    "```{=latex}\n"
+    "\\providecommand{\\OFDivMarkerHideBegin}{\\ifdefined\\pdfextension\\pdfextension literal{/OFDIV BMC 3 Tr}"
+    "\\else\\ifdefined\\pdfliteral\\pdfliteral{/OFDIV BMC 3 Tr}"
+    "\\else\\special{pdf:literal direct /OFDIV BMC 3 Tr}\\fi\\fi}\n"
+    "\\providecommand{\\OFDivMarkerHideEnd}{\\ifdefined\\pdfextension\\pdfextension literal{0 Tr EMC}"
+    "\\else\\ifdefined\\pdfliteral\\pdfliteral{0 Tr EMC}"
+    "\\else\\special{pdf:literal direct 0 Tr EMC}\\fi\\fi}\n"
+    "```",
     # Ritual no-inject zone marks (codex0 defines the Lua-backed versions).
     "\\providecommand{\\CodexPlateRitualBegin}{}",
     "\\providecommand{\\CodexPlateRitualEnd}{}",
@@ -1438,7 +1462,12 @@ class CompositeBundleCompiler(ManifestCompiler):
         frontmatter_seen = False
         mainmatter_started = False
         appendices_started = False
-        if any(isinstance(s.get("chapter_opener"), dict) for s in sorted_sources):
+        # The fallbacks are needed by chapter openers AND by section dividers:
+        # every divider opens with \CodexPlateRitualBegin{} and brackets its
+        # furnish marker with \OFDivMarkerHideBegin/End. Gating on openers alone
+        # made any non-codex0 profile with dividers and no openers fail to
+        # compile (2026-09-01 keeper-capture proof render, attempt 1).
+        if dividers_by_before_uid or any(isinstance(s.get("chapter_opener"), dict) for s in sorted_sources):
             lines.extend(_CHAPTER_OPENER_FALLBACK_DEFS)
             lines.append("")
         for src in sorted_sources:
