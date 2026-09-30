@@ -5,7 +5,7 @@ note_role: architecture_note
 validation_profile: standard
 status: draft
 created: 2026-08-25T12:05:00-04:00
-updated: 2026-09-28T19:17:00-04:00
+updated: 2026-09-30T18:47:00-04:00
 beam_home: 42_optical_foundry
 title: "Codex 0 → Optical Foundry — capability promotion map (post-delivery)"
 tags:
@@ -25,13 +25,15 @@ ruling_refs:
     relation: b3-promotion
   - uid: 01a0ea08-7757-7f0f-9176-4316debc18d6
     relation: part01-plate-intended
+  - uid: 01a0f458-a0ce-7a10-a6b9-927a52a976cb
+    relation: step-1-defects-and-f2
 last_touched:
   name: Claude Opus 5.5
-  harness: claude_code
+  harness: hermes-agent
   model: claude-opus-5-5
-  provider: anthropic
-  voyage: "claude-code:session:96cb72ec-b737-4efa-bd76-d5e173d514bf"
-  at: 2026-09-28T19:17:00-04:00
+  provider: custom:primary
+  voyage: "t3-code:hermes-acp"
+  at: 2026-09-30T18:47:00-04:00
 ---
 
 # Codex 0 → Optical Foundry — capability promotion map
@@ -199,7 +201,7 @@ The band that makes "compose a book out of arbitrary Atrium files" possible at a
 
 - [x] **F1 ★ — Build stamping and the build ledger.** *Now:* `build/stamp_colophon.py` (532 lines) + `build_ledger.yaml`. *Generalization:* a bound artifact claims a build number, stamps a git head into its colophon sources once, and **`--final` refuses a dirty tree by design** while a proof reports `-dirty` loudly rather than refusing. *And the gate that exists for exactly one failure mode:* PASS F / **CC14** — every volume of one build must carry a byte-identical stamp, because build 84 rendered body text from one tree state and apparatus from another and looked healthy. *Second consumer:* a keeper-capture book printed for review is worthless without knowing which tree state it shows. **High value, low blast radius, small code.** *PROMOTE, ruled 2026-09-28 (`RULINGS.md` 01a0e9ab-077c); done the same day — §8.*
 
-- [ ] **F2 ○ — Render evidence extension.** `schemas/render_evidence_v1.yaml` exists; extend it with `resource_roots.py`'s origin proof so evidence names which physical file supplied each logical reference.
+- [x] **F2 ○ — Render evidence extension.** `schemas/render_evidence_v1.yaml` exists; extend it with `resource_roots.py`'s origin proof so evidence names which physical file supplied each logical reference. *Done 2026-09-30 with the raw-LaTeX precedence fix, as step 1 of the order ruled that day (`RULINGS.md` 01a0f458-a0ce) — §9.*
 
 ### Band G — The tenant split (P1/P2 execution)
 
@@ -285,7 +287,7 @@ For each candidate, Luis rules one of:
 | C — edition gating | C1 C2 | — |
 | D — furniture | D1★ D2★ D3 D4 D5 | — |
 | E — physical | E1★ E2 E3 E4 | E1 PROMOTE, done (2026-09-28); rest — |
-| F — build identity | F1★ F2 | F1 PROMOTE, done (2026-09-28); F2 — |
+| F — build identity | F1★ F2 | F1 PROMOTE, done (2026-09-28); F2 done (2026-09-30, §9) |
 | G — tenant split | G1★ G2 G3 | G1 PROMOTE, done (2026-09-28); G2, G3 — |
 
 **On ratification this document is committed to `42_optical_foundry`** and the ruled set
@@ -445,3 +447,66 @@ nothing. G1 removed the shadow. Luis, 17:59: "The middle one was the one that I 
 The build-performance plan (`2026-09-28_codex0_build_performance_plan.md`, ruling
 `01a0e9c7-c01e-7d0a-bcc0-4793b00abce0`): step 1 (measure renders, parallel reading volumes), then
 step 2 as the B3 promotion, then the image cache. Every other candidate in §3 is unruled.
+
+## 9. 2026-09-30 — step 1: four defects and F2
+
+Ruling `01a0f458-a0ce-7a10-a6b9-927a52a976cb` approved the order proposed on 2026-09-29 and
+started step 1: the four open defects together with F2. Worked on branch
+`dev/step1-defects-f2-20260930` in a worktree, verified, then fast-forwarded to `main`.
+
+### 9.1 What changed
+
+- **Raw-LaTeX image precedence, and F2.** A relative image path written as raw LaTeX was
+  resolved by LaTeX itself, from the profile folder pandoc runs in, ahead of every manifest
+  resource root, while the evidence named the manifest copy as the winner (the Part I plate
+  scar). `engine/resource_roots.py` gains a pinning pass (`pin_render_resources`): before
+  pandoc runs, the renderer rewrites every relative image reference it can see in the
+  render-only source — the arguments of `\includegraphics`, `\OFSectionDividerBackground`,
+  `\CodexFloatingPlate`, the rail and edge-ornament macros, `\OFImageInitialSetup`, the path
+  argument of `\OFDecorativeImage`, and the template path variables in frontmatter — to the
+  absolute path of its winner in the effective root chain. The file the evidence names is then
+  the file LaTeX opens. Evidence gains `resource_resolution.raw_latex_pins`: per reference the
+  pinned path, its origin, shadowed copies, and `latex_cwd_candidate`, the file LaTeX would have
+  opened had the path stayed relative (the inversion, recorded, not only visible in pixels).
+  References with no winner stay relative and name their LaTeX fallback. Schema updated.
+- **Divider-only bundles compile and publish on every profile.** The chapter-opener fallback
+  definitions are now emitted when a bundle has dividers, not only openers; the divider marker
+  wrappers' fallbacks are the tagged, engine-guarded pair codex0 and base define (the old no-op
+  fallbacks let the compile pass and then the final-PDF sanitizer failed closed).
+- **Strikeout.** When pandoc, reading the source as the profile does, finds a Strikeout, the
+  renderer includes pandoc's own package block (`lua-ul` under LuaTeX, else `soul`) as a header
+  file; evidence records `render_metadata.strikeout_support`. A header file rather than
+  metadata, because pandoc drops metadata `header-includes` whenever `--include-in-header` is
+  also given (draft and baked renders give it).
+- **`codex0.tex` apparatus defaults.** The template no longer names paths inside the Codex 0
+  book. `codex_blank_leaf_ornament`, `codex_compass_field_icon` and `codex_folio_chip_asset`
+  are allowlisted, path-guarded manifest variables; without them the blank leaf, compass field
+  and folio chip draw nothing. The book's generator names its three files.
+
+### 9.2 Verification
+
+- Full suite: 600 pass, 7 fail — the seven known failures (profile checker local sources,
+  ownvoice stacking, five client template contracts). The three `test_body_folio_start`
+  failures carried since 2026-09-28 now pass: they were this defect — the codex0 profile could
+  not render outside the book because its template named the book's endless-knot image.
+- A real render reproduces the scar: with a different image at the same relative path in the
+  pandoc working directory, the PDF embedded the profile folder's copy with pinning off and
+  embeds the manifest's with it on.
+- Whole-book regression (`CODEX0_REGRESSION=1`), baseline at `358d8d1` vs this branch: every
+  gate passed; page counts 224 / 286 / 126 read, 224 / 288 / 128 bound, unchanged. The resolved
+  sources differ exactly by the three apparatus variables and the tagged marker fallbacks.
+  Pages: **16 per PDF MARKED, none failing** — every one is a blank leaf carrying the endless
+  knot. Step 3's bake had never baked that image: its callback resolves a relative name through
+  kpse or the working directory, and a path LaTeX finds only through `\graphicspath` missed the
+  index. Pinned absolute, it is now baked, so it arrives in a Form XObject — the image-edge
+  deviation ruling `01a0eb4f-849e` accepted and the comparison marks. Image data, placement,
+  drawings and text are identical on all 16.
+- Evidence: 24 / 34 / 9 references pinned per volume, none unpinned, no warnings, no profile
+  shadow (none exist since G1).
+
+### 9.3 Found on the way
+
+- Pandoc drops metadata `header-includes` whenever `--include-in-header` is given. Draft and
+  baked renders give it; any profile whose render relies on frontmatter `header-includes` and
+  is rendered with `--draft` or `--bake-images` would lose them. Not observed to matter for
+  Codex 0 (drafts agree with finals, PASS H); not investigated further.
