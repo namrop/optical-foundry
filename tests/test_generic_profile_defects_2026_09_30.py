@@ -125,3 +125,19 @@ def test_apparatus_variables_are_allowlisted_and_path_guarded(key):
     for unsafe in ("/abs/knot.png", "../knot.png", "assets/knot.png}\\input{x}", "https://x/knot.png", "assets/knot.txt"):
         accepted, rejected = _guard_manifest_variables({key: unsafe})
         assert accepted == {} and key in rejected, unsafe
+
+
+def test_bindery_preflight_compile_timeout_is_reported_not_raised(tmp_path, monkeypatch):
+    import engine.bindery_preflight as bp
+
+    def slow(*_args, **_kwargs):
+        raise subprocess.TimeoutExpired(cmd="xelatex", timeout=1)
+
+    monkeypatch.setattr(bp.shutil, "which", lambda name: "/bin/xelatex")
+    monkeypatch.setattr(bp.subprocess, "run", slow)
+    monkeypatch.setenv("OF_PREFLIGHT_TIMEOUT_S", "1")
+    tex = tmp_path / "guide.tex"
+    tex.write_text("x", encoding="utf-8")
+    status, detail = bp._compile_tex(tex, tmp_path)
+    assert status == "tex_written_pdf_failed"
+    assert "exceeded 1s" in detail

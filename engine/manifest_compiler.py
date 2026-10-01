@@ -879,6 +879,72 @@ def _render_section_divider(divider: dict[str, Any], numbering_strategy: str = "
     return _render_generic_section_divider(divider, numbering_strategy=numbering_strategy)
 
 
+_BODY_METADATA_BLOCK_RE = re.compile(
+    r"(?:\A\n*|(?<=\n\n))---[ \t]*\n(?P<yaml>(?:(?!---[ \t]*\n|\.\.\.[ \t]*\n).*\n)*?)(?:---|\.\.\.)[ \t]*(?:\n|\Z)"
+)
+
+
+def _strip_body_metadata_blocks(body: str) -> tuple[str, int]:
+    """Remove YAML blocks pandoc would read as metadata (a mapping between ``---`` lines
+    at the start of the body or after a blank line). Code fences are left alone."""
+    import yaml as _yaml
+
+    removed = 0
+    out: list[str] = []
+    pos = 0
+    fence_spans = [m.span() for m in re.finditer(r"^(```|~~~)[^\n]*\n.*?^\1[ \t]*$", body, re.M | re.S)]
+    for match in _BODY_METADATA_BLOCK_RE.finditer(body):
+        if any(a <= match.start() < b for a, b in fence_spans):
+            continue
+        try:
+            data = _yaml.safe_load(match.group("yaml"))
+        except _yaml.YAMLError:
+            continue
+        if not isinstance(data, dict) or not data:
+            continue
+        out.append(body[pos:match.start()])
+        pos = match.end()
+        removed += 1
+    out.append(body[pos:])
+    return "".join(out), removed
+
+
+_ATX_HEADING_RE = re.compile(r"^(#{1,6})[ \t]+(.*?)[ \t#]*$")
+_FENCE_OPEN_RE = re.compile(r"^[ \t]*(```+|~~~+)")
+
+
+def title_heading(body: str) -> tuple[int, int, str] | None:
+    """(start, end, text) of the body's title heading: its FIRST heading, if level 1.
+
+    Lines inside code fences are not headings. A short kicker line above the H1
+    is allowed; any earlier heading of another level means there is no title
+    heading.
+    """
+    pos = 0
+    fence = ""
+    for line in body.splitlines(keepends=True):
+        stripped = line.rstrip("\n")
+        opener = _FENCE_OPEN_RE.match(stripped)
+        if fence:
+            if opener and opener.group(1).startswith(fence):
+                fence = ""
+        elif opener:
+            fence = opener.group(1)[:3]
+        else:
+            heading = _ATX_HEADING_RE.match(stripped)
+            if heading:
+                if len(heading.group(1)) != 1:
+                    return None
+                return pos, pos + len(line), heading.group(2).strip()
+        pos += len(line)
+    return None
+
+
+def _strip_title_heading(body: str) -> str:
+    span = title_heading(body)
+    return body if span is None else body[: span[0]] + body[span[1]:]
+
+
 _CHAPTER_OPENER_FALLBACK_DEFS = [
     # Tagged fallbacks for profiles whose template does not define the divider
     # marker wrappers (2026-09-30). They are the same engine-guarded pair
@@ -1459,6 +1525,7 @@ class CompositeBundleCompiler(ManifestCompiler):
 
         # source sections
         source_order_uid = []
+        body_metadata_blocks_removed: dict[str, int] = {}
         frontmatter_seen = False
         mainmatter_started = False
         appendices_started = False
@@ -1503,6 +1570,21 @@ class CompositeBundleCompiler(ManifestCompiler):
 
             raw_text = src_path.read_text()
             fm, body = _split_frontmatter_and_body(raw_text)
+            if src.get("strip_body_metadata_blocks") is True:
+                # A YAML block inside a body (legacy second frontmatter, common in
+                # older Atrium notes) never renders, but in an assembled bundle
+                # pandoc reads it as DOCUMENT metadata: the 2026-09-30 keeper-
+                # capture proof printed one capture's `date:` on the book's title
+                # page. Removed from the assembled copy and counted in evidence.
+                body, removed = _strip_body_metadata_blocks(body)
+                if removed:
+                    body_metadata_blocks_removed[uid] = removed
+            if src.get("strip_leading_heading") is True:
+                # The source's own leading H1 is set by the chapter opener (its
+                # title); without this every chapter opened with its title twice
+                # (promotion map §7, 2026-09-01). Only the body's first heading is
+                # removed, and only when it is level 1 (see _title_heading_span).
+                body = _strip_title_heading(body)
 
             # Per-source page break. A source may opt out (page_break_before:
             # false) to flow continuously after the previous source — e.g. a
@@ -1751,6 +1833,7 @@ class CompositeBundleCompiler(ManifestCompiler):
                 "rejected_title_page_variables": rejected_title_page_variables,
                 "accepted_manifest_variables": sorted(accepted_manifest_variables.keys()),
                 "rejected_manifest_variables": rejected_manifest_variables,
+                "body_metadata_blocks_removed": body_metadata_blocks_removed,
                 "delivery_colophon_emitted": delivery_colophon_emitted,
                 "section_divider_numbering": section_divider_numbering,
                 "section_dividers_enabled": bool(section_divider_inventory),

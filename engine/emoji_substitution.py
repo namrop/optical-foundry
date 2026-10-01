@@ -12,7 +12,14 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from engine.glyph_registry import ASSETS_ROOT, load_registry, lower_glyphs
+from engine.glyph_registry import (
+    ASSETS_ROOT,
+    code_inline_lua_filter,
+    iter_prose_segments,
+    load_registry,
+    lower_glyphs,
+    monospace_coverage,
+)
 from engine.layout_images import _ensure_header_includes
 
 
@@ -23,6 +30,7 @@ class EmojiSubstitutionResult:
     inventory: list[dict[str, Any]] = field(default_factory=list)
     asset_paths: list[str] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
+    lua_filter: Path | None = None
 
 
 _EMOJI_HEADER_INCLUDES = [
@@ -74,21 +82,63 @@ def preprocess_emoji_substitutions(source: Path, output_dir: Path, render_id: st
     registry = load_registry()
     text = source.read_text(encoding="utf-8", errors="ignore")
     entries = registry["emoji"]
-    lowered = lower_glyphs(
-        text,
-        registry,
-        emoji_macro=lambda key: _latex_emoji_macro(ASSETS_ROOT / entries[key]["pdf"]),
-        fallback_macro=lambda family, run: f"\\{family}{{{run}}}",
+
+    def emoji_latex(key: str) -> str:
+        return _latex_emoji_macro(ASSETS_ROOT / entries[key]["pdf"])
+
+    def fallback_latex(family: str, run: str) -> str:
+        return f"\\{family}{{{run}}}"
+
+    lowered = lower_glyphs(text, registry, emoji_macro=emoji_latex, fallback_macro=fallback_latex)
+    # Registered glyphs inside inline code spans: lowered by a pandoc Lua filter,
+    # since a macro written into a code span would print literally.
+    code_spans = "\n".join(
+        seg[1:-1] if len(seg) > 1 else seg
+        for seg, prose in iter_prose_segments(text)
+        if not prose and seg.startswith("`")
     )
+    mono = monospace_coverage()
+    code_registry = {
+        **registry,
+        "emoji": {
+            key: entry for key, entry in entries.items()
+            if not all(int(part, 16) in mono for part in key.split("_"))
+        },
+        "fallback_fonts": [
+            {**font, "codepoints": [cp for cp in font.get("codepoints", []) if int(cp) not in mono]}
+            for font in registry["fallback_fonts"]
+        ],
+    }
+    code_lowered = lower_glyphs(code_spans, code_registry, emoji_macro=lambda k: "", fallback_macro=lambda f, r: "")
     warnings = [
         f"no fallback font covers {cp}; grow the glyph registry (cli glyphs grow)"
-        for cp in lowered.fallback_missing
+        for cp in sorted(set(lowered.fallback_missing) | set(code_lowered.fallback_missing))
     ]
-    if not lowered.emoji_counts and not lowered.fallback_counts:
+    families = set(lowered.fallback_counts) | set(code_lowered.fallback_counts)
+    if not (lowered.emoji_counts or families or code_lowered.emoji_counts):
         return EmojiSubstitutionResult(changed=False, rewritten_source=source, warnings=warnings)
 
+    lua_filter = None
+    if code_lowered.emoji_counts or code_lowered.fallback_counts:
+        replacements: dict[str, str] = {}
+        for key in code_lowered.emoji_counts:
+            seq = "".join(chr(int(part, 16)) for part in key.split("_"))
+            replacements[seq] = emoji_latex(key)
+            if len(seq) == 1:
+                replacements[seq + "\ufe0f"] = emoji_latex(key)
+        for font in code_registry["fallback_fonts"]:
+            if font["family"] in code_lowered.fallback_counts:
+                for cp in font.get("codepoints", []):
+                    replacements[chr(int(cp))] = fallback_latex(font["family"], chr(int(cp)))
+        output_dir.mkdir(parents=True, exist_ok=True)
+        lua_filter = output_dir / f"{render_id}.glyph_code.lua"
+        lua_filter.write_text(code_inline_lua_filter(replacements), encoding="utf-8")
+        for key, count in code_lowered.emoji_counts.items():
+            lowered.emoji_counts[key] = lowered.emoji_counts.get(key, 0) + count
+        for family, count in code_lowered.fallback_counts.items():
+            lowered.fallback_counts[family] = lowered.fallback_counts.get(family, 0) + count
+
     output_dir.mkdir(parents=True, exist_ok=True)
-    families = set(lowered.fallback_counts)
     includes = list(_EMOJI_HEADER_INCLUDES)
     if families:
         includes += _fallback_header_includes(registry, families)
@@ -132,6 +182,7 @@ def preprocess_emoji_substitutions(source: Path, output_dir: Path, render_id: st
         inventory=inventory,
         asset_paths=asset_paths,
         warnings=warnings,
+        lua_filter=lua_filter,
     )
 
 

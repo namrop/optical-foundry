@@ -66,6 +66,14 @@
       "license": "Apache-2.0",
       "svg_sha256": "4a70e10a0d4031082691b5da2de75519fdfb9f77a7ac76e1a39a4655a3c133fd"
     },
+    "23e9": {
+      "emoji": "⏩",
+      "svg": "emoji/noto/svg/emoji_u23e9.svg",
+      "pdf": "emoji/noto/pdf/emoji_u23e9.pdf",
+      "source": "googlefonts/noto-emoji v2.051",
+      "license": "Apache-2.0",
+      "svg_sha256": "2d4a5b1b2bb9ed8caa584266dbffd685c97cd89b23f9c0586339ed700fd6f7cd"
+    },
     "26a0": {
       "emoji": "⚠️",
       "svg": "emoji/noto/svg/emoji_u26a0.svg",
@@ -105,6 +113,20 @@
       "characters": "斩杀线",
       "source": "notofonts/noto-cjk Sans 2.004 (JP face)",
       "license": "OFL-1.1"
+    },
+    {
+      "family": "OFFallbackSymbols",
+      "codepoints": [
+        10003,
+        10004
+      ],
+      "faces": {
+        "Regular": "fonts/glyph_fallback/OFFallbackSymbols-Regular.otf",
+        "Bold": "fonts/glyph_fallback/OFFallbackSymbols-Bold.otf"
+      },
+      "characters": "✓✔",
+      "source": "DejaVu Sans 2.37 (TeX Live dejavu package)",
+      "license": "Bitstream Vera / DejaVu (free; see dejavu LICENSE)"
     }
   ]
 }

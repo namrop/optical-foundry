@@ -223,27 +223,63 @@ def lower_glyphs(text: str, registry: dict[str, Any], *, emoji_macro, fallback_m
 
 
 def font_coverage(font_files: Iterable[Path]) -> set[int]:
-    """Code points covered by ``font_files`` (fontconfig's charset; no Python font deps)."""
-    covered: set[int] = set()
+    """Code points covered by EVERY font in ``font_files`` (fontconfig's charset).
+
+    Intersection, not union: a character is safe only if every face the body is
+    set in has it (regular and bold, serif and sans).
+    """
+    covered: set[int] | None = None
     for font in font_files:
         out = subprocess.run(
             ["fc-query", "-f", "%{charset}", str(font)], capture_output=True, text=True, check=True
         ).stdout
+        cps: set[int] = set()
         for token in out.split():
             if "-" in token:
                 lo, hi = token.split("-")
-                covered.update(range(int(lo, 16), int(hi, 16) + 1))
+                cps.update(range(int(lo, 16), int(hi, 16) + 1))
             else:
-                covered.add(int(token, 16))
-    return covered
+                cps.add(int(token, 16))
+        covered = cps if covered is None else covered & cps
+    return covered or set()
+
+
+def _tex_font(name: str) -> Path | None:
+    found = subprocess.run(["kpsewhich", name], capture_output=True, text=True).stdout.strip()
+    return Path(found) if found else None
+
+
+DEFAULT_COVERAGE_FACES = ("DejaVuSerif.ttf", "DejaVuSerif-Bold.ttf", "DejaVuSans.ttf", "DejaVuSans-Bold.ttf")
+DEFAULT_SYMBOL_FACES = {"Regular": "DejaVuSans.ttf", "Bold": "DejaVuSans-Bold.ttf"}
 
 
 def default_coverage_fonts() -> list[Path]:
-    """The Sol runtime body font (the fallback for Helvetica et al., see the renderer)."""
-    found = subprocess.run(
-        ["fc-match", "-f", "%{file}", "DejaVu Sans"], capture_output=True, text=True
-    ).stdout.strip()
-    return [Path(found)] if found else []
+    """The faces Foundry text is set in on Sol: the TeX tree's DejaVu (the runtime
+    fallback for Helvetica, Times and Iowan; see the renderer's font overlay)."""
+    return [p for p in (_tex_font(name) for name in DEFAULT_COVERAGE_FACES) if p]
+
+
+_MONO_COVERAGE: set[int] | None = None
+
+
+def monospace_coverage() -> set[int]:
+    """What the Sol code face (TeX-tree DejaVu Sans Mono) covers; empty if absent.
+
+    Inline code keeps its own glyph wherever the code face has one; only what it
+    lacks is lowered (an empty set lowers every registered glyph).
+    """
+    global _MONO_COVERAGE
+    if _MONO_COVERAGE is None:
+        mono = _tex_font("DejaVuSansMono.ttf")
+        try:
+            _MONO_COVERAGE = font_coverage([mono]) if mono else set()
+        except (OSError, subprocess.CalledProcessError):
+            _MONO_COVERAGE = set()
+    return _MONO_COVERAGE
+
+
+def default_symbol_faces() -> dict[str, Path]:
+    return {face: p for face, name in DEFAULT_SYMBOL_FACES.items() if (p := _tex_font(name))}
 
 
 def noto_svg_keys(noto_source: Path) -> set[str]:
@@ -254,6 +290,7 @@ def noto_svg_keys(noto_source: Path) -> set[str]:
 class Needs:
     emoji: dict[str, dict[str, Any]] = field(default_factory=dict)  # key -> {count, files}
     fallback: dict[int, dict[str, Any]] = field(default_factory=dict)
+    symbols: dict[int, dict[str, Any]] = field(default_factory=dict)
     unresolved: dict[int, dict[str, Any]] = field(default_factory=dict)
 
 
@@ -263,12 +300,17 @@ def scan_needed(
     covered: set[int],
     registry: dict[str, Any],
     noto_keys: set[str] | None = None,
+    symbol_coverage: set[int] | None = None,
+    code_covered: set[int] | None = None,
 ) -> Needs:
     """What ``paths`` need that neither the coverage fonts nor the registry supply.
 
-    An emoji sequence counts only when it contains a code point the coverage fonts
-    lack: a covered character (©, ↔, ✓) stays text. With ``noto_keys`` the longest
-    available Noto sequence is chosen; without, single code points are reported.
+    A code point counts only when the face it is set in lacks it: ``covered`` for
+    prose, ``code_covered`` for inline code spans (code blocks are verbatim and
+    not scanned). Order of resolution for a missing code point: CJK and kana →
+    the CJK fallback font; a symbol the symbols source font has (✓, ✔, ⏩ in
+    DejaVu Sans) → the symbols fallback font, so it stays text; otherwise the
+    longest available Noto Emoji sequence (an image); otherwise unresolved.
     """
     registered_trie = _build_trie(registry["emoji"].keys())
     noto_trie = _build_trie(noto_keys) if noto_keys else None
@@ -280,32 +322,40 @@ def scan_needed(
         entry["count"] += 1
         entry["files"].add(name)
 
+    def resolve(segment: str, have: set[int], name: str) -> None:
+        i = 0
+        while i < len(segment):
+            if registered_trie.children and (m := _match_at(segment, i, registered_trie)):
+                i = m[1]
+                continue
+            cp = ord(segment[i])
+            if cp in have or cp in (VS16, ZWJ) or cp < 0x20 or cp in fallback_registered:
+                i += 1
+                continue
+            if is_fallback_codepoint(cp):
+                note(needs.fallback, cp, name)
+                i += 1
+                continue
+            if symbol_coverage and cp in symbol_coverage:
+                note(needs.symbols, cp, name)
+                i += 1
+                continue
+            m = _match_at(segment, i, noto_trie) if noto_trie else None
+            if m:
+                note(needs.emoji, m[0], name)
+                i = m[1]
+                continue
+            note(needs.unresolved, cp, name)
+            i += 1
+
     for path in paths:
         text = Path(path).read_text(encoding="utf-8", errors="ignore")
+        name = Path(path).name
         for segment, prose in iter_prose_segments(text):
-            if not prose:
-                continue
-            i = 0
-            while i < len(segment):
-                if registered_trie.children and (m := _match_at(segment, i, registered_trie)):
-                    i = m[1]
-                    continue
-                cp = ord(segment[i])
-                if cp in covered or cp in (VS16, ZWJ) or cp < 0x20:
-                    i += 1
-                    continue
-                if is_fallback_codepoint(cp):
-                    if cp not in fallback_registered:
-                        note(needs.fallback, cp, Path(path).name)
-                    i += 1
-                    continue
-                m = _match_at(segment, i, noto_trie) if noto_trie else None
-                if m:
-                    note(needs.emoji, m[0], Path(path).name)
-                    i = m[1]
-                    continue
-                note(needs.unresolved, cp, Path(path).name)
-                i += 1
+            if prose:
+                resolve(segment, covered, name)
+            elif code_covered is not None and segment.startswith("`") and not _FENCE_RE.match(segment):
+                resolve(segment, code_covered, name)
     return needs
 
 
@@ -361,3 +411,47 @@ def subset_fallback_font(
     entry["codepoints"] = sorted(codepoints)
     entry["characters"] = "".join(chr(cp) for cp in sorted(codepoints))
     return entry
+
+
+def code_inline_lua_filter(replacements: dict[str, str]) -> str:
+    """A pandoc Lua filter that lowers registered glyphs inside inline code.
+
+    Markdown preprocessing cannot reach into a code span (pandoc would print the
+    macro literally), so inline ``Code`` is split around each registered glyph
+    and the glyph becomes raw LaTeX between two code pieces. Code blocks are
+    verbatim and are not touched; a missing glyph there still fails the lint.
+    ``replacements`` maps a glyph string (an emoji sequence with and without VS16,
+    or a fallback character) to its LaTeX.
+    """
+    keys = sorted(replacements, key=len, reverse=True)
+    rows = "\n".join(f"  {{ [==[{k}]==], [==[{replacements[k]}]==] }}," for k in keys)
+    return f"""-- Optical Foundry glyph registry: inline-code lowering (engine/glyph_registry.py), per render.
+local glyphs = {{
+{rows}
+}}
+function Code(el)
+  local text = el.text
+  local out, buf, i, hit = {{}}, "", 1, false
+  while i <= #text do
+    local matched = false
+    for _, g in ipairs(glyphs) do
+      local key = g[1]
+      if text:sub(i, i + #key - 1) == key then
+        if buf ~= "" then out[#out + 1] = pandoc.Code(buf, el.attr) end
+        buf = ""
+        out[#out + 1] = pandoc.RawInline("latex", g[2])
+        i = i + #key
+        matched, hit = true, true
+        break
+      end
+    end
+    if not matched then
+      buf = buf .. text:sub(i, i)
+      i = i + 1
+    end
+  end
+  if not hit then return nil end
+  if buf ~= "" then out[#out + 1] = pandoc.Code(buf, el.attr) end
+  return out
+end
+"""

@@ -109,3 +109,28 @@ def test_keeper_render_passes_the_glyph_lint_with_emoji_and_cjk(tmp_path):
     pdf = evidence["output"]["pdf_path"]
     text = subprocess.run(["pdftotext", pdf, "-"], capture_output=True, text=True, check=True).stdout
     assert "斩杀线" in text
+
+
+def test_check_marks_are_symbols_fallback_and_stay_text():
+    families = {f["family"]: f for f in REGISTRY["fallback_fonts"]}
+    assert {0x2713, 0x2714} <= set(families["OFFallbackSymbols"]["codepoints"])
+
+
+def test_inline_code_glyphs_the_code_face_lacks_get_a_lua_filter(tmp_path):
+    src = tmp_path / "c.md"
+    src.write_text("Prose only.\n\n- `🧠 Metacognition` header, and `⚠ warn`.\n", encoding="utf-8")
+    result = preprocess_emoji_substitutions(src, tmp_path / "out", "c")
+    assert result.lua_filter is not None
+    lua = result.lua_filter.read_text(encoding="utf-8")
+    assert "emoji_u1f9e0.pdf" in lua
+    if gr.monospace_coverage():  # DejaVu Sans Mono has ⚠, so code keeps its own glyph
+        assert "emoji_u26a0.pdf" not in lua
+
+
+@pytest.mark.skipif(not shutil.which("pandoc"), reason="pandoc missing")
+def test_code_inline_filter_splits_code_around_the_glyph(tmp_path):
+    flt = tmp_path / "f.lua"
+    flt.write_text(gr.code_inline_lua_filter({"🧠": "\\OFEmoji{x.pdf}"}), encoding="utf-8")
+    out = subprocess.run(["pandoc", "-t", "latex", "--lua-filter", str(flt)], input="a `🧠 b` c\n",
+                         capture_output=True, text=True, check=True).stdout
+    assert out.strip() == "a \\OFEmoji{x.pdf}\\texttt{\\ b} c"

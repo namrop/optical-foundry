@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 import json
 import re
+import os
 import shutil
 import subprocess
 
@@ -545,14 +546,25 @@ def _compile_tex(tex_path: Path, dest: Path) -> tuple[str, str]:
         return "tex_written", ""
     output_pdf = tex_path.with_suffix(".pdf")
     last_proc = None
+    # The safe-area overlay typesets a copy of every page, so a long book can
+    # outrun the budget (a very long corpus book did, 2026-09-30).
+    # A timeout is reported as an unwritten guide, never raised: the preflight
+    # describes the render, it does not get to crash it.
+    budget = int(os.environ.get("OF_PREFLIGHT_TIMEOUT_S", "120"))
     for _ in range(2):
-        proc = subprocess.run(
-            [xelatex, "-interaction=nonstopmode", "-halt-on-error", tex_path.name],
-            cwd=dest,
-            text=True,
-            capture_output=True,
-            timeout=120,
-        )
+        try:
+            proc = subprocess.run(
+                [xelatex, "-interaction=nonstopmode", "-halt-on-error", tex_path.name],
+                cwd=dest,
+                text=True,
+                capture_output=True,
+                timeout=budget,
+            )
+        except subprocess.TimeoutExpired:
+            return (
+                "tex_written_pdf_failed",
+                f"xelatex exceeded {budget}s (OF_PREFLIGHT_TIMEOUT_S) compiling {tex_path.name}",
+            )
         last_proc = proc
         if proc.returncode != 0:
             return "tex_written_pdf_failed", (proc.stderr or proc.stdout)[-800:]
@@ -637,7 +649,10 @@ def _tool_error(text: str) -> str:
 def _run_tool(command: list[str]) -> str:
     if not shutil.which(command[0]):
         return f"__ERROR__{command[0]} unavailable"
-    proc = subprocess.run(command, text=True, capture_output=True, timeout=90)
+    try:
+        proc = subprocess.run(command, text=True, capture_output=True, timeout=90)
+    except subprocess.TimeoutExpired:
+        return f"__ERROR__{command[0]} exceeded 90s"
     if proc.returncode != 0:
         return f"__ERROR__{command[0]} failed: {(proc.stderr or proc.stdout).strip()}"
     return proc.stdout

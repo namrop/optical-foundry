@@ -454,7 +454,12 @@ def cmd_glyphs(args: argparse.Namespace) -> int:
     noto = Path(args.noto_source) if args.noto_source else None
     noto_keys = gr.noto_svg_keys(noto) if noto else None
     paths = _glyph_paths(args.input)
-    needs = gr.scan_needed(paths, covered=covered, registry=registry, noto_keys=noto_keys)
+    symbol_faces = gr.default_symbol_faces()
+    symbol_coverage = gr.font_coverage(symbol_faces.values()) if symbol_faces else set()
+    needs = gr.scan_needed(
+        paths, covered=covered, registry=registry, noto_keys=noto_keys,
+        symbol_coverage=symbol_coverage, code_covered=gr.monospace_coverage(),
+    )
 
     def show(title: str, table: dict, label) -> None:
         if not table:
@@ -474,10 +479,11 @@ def cmd_glyphs(args: argparse.Namespace) -> int:
 
     print(f"{len(paths)} file(s); coverage fonts: {', '.join(str(f) for f in coverage_fonts)}")
     show("emoji to vendor", needs.emoji, emoji_label)
-    show("fallback-font characters", needs.fallback, cp_label)
+    show("CJK fallback-font characters", needs.fallback, cp_label)
+    show("symbols fallback-font characters", needs.symbols, cp_label)
     show("not resolvable here" + ("" if noto else " (pass --noto-source to match emoji)"), needs.unresolved, cp_label)
     if args.glyphs_command == "scan":
-        return 1 if (needs.emoji or needs.fallback or needs.unresolved) else 0
+        return 1 if (needs.emoji or needs.fallback or needs.symbols or needs.unresolved) else 0
 
     if needs.emoji and not noto:
         print("ERROR: --noto-source is required to vendor emoji", file=sys.stderr)
@@ -503,10 +509,43 @@ def cmd_glyphs(args: argparse.Namespace) -> int:
         updated["license"] = "OFL-1.1"
         fonts[fonts.index(family)] = updated
         print(f"  OFFallbackCJK now covers {len(codepoints)} code point(s)")
+    if needs.symbols:
+        fonts = registry["fallback_fonts"]
+        family = next((f for f in fonts if f["family"] == "OFFallbackSymbols"), None)
+        if family is None:
+            family = {"family": "OFFallbackSymbols", "codepoints": []}
+            fonts.append(family)
+        codepoints = {int(cp) for cp in family["codepoints"]} | set(needs.symbols)
+        faces = {face: (path, 0) for face, path in symbol_faces.items()}
+        updated = gr.subset_fallback_font(family, codepoints, faces=faces)
+        updated["source"] = "DejaVu Sans 2.37 (TeX Live dejavu package)"
+        updated["license"] = "Bitstream Vera / DejaVu (free; see dejavu LICENSE)"
+        fonts[fonts.index(family)] = updated
+        print(f"  OFFallbackSymbols now covers {len(codepoints)} code point(s)")
     gr.save_registry(registry)
     if needs.unresolved:
         print("WARNING: some characters have no registry source; the render lint will still refuse them", file=sys.stderr)
         return 3
+    return 0
+
+
+def cmd_select(args: argparse.Namespace) -> int:
+    """A2: compose a bundle manifest from a selection file."""
+    from engine.selection import SelectionError, emit
+
+    try:
+        out, result = emit(Path(args.input), Path(args.output) if args.output else None)
+    except SelectionError as exc:
+        print(f"ERROR: {exc}", file=sys.stderr)
+        return 1
+    info = result.manifest["selection"]
+    print(f"Wrote {out}")
+    print(f"  {info['selected']} source(s), {len(result.manifest['section_dividers'])} divider(s); "
+          f"{info['excluded_by_predicate']} excluded by predicate")
+    print(f"  dates: {info['date_origins']}  titles: {info['title_origins']}")
+    if args.verbose:
+        for path, reason in result.excluded:
+            print(f"  excluded {path.name}: {reason}")
     return 0
 
 
@@ -635,6 +674,13 @@ def main() -> int:
     ra_ap.add_argument("reference", help="The render a later pass read (e.g. the draft)")
     ra_ap.add_argument("candidate", help="The render that ships")
     ra_ap.set_defaults(func=cmd_renders_agree)
+
+    # select
+    sel_ap = sub.add_parser("select", help="Compose a bundle manifest from a selection file (A2)")
+    sel_ap.add_argument("input", help="Selection YAML (kind: selection)")
+    sel_ap.add_argument("--output", help="Bundle manifest to write (default: the file's emit:)")
+    sel_ap.add_argument("--verbose", action="store_true", help="List excluded files and why")
+    sel_ap.set_defaults(func=cmd_select)
 
     # glyphs
     gl_ap = sub.add_parser("glyphs", help="Scan for or vendor the glyphs a set of sources needs (glyph registry)")

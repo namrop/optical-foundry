@@ -221,6 +221,9 @@ class PandocRenderer(Renderer):
         template = template_path.name if template_path else ""
         if template_path and template_path.exists():
             cmd += ["--template", str(template_path)]
+        glyph_code_filter = plan.boundary_assertions.get("glyph_code_lua_filter")
+        if glyph_code_filter:
+            cmd += ["--lua-filter", str(glyph_code_filter)]
 
         # metadata
         if plan.title:
@@ -1048,8 +1051,12 @@ class PandocRenderer(Renderer):
         figure_count_by_kind = dict(boundary.get("figure_count_by_kind", {}))
         total = 0
         counts_by_key: dict[str, int] = {}
+        fallback_counts: dict[str, int] = {}
         for entry in result.inventory:
             kind = str(entry.get("kind", "emoji_asset"))
+            if kind == "glyph_fallback_font":
+                fallback_counts[str(entry["family"])] = int(entry.get("characters", 0))
+                continue
             count = int(entry.get("count", 0))
             figure_count_by_kind[kind] = figure_count_by_kind.get(kind, 0) + count
             total += count
@@ -1066,6 +1073,11 @@ class PandocRenderer(Renderer):
                 "emoji_asset_paths": result.asset_paths,
                 "host_emoji_fonts_required": False,
                 "figure_count_by_kind": figure_count_by_kind,
+                # Glyph registry (engine/glyph_registry.py): characters set in a
+                # vendored fallback font, and the per-render filter that lowers
+                # registered glyphs inside inline code.
+                "glyph_fallback_characters_by_family": fallback_counts,
+                "glyph_code_lua_filter": str(result.lua_filter) if result.lua_filter else "",
             }
         )
         if warnings:
