@@ -13,6 +13,7 @@ measure the resulting PDF geometrically. A page-position law can only be proved
 on a paginated page; string assertions about the macro live in
 ``test_template_contracts.py``.
 """
+import os
 from pathlib import Path
 import re
 import shutil
@@ -58,12 +59,16 @@ def _compile(tmp_path: Path, body: str, enabled: bool = True) -> Path:
         "\\end{document}\n",
         encoding="utf-8",
     )
+    # The law's Lua lives in the profile's TeX tree since 2026-10-01 (it is
+    # required from there), so kpse must search it as a render does.
+    env = {**os.environ, "TEXMFHOME": str(CODEX0_TEMPLATE.parents[1] / "styles" / "texmf")}
     result = subprocess.run(
         ["lualatex", "-interaction=nonstopmode", "-halt-on-error", "probe.tex"],
         cwd=tmp_path,
         capture_output=True,
         text=True,
         timeout=180,
+        env=env,
     )
     pdf = tmp_path / "probe.pdf"
     assert pdf.exists(), result.stdout[-3000:]

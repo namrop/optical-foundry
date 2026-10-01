@@ -3,11 +3,11 @@ uid: 01a0f952-f2ee-7f75-86fb-c37e67445550
 kind: note
 note_role: contract
 validation_profile: standard
-status: draft
+status: current
 created: 2026-10-01T17:20:00-04:00
-updated: 2026-10-01T17:20:00-04:00
+updated: 2026-10-01T19:05:00-04:00
 beam_home: 42_optical_foundry
-title: "Ornament slots and rail art — Optical Foundry (draft)"
+title: "Ornament slots and rail art — Optical Foundry"
 summary: "Draft engine contract for step 4 (D1, D2) of the order, written from the keeper's ruling 01a0f951-dc5d: the engine defines ornament slots and the rules each follows; a profile fills the ones it wants; rails, ornaments and their art come with the profile, which lives outside the engine repository by default; in the keeper-capture book a rail marks Luis's literal voice, and the book gets new rail art whose requirements are defined here first. Every rule is either carried from Codex 0 (with its source) or marked as a proposal for the keeper to rule on."
 tags:
   - optical-foundry
@@ -28,11 +28,11 @@ last_touched:
   model: claude-opus-5-5
   provider: custom:primary
   voyage: "t3-code:hermes-acp"
-  at: 2026-10-01T17:20:00-04:00
+  at: 2026-10-01T19:05:00-04:00
 principal: luis
 ---
 
-# Ornament slots and rail art — Optical Foundry (draft)
+# Ornament slots and rail art — Optical Foundry
 
 ## Pith
 
@@ -48,7 +48,13 @@ be true of the art. there are many ornament slots that exist, they don't all nee
 but there are rules about how each works. all of this comes with the profile. The rails and
 ornaments are part of the profile, which should not be baked into the repo by default."
 
-This draft splits that into three parts: the **slots** the engine owns and their rules (§1),
+Luis answered the draft's open questions the same day (ruling `01a0f99a-b2db`): "1. yeah
+marking in the source by "hand" is fine. 2. I think the profiles should be in their own repo.
+we can point to it. This will allow me to make a repo with public profiles. 3. breath, hinge,
+rails. I will deal with generating art for it later 4. do the same thing as codex 0. I can
+tweak later. 5. yes it can tighten but not loosen".
+
+This contract splits that into three parts: the **slots** the engine owns and their rules (§1),
 the **art requirements** each slot imposes, rails in most detail (§2), and the **profile
 package** that brings rails, ornaments and art from outside the engine (§3). §4 is what the
 keeper-capture profile would declare. §5 lists what is open. Rules marked *Codex 0* are
@@ -77,7 +83,13 @@ that leaves a slot empty gets nothing on the page and no error.
 
 The **page-position law** (D2) is how the engine enforces the "where it may land" column: on
 the shipped page, at output time, not predicted from the source (*Codex 0*, `e0bc6fd`). A
-profile cannot loosen it; *proposed*: a profile may tighten it for a slot.
+profile may tighten a slot's rule, never loosen it (ruling `01a0f99a-b2db`). A rule has two
+parts, the page top (`keep` or `drop`) and the page foot (`keep_first` or `drop`), in that
+order of strictness; the engine's defaults are the table above.
+
+**Built** (2026-10-01): the law for whisper, breath, hinge, passage rule, tailpiece and
+threshold (`engine/latex/of_ornament_law.lua`), and rails (§1.1). The other slots are named
+here and refused if a profile fills them, until the engine places them.
 
 ### 1.1 Rail rules
 
@@ -99,15 +111,15 @@ Carried from `contracts/RAILS_CONTRACT.md` (*Codex 0*), with the book-specific p
 
 ## 2. Art requirements
 
-What must be true of the art before a profile may wire it. The engine checks each one when the
-profile is loaded and refuses art that fails (*proposed*: fail closed, as the glyph lint does).
+What must be true of the art before a profile may wire it. The engine checks each one when a render
+loads the profile and refuses art that fails, naming the file and the check
+(`engine/ornaments.py`).
 
 ### 2.1 For every slot
 
 - Transparent background (alpha), no ink on any border row of the canvas: the mark is
   **contained** (*Codex 0*, rail ladder).
 - At least 300 dpi at the size it is placed (*Codex 0*, print floor).
-- Colours stated by the profile as part of its palette (*proposed*).
 - Provenance recorded beside each file: how it was made, from what (*Codex 0* practice).
 
 ### 2.2 Rails
@@ -127,12 +139,16 @@ profile is loaded and refuses art that fails (*proposed*: fail closed, as the gl
 
 ## 3. The profile package
 
-*Proposed* shape. A profile package is a directory, kept outside the engine repository, that a
-manifest names (`profile_package: <path>`, relative to the manifest). It holds:
+Profiles live in their own repositories (ruling `01a0f99a-b2db`), and the engine is pointed
+at them: `OF_PROFILE_PATH` (colon-separated), or one repository per line in
+`~/.config/optical-foundry/profile_repos`. A package is `<repository>/<profile-id>/` and is
+named in a manifest by its id, like any profile; an engine profile of the same id always wins.
+The private repository on Sol is `optical-foundry-profiles`, beside the engine. It holds
+(`engine/profile_package.py`, schema `profile_package_v1`):
 
-- `profile.yaml` — the profile: template and defaults (or the engine profile it extends), the
-  source-preparation steps it uses (ruling `01a0f930-407c`), the slots it fills, and what its
-  rails mean (§3.1);
+- `profile.yaml` — the profile: the engine profile it extends, the defaults it adds, a
+  template of its own if it has one, the source-preparation steps it uses (ruling
+  `01a0f930-407c`), the slots it fills and what its rails mean (§3.1);
 - the art for each filled slot, with its provenance;
 - any template additions of its own.
 
@@ -148,22 +164,19 @@ purple ladder. The keeper-capture profile's: §4.
 
 ## 4. The keeper-capture profile
 
-- **Rails mark Luis's literal voice** (ruling `01a0f951-dc5d`). A run is one continuous
-  stretch of his words inside one capture.
-- **New rail art**, to §2. To be made.
-- **Ornament slots filled:** open (§5).
-- **Package location:** open (§5).
+`optical-foundry-profiles/keeper-capture/`. It extends the engine's `keeper` profile and
+renders with LuaLaTeX.
 
-## 5. Open — for Luis
+- **Rails mark Luis's literal voice** (ruling `01a0f951-dc5d`), marked by hand: a
+  `::: literal-voice` div around the passage. Every marked passage in one capture is one run.
+- **Slots filled:** rails, breath and hinge (`::: breath :::`, `::: hinge :::`).
+- **Numbers:** Codex 0's (width 0.50in, line 0.18816in, shortest rail 4 lines, rungs every 2
+  lines from 2 to 38, inner share 0.5), to be tuned.
+- **Art:** to be made; until then the slots are declared and print nothing. The package's
+  README states what the art must satisfy.
 
-1. **How the book knows a passage is your literal voice.** The captures carry no consistent
-   mark: their 2,280 blockquotes mix your verbatim turns (often introduced as "Luis,
-   verbatim:"), Lux's **Extension** notes, quotations of other people and Lux's framing. The
-   options: an explicit mark written into the sources; a source-preparation step that infers
-   it from the introducing line and lists every block it was unsure of; or both, the step
-   proposing marks for you to accept.
-2. **Where the keeper-capture profile package lives in the canon.**
-3. **Which slots the keeper book fills** besides rails.
-4. **The art numbers** for the new set: slot width, shortest run, rung step, pieces per rung,
-   palette.
-5. Whether a profile may tighten the page-position law for a slot (§1).
+## 5. Answered
+
+The five questions the draft left open were answered by ruling `01a0f99a-b2db` (quoted in the
+abstract): marking by hand; profiles in their own repository; breath, hinge and rails; Codex 0's
+numbers; tighten, never loosen.

@@ -1,0 +1,315 @@
+% Optical Foundry ornament slots and register rails (engine/ornaments.py).
+%
+% Promotion map D1 and D2; contracts/ORNAMENT_SLOTS_CONTRACT.md; keeper rulings
+% 01a0f951-dc5d and 01a0f99a-b2db. Loaded into a render's preamble only when its
+% profile package fills an ornament slot. The engine ships the mechanism; the
+% profile brings the art, the numbers and what its rails mean.
+%
+% Requires LuaLaTeX (the page-position law runs in pre_output_filter); the
+% engine refuses a profile that fills slots under another TeX engine.
+%
+% The rail code is Codex 0's (profiles/40_latex_import/templates/codex0.tex,
+% contracts/RAILS_CONTRACT.md) with the book removed: the same two identities
+% (segment for draw extent, run for family), the same seat, rung rounding,
+% seed and same-page exclusion. Codex 0 keeps its own copy until its profile
+% moves into a package of its own.
+\RequirePackage{graphicx}
+\RequirePackage{eso-pic}
+\RequirePackage{zref-abspage}
+\RequirePackage{zref-savepos}
+
+% ---- Ornament bands and the page-position law ------------------------------
+\attributedef\OFOrnamentBandAttr=\directlua{tex.print(of_ornament_law.attr)}\relax
+% \OFOrnamentBand{<slot index>}{<material>}: mark material as one slot's ornament
+% so the law can find it on the shipped page.
+\NewDocumentCommand{\OFOrnamentBand}{m +m}{%
+  \begingroup
+  \OFOrnamentBandAttr=#1\relax
+  #2%
+  \endgroup
+}
+
+% \OFOrnamentPlace{<slot index>}{<height>}{<gap>}{<path>}: a centred pause or
+% structural ornament between blocks, sized by height, with its gap above and
+% below inside the band so the law removes the gap with the ornament.
+\NewDocumentCommand{\OFOrnamentPlace}{m m m m}{%
+  \par
+  \OFOrnamentBand{#1}{%
+    \vspace{#3}%
+    {\centering\includegraphics[height=#2]{#4}\par}%
+    \vspace{#3}%
+  }%
+  \par
+}
+
+% \OFOrnament{<slot>}: the slot's next piece of art, in rotation, placed by
+% \OFOrnamentPlace with the slot's index, height and gap. A slot the profile
+% declared but has no art for yet prints nothing.
+\ExplSyntaxOn
+\prop_new:N \g_of_ornament_index_prop
+\prop_new:N \g_of_ornament_height_prop
+\prop_new:N \g_of_ornament_gap_prop
+\tl_new:N \l_of_ornament_tmp_tl
+% \OFOrnamentDefine{<slot>}{<index>}{<height>}{<gap>}
+\NewDocumentCommand{\OFOrnamentDefine}{m m m m}
+  {
+    \prop_gput:Nnn \g_of_ornament_index_prop {#1} {#2}
+    \prop_gput:Nnn \g_of_ornament_height_prop {#1} {#3}
+    \prop_gput:Nnn \g_of_ornament_gap_prop {#1} {#4}
+    \seq_if_exist:cF { g_of_ornament_art_#1_seq } { \seq_new:c { g_of_ornament_art_#1_seq } }
+    \int_if_exist:cF { g_of_ornament_next_#1_int } { \int_new:c { g_of_ornament_next_#1_int } }
+  }
+% \OFOrnamentArtAdd{<slot>}{<path>}
+\NewDocumentCommand{\OFOrnamentArtAdd}{m m}
+  { \seq_gput_right:cn { g_of_ornament_art_#1_seq } {#2} }
+\NewDocumentCommand{\OFOrnament}{m}
+  {
+    \seq_if_exist:cT { g_of_ornament_art_#1_seq }
+      {
+        \int_compare:nNnT { \seq_count:c { g_of_ornament_art_#1_seq } } > {0}
+          {
+            \int_gset:cn { g_of_ornament_next_#1_int }
+              { \int_mod:nn { \int_use:c { g_of_ornament_next_#1_int } } { \seq_count:c { g_of_ornament_art_#1_seq } } + 1 }
+            \tl_set:Nx \l_of_ornament_tmp_tl
+              {
+                { \prop_item:Nn \g_of_ornament_index_prop {#1} }
+                { \prop_item:Nn \g_of_ornament_height_prop {#1} }
+                { \prop_item:Nn \g_of_ornament_gap_prop {#1} }
+                { \seq_item:cn { g_of_ornament_art_#1_seq } { \int_use:c { g_of_ornament_next_#1_int } } }
+              }
+            \exp_last_unbraced:NV \OFOrnamentPlace \l_of_ornament_tmp_tl
+          }
+      }
+  }
+\ExplSyntaxOff
+
+% ---- Register rails ---------------------------------------------------------
+\makeatletter
+\ExplSyntaxOn
+\seq_new:N \g_of_rail_ids_seq
+\prop_new:N \g_of_rail_seg_run_prop
+\tl_new:N \l_of_rail_run_tl
+\int_new:N \l_of_rail_run_int
+\seq_new:N \g_of_rail_pool_names_seq
+\dim_new:N \g_of_rail_width_dim
+\int_new:N \g_of_rail_min_lines_int
+\int_new:N \g_of_rail_step_int
+\int_new:N \g_of_rail_max_rung_int
+\int_new:N \l_of_rail_page_int
+\int_new:N \l_of_rail_start_int
+\int_new:N \l_of_rail_end_int
+\int_new:N \l_of_rail_relative_int
+\int_new:N \l_of_rail_seed_int
+\int_new:N \l_of_rail_band_int
+\seq_new:N \g_of_rail_page_used_seq
+\int_new:N \l_of_rail_probe_int
+\dim_new:N \l_of_rail_text_top_dim
+\dim_new:N \l_of_rail_text_bottom_dim
+\dim_new:N \l_of_rail_segment_top_dim
+\dim_new:N \l_of_rail_segment_bottom_dim
+\dim_new:N \l_of_rail_segment_height_dim
+\dim_new:N \l_of_rail_x_dim
+\dim_new:N \l_of_rail_white_dim
+\dim_new:N \l_of_rail_inner_dim
+\box_new:N \l_of_rail_box
+\tl_new:N \l_of_rail_path_tl
+\bool_new:N \l_of_rail_positions_ready_bool
+% Codex 0's numbers (keeper ruling 01a0f99a-b2db: "do the same thing as codex 0").
+\dim_gset:Nn \g_of_rail_width_dim { 0.50in }
+\int_gset:Nn \g_of_rail_min_lines_int {4}
+\int_gset:Nn \g_of_rail_step_int {2}
+\int_gset:Nn \g_of_rail_max_rung_int {38}
+\newlength{\OFRailTrimAllowance}\setlength{\OFRailTrimAllowance}{0mm}
+\newlength{\OFRailTextClearance}\setlength{\OFRailTextClearance}{1mm}
+\providecommand{\OFRailInnerShare}{0.5}
+
+\NewDocumentCommand{\OFRailSetWidth}{m}{\dim_gset:Nn \g_of_rail_width_dim {#1}}
+\NewDocumentCommand{\OFRailSetMinLines}{m}{\int_gset:Nn \g_of_rail_min_lines_int {#1}}
+\NewDocumentCommand{\OFRailSetLadder}{m m}
+  {\int_gset:Nn \g_of_rail_step_int {#1}\int_gset:Nn \g_of_rail_max_rung_int {#2}}
+% \OFRailPoolAdd{<rung, in lines>}{<path>}
+\NewDocumentCommand{\OFRailPoolAdd}{m m}
+  {
+    \seq_if_exist:cF { g_of_rail_pool_#1_seq } { \seq_new:c { g_of_rail_pool_#1_seq } }
+    \seq_gput_right:cn { g_of_rail_pool_#1_seq } {#2}
+  }
+
+\cs_new_protected:Npn \of_rail_resolve:N #1
+  {
+    \seq_if_exist:cTF { g_of_rail_pool_\int_use:N \l_of_rail_band_int _seq }
+      {
+        \int_set:Nn \l_tmpa_int { \seq_count:c { g_of_rail_pool_\int_use:N \l_of_rail_band_int _seq } }
+        \int_compare:nNnTF { \l_tmpa_int } > {0}
+          {
+            \int_set:Nn \l_tmpb_int { \int_mod:nn { \l_of_rail_seed_int - 1 } { \l_tmpa_int } + 1 }
+            % Same-page exclusion: walk forward from the seeded piece until one
+            % this page has not used; after a full cycle keep the seeded pick.
+            \int_zero:N \l_of_rail_probe_int
+            \bool_until_do:nn { \int_compare_p:nNn { \l_of_rail_probe_int } = { \l_tmpa_int } }
+              {
+                \tl_set:Nx #1 { \seq_item:cn { g_of_rail_pool_\int_use:N \l_of_rail_band_int _seq } { \l_tmpb_int } }
+                \seq_if_in:NVTF \g_of_rail_page_used_seq #1
+                  {
+                    \int_incr:N \l_of_rail_probe_int
+                    \int_set:Nn \l_tmpb_int { \int_mod:nn { \l_tmpb_int } { \l_tmpa_int } + 1 }
+                  }
+                  { \int_set_eq:NN \l_of_rail_probe_int \l_tmpa_int }
+              }
+            \seq_gput_right:NV \g_of_rail_page_used_seq #1
+          }
+          { \tl_clear:N #1 }
+      }
+      { \tl_clear:N #1 }
+  }
+
+% #1 = segment id (one per marked block: draw extent); #2 = run id (family).
+\NewDocumentCommand{\OFRailBegin}{m m}
+  {
+    \leavevmode
+    \zref@labelbyprops{ofrailstart@#1}{abspage}
+    \zsavepos{ofrailstartpos@#1}
+    \seq_if_in:NnF \g_of_rail_ids_seq {#1} { \seq_gput_right:Nn \g_of_rail_ids_seq {#1} }
+    \prop_gput:Nnn \g_of_rail_seg_run_prop {#1} {#2}
+  }
+\NewDocumentCommand{\OFRailEnd}{m m}
+  {
+    \zref@labelbyprops{ofrailend@#1}{abspage}
+    \zsavepos{ofrailendpos@#1}
+  }
+
+\cs_new_protected:Npn \of_rail_measure_segment:n #1
+  {
+    \bool_set_true:N \l_of_rail_positions_ready_bool
+    \dim_set:Nn \l_of_rail_text_top_dim { 1in + \topmargin + \headheight + \headsep }
+    \dim_set:Nn \l_of_rail_text_bottom_dim { \l_of_rail_text_top_dim + \textheight }
+    \dim_set_eq:NN \l_of_rail_segment_top_dim \l_of_rail_text_top_dim
+    \dim_set_eq:NN \l_of_rail_segment_bottom_dim \l_of_rail_text_bottom_dim
+    \int_compare:nNnT { \l_of_rail_page_int } = { \l_of_rail_start_int }
+      {
+        \int_set:Nn \l_tmpa_int { \zposy{ofrailstartpos@#1} }
+        \int_compare:nNnTF { \l_tmpa_int } > {0}
+          { \dim_set:Nn \l_of_rail_segment_top_dim { \paperheight - \int_use:N \l_tmpa_int sp - 0.80\baselineskip } }
+          { \bool_set_false:N \l_of_rail_positions_ready_bool }
+      }
+    \int_compare:nNnT { \l_of_rail_page_int } = { \l_of_rail_end_int }
+      {
+        \int_set:Nn \l_tmpa_int { \zposy{ofrailendpos@#1} }
+        \int_compare:nNnTF { \l_tmpa_int } > {0}
+          { \dim_set:Nn \l_of_rail_segment_bottom_dim { \paperheight - \int_use:N \l_tmpa_int sp + 0.35\baselineskip } }
+          { \bool_set_false:N \l_of_rail_positions_ready_bool }
+      }
+    \dim_compare:nNnT { \l_of_rail_segment_top_dim } < { \l_of_rail_text_top_dim }
+      { \dim_set_eq:NN \l_of_rail_segment_top_dim \l_of_rail_text_top_dim }
+    \dim_compare:nNnT { \l_of_rail_segment_bottom_dim } > { \l_of_rail_text_bottom_dim }
+      { \dim_set_eq:NN \l_of_rail_segment_bottom_dim \l_of_rail_text_bottom_dim }
+    \dim_set:Nn \l_of_rail_segment_height_dim { \l_of_rail_segment_bottom_dim - \l_of_rail_segment_top_dim }
+    \dim_compare:nNnF { \l_of_rail_segment_height_dim } > {0pt}
+      { \bool_set_false:N \l_of_rail_positions_ready_bool }
+    % Stub floor: a page-local segment shorter than the shortest authored run
+    % draws nothing; the margin stays clean.
+    \dim_compare:nNnT { \l_of_rail_segment_height_dim } < { \int_use:N \g_of_rail_min_lines_int \baselineskip }
+      { \bool_set_false:N \l_of_rail_positions_ready_bool }
+  }
+
+% Round the measured segment UP to the next rung, so the piece chosen is at
+% least as slender as the slot needs.
+\cs_new_protected:Npn \of_rail_select_band:
+  {
+    \int_set:Nn \l_of_rail_band_int
+      {
+        \fp_to_int:n
+          {
+            min ( \int_use:N \g_of_rail_max_rung_int ,
+                  max ( \int_use:N \g_of_rail_step_int ,
+                        \int_use:N \g_of_rail_step_int * ceil (
+                          ( \dim_to_fp:n { \l_of_rail_segment_height_dim } / \dim_to_fp:n { \baselineskip } )
+                          / \int_use:N \g_of_rail_step_int ) ) )
+          }
+      }
+  }
+
+\cs_new_protected:Npn \of_rail_select_seed:n #1
+  {
+    \int_set:Nn \l_of_rail_relative_int { \l_of_rail_page_int - \l_of_rail_start_int }
+    \int_set:Nn \l_of_rail_seed_int
+      {
+        #1 * 37 + \l_of_rail_relative_int
+        + 3 * \int_div_truncate:nn { \l_of_rail_relative_int } {2}
+        + 7 * \int_div_truncate:nn { \l_of_rail_relative_int } {5}
+      }
+  }
+
+\cs_new_protected:Npn \of_rail_split_white:
+  {
+    \dim_set:Nn \l_of_rail_inner_dim { \OFRailInnerShare \l_of_rail_white_dim }
+    \dim_compare:nNnT { \l_of_rail_inner_dim } < { \OFRailTextClearance }
+      { \dim_set:Nn \l_of_rail_inner_dim { \OFRailTextClearance } }
+  }
+
+% Balance seat in the outer margin, parity from the page counter (never abspage).
+% The piece fits inside the slot: height to the segment, width capped at the slot.
+\cs_new_protected:Npn \of_rail_shipout_place:
+  {
+    \hbox_set:Nn \l_of_rail_box
+      {
+        \includegraphics
+          [ height = \dim_use:N \l_of_rail_segment_height_dim ,
+            width = \dim_use:N \g_of_rail_width_dim , keepaspectratio ]
+          { \l_of_rail_path_tl }
+      }
+    \int_if_odd:nTF { \value{page} }
+      {
+        \dim_set:Nn \l_of_rail_white_dim
+          { \paperwidth - \OFRailTrimAllowance - ( 1in + \oddsidemargin + \textwidth ) - \box_wd:N \l_of_rail_box }
+        \of_rail_split_white:
+        \dim_set:Nn \l_of_rail_x_dim { 1in + \oddsidemargin + \textwidth + \l_of_rail_inner_dim }
+      }
+      {
+        \dim_set:Nn \l_of_rail_white_dim
+          { ( 1in + \evensidemargin ) - \OFRailTrimAllowance - \box_wd:N \l_of_rail_box }
+        \of_rail_split_white:
+        \dim_set:Nn \l_of_rail_x_dim { 1in + \evensidemargin - \l_of_rail_inner_dim - \box_wd:N \l_of_rail_box }
+      }
+    \AtPageUpperLeft
+      {
+        \put( \LenToUnit{\l_of_rail_x_dim}, \LenToUnit{-\l_of_rail_segment_top_dim} )
+          { \raisebox{-\height}{\box_use:N \l_of_rail_box} }
+      }
+  }
+
+\cs_new_protected:Npn \of_rail_consider_range:n #1
+  {
+    \int_set:Nn \l_of_rail_start_int { \zref@extractdefault{ofrailstart@#1}{abspage}{0} }
+    \int_set:Nn \l_of_rail_end_int { \zref@extractdefault{ofrailend@#1}{abspage}{0} }
+    \bool_lazy_and:nnT
+      { \int_compare_p:nNn { \l_of_rail_start_int } > {0} }
+      { \int_compare_p:nNn { \l_of_rail_end_int } > {0} }
+      {
+        \bool_lazy_and:nnT
+          { ! \int_compare_p:nNn { \l_of_rail_page_int } < { \l_of_rail_start_int } }
+          { ! \int_compare_p:nNn { \l_of_rail_page_int } > { \l_of_rail_end_int } }
+          {
+            \of_rail_measure_segment:n {#1}
+            \bool_if:NT \l_of_rail_positions_ready_bool
+              {
+                \of_rail_select_band:
+                \prop_get:NnNF \g_of_rail_seg_run_prop {#1} \l_of_rail_run_tl
+                  { \tl_set:Nn \l_of_rail_run_tl {#1} }
+                \int_set:Nn \l_of_rail_run_int { \l_of_rail_run_tl }
+                \of_rail_select_seed:n { \l_of_rail_run_int }
+                \of_rail_resolve:N \l_of_rail_path_tl
+                \tl_if_blank:VF \l_of_rail_path_tl { \of_rail_shipout_place: }
+              }
+          }
+      }
+  }
+\cs_new_protected:Npn \of_rail_shipout:
+  {
+    \int_set:Nn \l_of_rail_page_int { \value{abspage} }
+    \seq_gclear:N \g_of_rail_page_used_seq
+    \seq_map_inline:Nn \g_of_rail_ids_seq { \of_rail_consider_range:n {##1} }
+  }
+\NewDocumentCommand{\OFRailShipout}{}{\of_rail_shipout:}
+\ExplSyntaxOff
+\makeatother
+\AddToShipoutPictureBG{\OFRailShipout}

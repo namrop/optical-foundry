@@ -49,6 +49,7 @@ from engine.profile_resolver import LOCAL_IMPORT, ResolvedProfile, resolve_profi
 from engine.projection_plan import ProjectionPlan
 from engine.preamble import Preamble, source_header_includes
 from engine.template_contract import contract_text
+from engine.ornaments import OrnamentError, filter_metadata as ornament_filter_metadata, plan_ornaments
 from engine.source_preparation import (
     PREPARATION_ERRORS,
     prepare as prepare_source,
@@ -224,6 +225,23 @@ class PandocRenderer(Renderer):
         # metrics and breaks render parity.
         pdf_engine = self._resolved_pdf_engine(resolved_profile.defaults_stack)
         xe = shutil.which(pdf_engine) or pdf_engine
+
+        # Ornament slots and rails the profile package fills (engine/ornaments.py).
+        try:
+            ornament_plan = plan_ornaments(resolved_profile.ornaments, resolved_profile.package_dir or Path.cwd())
+        except OrnamentError as exc:
+            return self._evidence_error(plan, output_pdf, evidence_file, time.monotonic() - start, str(exc), ["ornaments"])
+        if ornament_plan is not None:
+            if Path(pdf_engine).name != "lualatex":
+                return self._evidence_error(
+                    plan, output_pdf, evidence_file, time.monotonic() - start,
+                    f"profile {resolved_profile.canonical_profile_id} fills ornament slots, which need lualatex "
+                    f"(the page-position law runs in LuaTeX); its defaults choose {pdf_engine}",
+                    ["ornaments"],
+                )
+            preamble.add("ornaments", ornament_plan.preamble)
+            cmd += ["--lua-filter", str(ornament_plan.filter_path),
+                    "--metadata", f"of_ornaments={ornament_filter_metadata(ornament_plan)}"]
         cmd += [
             "--pdf-engine", str(xe),
             "--pdf-engine-opt=-interaction=nonstopmode",
@@ -627,6 +645,7 @@ class PandocRenderer(Renderer):
                 **({"strikeout_support": True} if strikeout_support else {}),
                 "preamble": preamble.evidence(preamble_file),
                 "source_preparation": prepared.record,
+                **({"ornaments": ornament_plan.record} if ornament_plan is not None else {}),
                 "rendered_at": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
                 "success": success,
                 "profile_version": defaults_meta.get("profile_version", "unknown"),

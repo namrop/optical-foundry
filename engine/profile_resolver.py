@@ -55,6 +55,10 @@ class ResolvedProfile:
     # The source-preparation steps this profile uses (engine/source_preparation.py);
     # None means it declares none and gets every step (ruling 01a0f930-407c).
     source_preparation: tuple[str, ...] | None = None
+    # A profile package (engine/profile_package.py, ruling 01a0f99a-b2db): its
+    # directory, and the ornament slots it fills (engine/ornaments.py).
+    package_dir: Path | None = None
+    ornaments: dict[str, Any] | None = None
 
 
 ALIASES: dict[str, str] = {
@@ -183,11 +187,34 @@ def resolve_profile(profile_id: str) -> ResolvedProfile:
 
     canonical = ALIASES.get(profile_id, profile_id)
     spec = PROFILE_SPECS.get(canonical)
+    package = None
+    if spec is None:
+        from engine.profile_package import find_package
+
+        package = find_package(canonical)
+    if package is not None:
+        base_id = ALIASES.get(package.spec["extends"], package.spec["extends"])
+        if base_id not in PROFILE_SPECS:
+            raise ValueError(f"profile package {canonical}: extends {base_id!r}, which is not an engine profile")
+        spec = dict(PROFILE_SPECS[base_id])
+        for key in ("source_preparation",):
+            if package.spec.get(key) is not None:
+                spec[key] = package.spec[key]
     if spec is None:
         spec = _fallback_spec(canonical)
 
     defaults_stack, defaults_sources = _resolve_defaults_stack(spec.get("defaults", []))
     template_path, template_source = _resolve_template(str(spec.get("template", "")))
+    if package is not None:
+        for name in package.spec.get("defaults") or []:
+            path = (package.directory / name).resolve()
+            if not path.is_file():
+                raise ValueError(f"profile package {canonical}: defaults file missing: {path}")
+            defaults_stack.append(path)
+            defaults_sources.append("package")
+        if package.spec.get("template"):
+            template_path = (package.directory / package.spec["template"]).resolve()
+            template_source = "package" if template_path.is_file() else "missing"
 
     local_texmf = LOCAL_IMPORT / "styles" / "texmf"
     texmfhome = local_texmf if local_texmf.exists() else None
@@ -245,10 +272,13 @@ def resolve_profile(profile_id: str) -> ResolvedProfile:
             "reads_legacy_profile_tree": False,
             "defaults_source": _summarize_sources(defaults_sources),
             "template_source": template_source,
+            "profile_package": str(package.directory) if package is not None else None,
             "font_policy": POLICY_NAME,
         },
         warnings=warnings,
         source_preparation=source_preparation,
+        package_dir=package.directory if package is not None else None,
+        ornaments=(package.spec.get("ornaments") or None) if package is not None else None,
     )
 
 
