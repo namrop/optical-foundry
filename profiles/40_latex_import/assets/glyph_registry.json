@@ -1,0 +1,110 @@
+{
+  "schema": "glyph_registry_v1",
+  "note": "Render-only substitutes for characters the profile fonts lack. Grown with `python3 -m cli glyphs grow` (engine/glyph_registry.py); keeper ruling 2026-09-01: 'The glyphs should grow to support what is needed.' Paths are relative to profiles/40_latex_import/assets.",
+  "emoji": {
+    "1f399": {
+      "emoji": "🎙",
+      "svg": "emoji/noto/svg/emoji_u1f399.svg",
+      "pdf": "emoji/noto/pdf/emoji_u1f399.pdf",
+      "source": "googlefonts/noto-emoji v2.051",
+      "license": "Apache-2.0",
+      "svg_sha256": "eb2c38cc9fdbeeb4cf532bda40588681258f3ba9624c5419035e112caf861d5a"
+    },
+    "1f516": {
+      "emoji": "🔖",
+      "svg": "emoji/noto/svg/emoji_u1f516.svg",
+      "pdf": "emoji/noto/pdf/emoji_u1f516.pdf",
+      "source": "googlefonts/noto-emoji v2.051",
+      "license": "Apache-2.0",
+      "svg_sha256": "5e19186218a221c10bff92f0bc878e1831fb4ec9ae6a05584410b11177d4948d"
+    },
+    "1f56f": {
+      "emoji": "🕯",
+      "svg": "emoji/noto/svg/emoji_u1f56f.svg",
+      "pdf": "emoji/noto/pdf/emoji_u1f56f.pdf",
+      "source": "googlefonts/noto-emoji v2.051",
+      "license": "Apache-2.0",
+      "svg_sha256": "05b8f115491e6cb168aed5f967115c687e900ae83d35213bcca6c737ad543da9"
+    },
+    "1f5a5": {
+      "emoji": "🖥",
+      "svg": "emoji/noto/svg/emoji_u1f5a5.svg",
+      "pdf": "emoji/noto/pdf/emoji_u1f5a5.pdf",
+      "source": "googlefonts/noto-emoji v2.051",
+      "license": "Apache-2.0",
+      "svg_sha256": "874d9c776bc7629f533cd5756b592ca3f6df1a8e1e9c5ee5c31cb38ed7362f82"
+    },
+    "1f6e1": {
+      "emoji": "🛡",
+      "svg": "emoji/noto/svg/emoji_u1f6e1.svg",
+      "pdf": "emoji/noto/pdf/emoji_u1f6e1.pdf",
+      "source": "googlefonts/noto-emoji v2.051",
+      "license": "Apache-2.0",
+      "svg_sha256": "d4fd525bc6fd90842dbdd4b2065727fe240cc44daa104842f3ef298f29820e5b"
+    },
+    "1f9e0": {
+      "emoji": "🧠",
+      "svg": "emoji/noto/svg/emoji_u1f9e0.svg",
+      "pdf": "emoji/noto/pdf/emoji_u1f9e0.pdf",
+      "source": "googlefonts/noto-emoji v2.051",
+      "license": "Apache-2.0",
+      "svg_sha256": "77a7f330447c590c0b16d6b78553bb58e8d04d08570af77fbbd43c31d0fc54df"
+    },
+    "1f9ec": {
+      "emoji": "🧬",
+      "svg": "emoji/noto/svg/emoji_u1f9ec.svg",
+      "pdf": "emoji/noto/pdf/emoji_u1f9ec.pdf",
+      "source": "googlefonts/noto-emoji v2.051",
+      "license": "Apache-2.0",
+      "svg_sha256": "214e5563efc74723d698d276b114129ca848fe65171dd9d54189244197d3bcde"
+    },
+    "1fa90": {
+      "emoji": "🪐",
+      "svg": "emoji/noto/svg/emoji_u1fa90.svg",
+      "pdf": "emoji/noto/pdf/emoji_u1fa90.pdf",
+      "source": "googlefonts/noto-emoji v2.051",
+      "license": "Apache-2.0",
+      "svg_sha256": "4a70e10a0d4031082691b5da2de75519fdfb9f77a7ac76e1a39a4655a3c133fd"
+    },
+    "26a0": {
+      "emoji": "⚠️",
+      "svg": "emoji/noto/svg/emoji_u26a0.svg",
+      "pdf": "emoji/noto/pdf/emoji_u26a0.pdf",
+      "source": "googlefonts/noto-emoji (seed, 2026-05-24)",
+      "license": "Apache-2.0"
+    },
+    "2705": {
+      "emoji": "✅",
+      "svg": "emoji/noto/svg/emoji_u2705.svg",
+      "pdf": "emoji/noto/pdf/emoji_u2705.pdf",
+      "source": "googlefonts/noto-emoji v2.051",
+      "license": "Apache-2.0",
+      "svg_sha256": "10d5be93c52a1fc0bcd195dee9485445daeb9f2398f9f58e513e3c27f95a52d0"
+    },
+    "274c": {
+      "emoji": "❌",
+      "svg": "emoji/noto/svg/emoji_u274c.svg",
+      "pdf": "emoji/noto/pdf/emoji_u274c.pdf",
+      "source": "googlefonts/noto-emoji v2.051",
+      "license": "Apache-2.0",
+      "svg_sha256": "0ccbebbd79d7244d142eff2838125e21c8100d51bbb29a0ad17ee7ca7fdc0c3c"
+    }
+  },
+  "fallback_fonts": [
+    {
+      "family": "OFFallbackCJK",
+      "codepoints": [
+        26025,
+        26432,
+        32447
+      ],
+      "faces": {
+        "Regular": "fonts/glyph_fallback/OFFallbackCJK-Regular.otf",
+        "Bold": "fonts/glyph_fallback/OFFallbackCJK-Bold.otf"
+      },
+      "characters": "斩杀线",
+      "source": "notofonts/noto-cjk Sans 2.004 (JP face)",
+      "license": "OFL-1.1"
+    }
+  ]
+}

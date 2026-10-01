@@ -1,17 +1,18 @@
-"""Render-only emoji image substitution for PDF/LaTeX projections.
+"""Render-only glyph substitution for PDF/LaTeX projections.
 
 Markdown source remains canonical. This preprocessor writes a generated Markdown
-copy that replaces a small, explicit set of supported emoji clusters with raw
-LaTeX inline image macros backed by vendored assets. It deliberately avoids code
-fences and inline code spans.
+copy that replaces the emoji in the glyph registry (engine/glyph_registry.py)
+with raw LaTeX inline image macros backed by vendored assets, and sets runs of
+registered fallback-font characters (CJK, kana) in their vendored font. It
+deliberately avoids code fences and inline code spans.
 """
 from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
-import re
 
+from engine.glyph_registry import ASSETS_ROOT, load_registry, lower_glyphs
 from engine.layout_images import _ensure_header_includes
 
 
@@ -24,126 +25,114 @@ class EmojiSubstitutionResult:
     warnings: list[str] = field(default_factory=list)
 
 
-_REPO_ROOT = Path(__file__).resolve().parents[1]
-_NOTO_EMOJI_ROOT = _REPO_ROOT / "profiles" / "40_latex_import" / "assets" / "emoji" / "noto"
-
-_SUPPORTED_EMOJI: dict[str, dict[str, Any]] = {
-    "26a0": {
-        "emoji": "⚠️",
-        "clusters": ("⚠️", "⚠"),
-        "asset_family": "noto_emoji",
-        "pdf_asset": _NOTO_EMOJI_ROOT / "pdf" / "emoji_u26a0.pdf",
-    }
-}
-
 _EMOJI_HEADER_INCLUDES = [
     r"\usepackage{graphicx}",
     r"\providecommand{\OFEmoji}[1]{\raisebox{-0.12em}{\includegraphics[height=1em]{#1}}}",
 ]
 
-_INLINE_CODE_RE = re.compile(r"(`+)(.*?)(\1)")
-_FENCE_RE = re.compile(r"^\s*(```+|~~~+)")
+
+def _fallback_header_includes(registry: dict[str, Any], families: set[str]) -> list[str]:
+    lines = [r"\usepackage{fontspec}"]
+    for font in registry["fallback_fonts"]:
+        family = font["family"]
+        if family not in families:
+            continue
+        faces = font["faces"]
+        regular = ASSETS_ROOT / faces["Regular"]
+        options = [f"Path={regular.parent.as_posix()}/"]
+        if "Bold" in faces:
+            options.append(f"BoldFont={Path(faces['Bold']).name}")
+        lines.append(
+            f"\\newfontfamily\\{family}Font{{{regular.name}}}[{','.join(options)}]"
+        )
+        lines.append(f"\\providecommand{{\\{family}}}[1]{{{{\\{family}Font #1}}}}")
+    return lines
+
+
+def _pdfstring_include(families: set[str]) -> str:
+    # Headings carry these into PDF bookmarks: an emoji contributes nothing there,
+    # a fallback run contributes its characters.
+    defs = "\\def\\OFEmoji#1{}" + "".join(f"\\def\\{family}#1{{#1}}" for family in sorted(families))
+    return (
+        "\\AtBeginDocument{\\ifdefined\\pdfstringdefDisableCommands"
+        f"\\pdfstringdefDisableCommands{{{defs}}}\\fi}}"
+    )
 
 
 def preprocess_emoji_substitutions(source: Path, output_dir: Path, render_id: str) -> EmojiSubstitutionResult:
-    """Replace supported emoji clusters with vendored inline image assets.
+    """Lower registered glyphs: emoji to vendored inline images, fallback runs to their font.
 
-    The original source is never mutated. If no supported emoji are present
-    outside Markdown code spans/fences, the original path is returned.
+    The registry is ``profiles/40_latex_import/assets/glyph_registry.json``
+    (``engine/glyph_registry.py``). The original source is never mutated. If no
+    registered glyph occurs outside Markdown code spans/fences, the original path
+    is returned.
     """
 
     if not source.exists():
         return EmojiSubstitutionResult(changed=False, rewritten_source=source)
 
+    registry = load_registry()
     text = source.read_text(encoding="utf-8", errors="ignore")
-    counts: dict[str, int] = {key: 0 for key in _SUPPORTED_EMOJI}
-
-    rewritten_body = _rewrite_markdown_text(text, counts)
-    used = {key: count for key, count in counts.items() if count > 0}
-    if not used:
-        return EmojiSubstitutionResult(changed=False, rewritten_source=source)
+    entries = registry["emoji"]
+    lowered = lower_glyphs(
+        text,
+        registry,
+        emoji_macro=lambda key: _latex_emoji_macro(ASSETS_ROOT / entries[key]["pdf"]),
+        fallback_macro=lambda family, run: f"\\{family}{{{run}}}",
+    )
+    warnings = [
+        f"no fallback font covers {cp}; grow the glyph registry (cli glyphs grow)"
+        for cp in lowered.fallback_missing
+    ]
+    if not lowered.emoji_counts and not lowered.fallback_counts:
+        return EmojiSubstitutionResult(changed=False, rewritten_source=source, warnings=warnings)
 
     output_dir.mkdir(parents=True, exist_ok=True)
-    rewritten = _ensure_header_includes(rewritten_body, _EMOJI_HEADER_INCLUDES)
+    families = set(lowered.fallback_counts)
+    includes = list(_EMOJI_HEADER_INCLUDES)
+    if families:
+        includes += _fallback_header_includes(registry, families)
+    includes.append(_pdfstring_include(families))
+    rewritten = _ensure_header_includes(lowered.text, includes)
     out_path = output_dir / f"{render_id}.emoji_assets.md"
     out_path.write_text(rewritten, encoding="utf-8")
 
     inventory: list[dict[str, Any]] = []
     asset_paths: list[str] = []
-    for key, count in used.items():
-        spec = _SUPPORTED_EMOJI[key]
-        asset = Path(spec["pdf_asset"])
+    for key, count in lowered.emoji_counts.items():
+        entry = entries[key]
         inventory.append(
             {
                 "kind": "emoji_asset",
-                "emoji": str(spec["emoji"]),
+                "emoji": str(entry["emoji"]),
                 "asset_key": key,
-                "asset_family": str(spec["asset_family"]),
+                "asset_family": "noto_emoji",
                 "count": count,
                 "host_emoji_fonts_required": False,
             }
         )
-        asset_paths.append(str(asset))
+        asset_paths.append(str(ASSETS_ROOT / entry["pdf"]))
+    for font in registry["fallback_fonts"]:
+        family = font["family"]
+        if family in lowered.fallback_counts:
+            inventory.append(
+                {
+                    "kind": "glyph_fallback_font",
+                    "family": family,
+                    "characters": lowered.fallback_counts[family],
+                    "faces": {face: str(ASSETS_ROOT / rel) for face, rel in font["faces"].items()},
+                    "source": font.get("source", ""),
+                }
+            )
+            asset_paths.extend(str(ASSETS_ROOT / rel) for rel in font["faces"].values())
 
     return EmojiSubstitutionResult(
         changed=True,
         rewritten_source=out_path,
         inventory=inventory,
         asset_paths=asset_paths,
+        warnings=warnings,
     )
-
-
-def _rewrite_markdown_text(text: str, counts: dict[str, int]) -> str:
-    lines = text.splitlines(keepends=True)
-    rewritten: list[str] = []
-    in_fence = False
-    fence_marker = ""
-
-    for line in lines:
-        fence_match = _FENCE_RE.match(line)
-        if fence_match:
-            marker = fence_match.group(1)
-            if not in_fence:
-                in_fence = True
-                fence_marker = marker[:3]
-                rewritten.append(line)
-                continue
-            if marker.startswith(fence_marker):
-                in_fence = False
-                fence_marker = ""
-                rewritten.append(line)
-                continue
-
-        if in_fence:
-            rewritten.append(line)
-        else:
-            rewritten.append(_rewrite_inline_text(line, counts))
-
-    return "".join(rewritten)
-
-
-def _rewrite_inline_text(text: str, counts: dict[str, int]) -> str:
-    parts: list[str] = []
-    pos = 0
-    for match in _INLINE_CODE_RE.finditer(text):
-        parts.append(_replace_supported_emoji(text[pos : match.start()], counts))
-        parts.append(match.group(0))
-        pos = match.end()
-    parts.append(_replace_supported_emoji(text[pos:], counts))
-    return "".join(parts)
-
-
-def _replace_supported_emoji(text: str, counts: dict[str, int]) -> str:
-    rewritten = text
-    for key, spec in _SUPPORTED_EMOJI.items():
-        asset = Path(spec["pdf_asset"])
-        replacement = _latex_emoji_macro(asset)
-        for cluster in spec["clusters"]:
-            occurrences = rewritten.count(cluster)
-            if occurrences:
-                counts[key] += occurrences
-                rewritten = rewritten.replace(cluster, replacement)
-    return rewritten
 
 
 def _latex_emoji_macro(asset: Path) -> str:

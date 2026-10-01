@@ -436,6 +436,80 @@ def cmd_renders_agree(args: argparse.Namespace) -> int:
     return 0
 
 
+def _glyph_paths(items: list[str]) -> list[Path]:
+    paths: list[Path] = []
+    for item in items:
+        path = Path(item)
+        paths.extend(sorted(path.rglob("*.md")) if path.is_dir() else [path])
+    return paths
+
+
+def cmd_glyphs(args: argparse.Namespace) -> int:
+    """Report (scan) or vendor (grow) the glyphs a set of sources needs."""
+    from engine import glyph_registry as gr
+
+    coverage_fonts = [Path(f) for f in (args.coverage_font or [])] or gr.default_coverage_fonts()
+    covered = gr.font_coverage(coverage_fonts)
+    registry = gr.load_registry()
+    noto = Path(args.noto_source) if args.noto_source else None
+    noto_keys = gr.noto_svg_keys(noto) if noto else None
+    paths = _glyph_paths(args.input)
+    needs = gr.scan_needed(paths, covered=covered, registry=registry, noto_keys=noto_keys)
+
+    def show(title: str, table: dict, label) -> None:
+        if not table:
+            return
+        print(f"{title}:")
+        for key, entry in sorted(table.items(), key=lambda kv: -len(kv[1]["files"])):
+            print(f"  {label(key)}  {entry['count']}x in {len(entry['files'])} file(s)")
+
+    import unicodedata
+
+    def cp_label(cp: int) -> str:
+        return f"U+{cp:04X} {chr(cp)} {unicodedata.name(chr(cp), '?')}"
+
+    def emoji_label(key: str) -> str:
+        seq = gr.key_sequence(key)
+        return f"{key} {''.join(chr(c) for c in seq)} {unicodedata.name(chr(seq[0]), '?')}"
+
+    print(f"{len(paths)} file(s); coverage fonts: {', '.join(str(f) for f in coverage_fonts)}")
+    show("emoji to vendor", needs.emoji, emoji_label)
+    show("fallback-font characters", needs.fallback, cp_label)
+    show("not resolvable here" + ("" if noto else " (pass --noto-source to match emoji)"), needs.unresolved, cp_label)
+    if args.glyphs_command == "scan":
+        return 1 if (needs.emoji or needs.fallback or needs.unresolved) else 0
+
+    if needs.emoji and not noto:
+        print("ERROR: --noto-source is required to vendor emoji", file=sys.stderr)
+        return 2
+    for key in sorted(needs.emoji):
+        registry["emoji"][key] = gr.vendor_emoji(key, noto, noto_version=args.noto_version)
+        print(f"  vendored {key}")
+    if needs.fallback:
+        if not args.cjk_font:
+            print("ERROR: --cjk-font is required for fallback-font characters", file=sys.stderr)
+            return 2
+        fonts = registry["fallback_fonts"]
+        family = next((f for f in fonts if f["family"] == "OFFallbackCJK"), None)
+        if family is None:
+            family = {"family": "OFFallbackCJK", "codepoints": []}
+            fonts.append(family)
+        codepoints = {int(cp) for cp in family["codepoints"]} | set(needs.fallback)
+        faces = {"Regular": (Path(args.cjk_font), args.cjk_font_number)}
+        if args.cjk_font_bold:
+            faces["Bold"] = (Path(args.cjk_font_bold), args.cjk_font_number)
+        updated = gr.subset_fallback_font(family, codepoints, faces=faces)
+        updated["source"] = args.cjk_source_label
+        updated["license"] = "OFL-1.1"
+        fonts[fonts.index(family)] = updated
+        print(f"  OFFallbackCJK now covers {len(codepoints)} code point(s)")
+    gr.save_registry(registry)
+    if needs.unresolved:
+        print("WARNING: some characters have no registry source; the render lint will still refuse them", file=sys.stderr)
+        return 3
+    return 0
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(prog="foundry", description="Optical Foundry CLI")
     sub = ap.add_subparsers(dest="command")
@@ -561,6 +635,24 @@ def main() -> int:
     ra_ap.add_argument("reference", help="The render a later pass read (e.g. the draft)")
     ra_ap.add_argument("candidate", help="The render that ships")
     ra_ap.set_defaults(func=cmd_renders_agree)
+
+    # glyphs
+    gl_ap = sub.add_parser("glyphs", help="Scan for or vendor the glyphs a set of sources needs (glyph registry)")
+    gl_sub = gl_ap.add_subparsers(dest="glyphs_command")
+    for name, help_text in (
+        ("scan", "Report what the sources need that the coverage fonts and registry lack (exit 1 if anything)"),
+        ("grow", "Vendor what the sources need into profiles/40_latex_import/assets/glyph_registry.json"),
+    ):
+        g = gl_sub.add_parser(name, help=help_text)
+        g.add_argument("input", nargs="+", help="Markdown files or directories (searched recursively)")
+        g.add_argument("--coverage-font", action="append", help="Font file the body is set in (default: fc-match 'DejaVu Sans')")
+        g.add_argument("--noto-source", help="googlefonts/noto-emoji source tree (has svg/)")
+        g.add_argument("--noto-version", default="v2.051", help="Recorded in the registry")
+        g.add_argument("--cjk-font", help="Noto Sans CJK Regular .ttc/.otf to subset")
+        g.add_argument("--cjk-font-bold", help="Noto Sans CJK Bold .ttc/.otf to subset")
+        g.add_argument("--cjk-font-number", type=int, default=0, help="Face index in a .ttc (0 = JP)")
+        g.add_argument("--cjk-source-label", default="notofonts/noto-cjk Sans 2.004 (JP face)")
+        g.set_defaults(func=cmd_glyphs)
 
     args = ap.parse_args()
     if args.command is None:
