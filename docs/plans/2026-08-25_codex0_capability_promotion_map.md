@@ -5,7 +5,7 @@ note_role: architecture_note
 validation_profile: standard
 status: draft
 created: 2026-08-25T12:05:00-04:00
-updated: 2026-10-01T16:32:00-04:00
+updated: 2026-10-01T19:10:00-04:00
 beam_home: 42_optical_foundry
 title: "Codex 0 → Optical Foundry — capability promotion map (post-delivery)"
 tags:
@@ -33,7 +33,7 @@ last_touched:
   model: claude-opus-5-5
   provider: custom:primary
   voyage: "t3-code:hermes-acp"
-  at: 2026-10-01T16:32:00-04:00
+  at: 2026-10-01T19:10:00-04:00
 ---
 
 # Codex 0 → Optical Foundry — capability promotion map
@@ -177,9 +177,9 @@ The band that makes "compose a book out of arbitrary Atrium files" possible at a
 
 ### Band D — Page furniture and typography (the ornamentation work)
 
-- [ ] **D1 ★ — Margin register rails.** *Now:* `contracts/RAILS_CONTRACT.md` (326 lines, already written at a promotable altitude), `codex0_composition.lua`, `codex0.tex`. *Generalization:* **a rail is a run-grouped margin mark that says "the register changed here."** The contract's three rules survive de-Codexing intact — rail continuity means *story identity* (not proximity, not chapter, not page); ornaments and literal interludes are transparent both ways; every rail is a complete specimen drawn natively at its length, never a stretched stem. *Second consumer:* in a keeper-capture book, a rail per source-capture or per beam does exactly the job it does in Codex 0 — it tells the eye where one voice ends. **This is the strongest "it was never about the book" candidate in the survey.** *Carries:* run grouping (`dec2e6d`, `c7c1b39`), the per-segment stub floor (`8ac1833`), the contained-ladder rule.
+- [x] **D1 ★ — Margin register rails.** *Built 2026-10-01 as step 4 (`engine/ornaments.py`, profile packages) — §12.* *Now:* `contracts/RAILS_CONTRACT.md` (326 lines, already written at a promotable altitude), `codex0_composition.lua`, `codex0.tex`. *Generalization:* **a rail is a run-grouped margin mark that says "the register changed here."** The contract's three rules survive de-Codexing intact — rail continuity means *story identity* (not proximity, not chapter, not page); ornaments and literal interludes are transparent both ways; every rail is a complete specimen drawn natively at its length, never a stretched stem. *Second consumer:* in a keeper-capture book, a rail per source-capture or per beam does exactly the job it does in Codex 0 — it tells the eye where one voice ends. **This is the strongest "it was never about the book" candidate in the survey.** *Carries:* run grouping (`dec2e6d`, `c7c1b39`), the per-segment stub floor (`8ac1833`), the contained-ladder rule.
 
-- [ ] **D2 ★ — Ornament page-position law.** *Now:* `e0bc6fd`, `144de1d` — LuaLaTeX `pre_output_filter` enforcement at render time, with structural classes exempt at page top. *Generalization:* an ornament class may declare where on a page it is legal, and the law is enforced against the shipped page rather than predicted from the source. Generic to any decorated document; the enforcement-at-output-time posture is the valuable half.
+- [x] **D2 ★ — Ornament page-position law.** *Built 2026-10-01 as step 4 — §12.* *Now:* `e0bc6fd`, `144de1d` — LuaLaTeX `pre_output_filter` enforcement at render time, with structural classes exempt at page top. *Generalization:* an ornament class may declare where on a page it is legal, and the law is enforced against the shipped page rather than predicted from the source. Generic to any decorated document; the enforcement-at-output-time posture is the valuable half.
 
 - [ ] **D3 ○ — Floating plate placement and containment.** *Now:* `b7baf9b` (pre_output_filter injector, whatsit anchors, ship-flag chip folio), `c050cb3`, `cea2861`, plus the build-time gate `tooling/check_plate_containment.py` (372 lines). *Generalization:* a full-page figure seats itself under legality rules, and **containment is re-proved every render because it is not a source defect** — a correctly-seated plate is pushed onto the wrong spread by any edit upstream of it. Build 64 proved that. *Second consumer:* any illustrated long document.
 
@@ -285,7 +285,7 @@ For each candidate, Luis rules one of:
 | A — composition | A1★ A2★ A3★ A4 A5 | A3 PROMOTE, done (2026-09-28); A2 built (2026-09-30, §10); rest — |
 | B — multi-volume | B1★ B2★ B3★ B4 | B1, B2 built (2026-10-01, §11); B3 PROMOTE (2026-09-28): assertion half done — draft renders + `renders-agree` in the engine; the pass order stays in the book (one consumer = contract, not code). `2026-09-28_codex0_build_performance_plan.md` §5; rest — |
 | C — edition gating | C1 C2 | — |
-| D — furniture | D1★ D2★ D3 D4 D5 | — |
+| D — furniture | D1★ D2★ D3 D4 D5 | D1, D2 built (2026-10-01, §12); rest — |
 | E — physical | E1★ E2 E3 E4 | E1 PROMOTE, done (2026-09-28); rest — |
 | F — build identity | F1★ F2 | F1 PROMOTE, done (2026-09-28); F2 done (2026-09-30, §9) |
 | G — tenant split | G1★ G2 G3 | G1 PROMOTE, done (2026-09-28); G2, G3 — |
@@ -670,3 +670,31 @@ second pass could run in parallel, as Codex 0's final wave does).
 `tests/test_volumes.py` covers the split, the validation of bad cuts, the two seats, the
 selector's volumes and a two-volume render (continuous folios, roman front matter, parity,
 contents). Full-suite and whole-book results are recorded in the session ledger.
+
+---
+
+## 12. 2026-10-01 — step 4: ornament slots and rails (D1, D2); the final check
+
+Rulings `01a0f951-dc5d` and `01a0f99a-b2db`; contract `contracts/ORNAMENT_SLOTS_CONTRACT.md`.
+Opened by candidate 5 (codex0's page-placement Lua in its own files, `e4be190`).
+
+- **Profiles in their own repositories** (`engine/profile_package.py`). The engine searches
+  the repositories it is pointed at (`OF_PROFILE_PATH`, or `~/.config/optical-foundry/
+  profile_repos`); a package extends an engine profile. Private repository on Sol:
+  `optical-foundry-profiles`, beside the engine.
+- **D2:** the page-position law in the engine, with Codex 0's law as the default rule of each
+  slot; a profile may tighten, never loosen.
+- **D1:** rails in the engine under its own names, ported from Codex 0's mechanism; art checked
+  on load (alpha, contained, 300 dpi, aspect decides the rung).
+- **The keeper-capture book** uses the `keeper-capture` package: rails mark Luis's literal voice
+  (a `literal-voice` div, by hand), breath and hinge, Codex 0's numbers, no art yet.
+- Codex 0 keeps its own copies of the rail and law code until its profile becomes a package
+  (G2).
+
+**The final check** (ruling `01a0f8ba-4937`: "then check to make sure we can output something
+identical to what we had before"). Full Codex 0 build from `b5ed5ac`, run
+`of-arch-final-b5ed5ac-2026-10-01`, against `of-step2-candidate-2026-09-30`, the last run before
+the 2026-10-01 work: every contact sheet identical, all three volumes, read and bound (224,
+286/288, 126/128 pages). The listed differences are the manifests' file dates and generation
+times, and the four body lines that defined the divider-marker commands, which the template
+contract now supplies. Against the template-contract check run: CLEAN.
