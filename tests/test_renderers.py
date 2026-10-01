@@ -251,11 +251,12 @@ def test_pandoc_renderer_page_size_defaults_merge_profile_geometry(tmp_path):
     geometry = variables["geometry"]
     assert geometry[:2] == ["paperwidth=5.5in", "paperheight=8.5in"]
     assert "margin=1in" in geometry
-    assert variables["header-includes"] == [r"\special{papersize=\the\paperwidth,\the\paperheight}"]
+    assert "header-includes" not in variables
+    assert PandocRenderer._page_geometry_preamble(plan, resolved) == [r"\special{papersize=\the\paperwidth,\the\paperheight}"]
     assert variables["classoption"] == ["11pt", "oneside", "statementpaper"]
 
 
-def test_pandoc_renderer_font_runtime_defaults_preserve_geometry_and_override_yugen_fonts(tmp_path):
+def test_pandoc_renderer_font_runtime_defaults_override_yugen_fonts_through_the_preamble(tmp_path):
     plan = ProjectionPlan(
         profile_id="cam",
         render_id="font-fallback-doc",
@@ -264,20 +265,18 @@ def test_pandoc_renderer_font_runtime_defaults_preserve_geometry_and_override_yu
     )
     resolved = resolve_profile("cam")
     renderer = PandocRenderer()
-    geometry_defaults = renderer._page_geometry_defaults(plan, resolved, tmp_path)
 
-    defaults, fallbacks = renderer._font_runtime_defaults(
+    defaults, fallbacks, preamble_lines = renderer._font_runtime_defaults(
         resolved.defaults_stack,
         tmp_path,
         plan.render_id,
-        geometry_defaults,
     )
 
     assert defaults is not None
     import yaml
     variables = yaml.safe_load(defaults.read_text())["variables"]
-    assert r"\special{papersize=\the\paperwidth,\the\paperheight}" in variables["header-includes"]
-    header_includes = "\n".join(variables["header-includes"])
+    assert "header-includes" not in variables
+    header_includes = "\n".join(preamble_lines)
     assert "\\renewcommand\\yugen@setfonts" in header_includes
     assert "\\setmainfont{DejaVu Serif}" in header_includes
     assert "\\setsansfont{DejaVu Sans}" in header_includes
@@ -345,7 +344,10 @@ def test_pandoc_renderer_bound_delivery_defaults_mirror_geometry_and_outer_numbe
     assert variables["classoption"] == ["11pt", "twoside", "statementpaper"]
     assert variables["pagestyle"] == "ofBoundOuter"
     assert variables["footeremail"] == ""
-    header_includes = "\n".join(variables["header-includes"])
+    header_includes = "\n".join(
+        PandocRenderer._page_geometry_preamble(plan, resolved) + PandocRenderer._bound_delivery_header_includes(plan)
+    )
+    assert "header-includes" not in variables  # preamble lines go to engine/preamble.py
     assert "\\makeevenfoot{ofBoundOuter}{\\thepage}{}{}" in header_includes
     assert "\\makeoddfoot {ofBoundOuter}{}{}{\\thepage}" in header_includes
 
@@ -379,7 +381,10 @@ def test_pandoc_renderer_bound_delivery_running_headers_use_memoir_marks(tmp_pat
     assert defaults is not None
     import yaml
     variables = yaml.safe_load(defaults.read_text())["variables"]
-    header_includes = "\n".join(variables["header-includes"])
+    header_includes = "\n".join(
+        PandocRenderer._page_geometry_preamble(plan, resolved) + PandocRenderer._bound_delivery_header_includes(plan)
+    )
+    assert "header-includes" not in variables  # preamble lines go to engine/preamble.py
     assert variables["pagestyle"] == "ofBoundOuter"
     assert "\\makeevenhead{ofBoundOuter}{\\small\\itshape\\leftmark}{}{}" in header_includes
     assert "\\makeoddhead {ofBoundOuter}{}{}{\\small\\itshape\\rightmark}" in header_includes
@@ -424,7 +429,10 @@ def test_pandoc_renderer_bound_delivery_illumination_rail_header_include(tmp_pat
     assert defaults is not None
     import yaml
     variables = yaml.safe_load(defaults.read_text())["variables"]
-    header_includes = "\n".join(variables["header-includes"])
+    header_includes = "\n".join(
+        PandocRenderer._page_geometry_preamble(plan, resolved) + PandocRenderer._bound_delivery_header_includes(plan)
+    )
+    assert "header-includes" not in variables  # preamble lines go to engine/preamble.py
     assert "\\newcommand{\\OFOuterRail}" in header_includes
     assert "\\newcommand{\\OFBottomRail}" in header_includes
     assert "angle=90" in header_includes
@@ -462,7 +470,10 @@ def test_pandoc_renderer_bound_delivery_edge_ornament_key_value_macro(tmp_path):
     assert defaults is not None
     import yaml
     variables = yaml.safe_load(defaults.read_text())["variables"]
-    header_includes = "\n".join(variables["header-includes"])
+    header_includes = "\n".join(
+        PandocRenderer._page_geometry_preamble(plan, resolved) + PandocRenderer._bound_delivery_header_includes(plan)
+    )
+    assert "header-includes" not in variables  # preamble lines go to engine/preamble.py
     assert "\\newcommand{\\OFEdgeOrnament}[2][]" in header_includes
     assert "/ofedgeornament/.is family" in header_includes
     assert "edge/.store in=\\OFEO@edge" in header_includes
@@ -577,12 +588,19 @@ def test_pandoc_renderer_page_size_defaults_preserve_source_header_includes(tmp_
     )
     resolved = resolve_profile("codex0")
 
-    defaults = PandocRenderer()._page_geometry_defaults(plan, resolved, tmp_path)
-
-    assert defaults is not None
+    out = tmp_path / "out"
+    out.mkdir()
     import yaml
-    variables = yaml.safe_load(defaults.read_text())["variables"]
-    assert variables["header-includes"] == [
+    defaults = PandocRenderer()._page_geometry_defaults(plan, resolved, out)
+    assert defaults is not None
+    assert "header-includes" not in yaml.safe_load(defaults.read_text())["variables"]
+    # The source's own header-includes reach the preamble ahead of the page special.
+    from engine.preamble import Preamble
+
+    preamble = Preamble()
+    preamble.add_source(src)
+    preamble.add("page_geometry", PandocRenderer._page_geometry_preamble(plan, resolved))
+    assert preamble.lines() == [
         r"\usepackage{yugenillumination}",
         r"\special{papersize=\the\paperwidth,\the\paperheight}",
     ]
@@ -883,5 +901,6 @@ def test_draft_mode_sets_graphicx_draft_and_implies_measure(tmp_path, monkeypatc
     assert evidence["status"] == "ok"
     assert evidence["render_metadata"]["render_mode"] == "draft"
     assert "--include-in-header" in evidence["render_metadata"]["command"]
-    assert "\\setkeys{Gin}{draft=true}" in (out / "draft.draft_header.tex").read_text()
+    assert "\\setkeys{Gin}{draft=true}" in (out / "draft.preamble.tex").read_text()
+    assert evidence["render_metadata"]["preamble"]["lines_by_origin"]["draft"] == 1
     assert calls == []

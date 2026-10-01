@@ -61,6 +61,7 @@ from engine.page_size import (
 )
 from engine.profile_resolver import LOCAL_IMPORT, ResolvedProfile, resolve_profile
 from engine.projection_plan import ProjectionPlan
+from engine.preamble import Preamble, source_header_includes
 from engine.resource_roots import (
     ResolvedResourceRoot,
     TEMPLATE_RESOURCE_KEYS,
@@ -192,6 +193,9 @@ class PandocRenderer(Renderer):
             *resource_resolution["raw_latex_pins"].pop("warnings"),
         ]
         cmd = ["pandoc", str(cmd_source), "-o", str(compile_pdf)]
+        # Every preamble line of this render, in one place (engine/preamble.py).
+        preamble = Preamble()
+        preamble.add_source(cmd_source)
         defaults_meta: dict[str, Any] = {}
         for defaults_file in resolved_profile.defaults_stack:
             cmd += ["--defaults", str(defaults_file)]
@@ -203,13 +207,14 @@ class PandocRenderer(Renderer):
         page_geometry_options = self._page_geometry_options(plan, resolved_profile)
         if page_geometry_defaults is not None:
             cmd += ["--defaults", str(page_geometry_defaults)]
-        font_runtime_defaults, font_runtime_fallbacks = self._font_runtime_defaults(
+            preamble.add("page_geometry", self._page_geometry_preamble(plan, resolved_profile))
+            preamble.add("bound_delivery", self._bound_delivery_header_includes(plan))
+        font_runtime_defaults, font_runtime_fallbacks, font_preamble = self._font_runtime_defaults(
             resolved_profile.defaults_stack,
             out_dir,
             plan.render_id,
-            page_geometry_defaults,
-            source_header_includes=self._source_header_includes(cmd_source),
         )
+        preamble.add("font_fallback", font_preamble)
         if font_runtime_defaults is not None:
             cmd += ["--defaults", str(font_runtime_defaults)]
 
@@ -278,22 +283,17 @@ class PandocRenderer(Renderer):
         # Foundry's imported templates have none, so any document with strikeout
         # failed with "Undefined control sequence \\st" (2026-09-01 keeper-capture
         # proof render). Load pandoc's own package choice for every template when
-        # the source contains strikeout. A header file, not metadata: pandoc
-        # drops metadata header-includes whenever --include-in-header is given.
+        # the source contains strikeout.
         strikeout_support = self._source_contains_strikeout(cmd_source, resolved_profile.defaults_stack)
         if strikeout_support:
-            strikeout_header = out_dir / f"{plan.render_id}.strikeout_header.tex"
-            strikeout_header.write_text(STRIKEOUT_HEADER, encoding="utf-8")
-            cmd += ["--include-in-header", str(strikeout_header)]
+            preamble.add("strikeout", STRIKEOUT_HEADER.rstrip("\n"))
 
         if draft:
-            draft_header = out_dir / f"{plan.render_id}.draft_header.tex"
-            draft_header.write_text(
+            preamble.add(
+                "draft",
                 "% Optical Foundry draft render: image boxes, no image data.\n"
-                "\\setkeys{Gin}{draft=true}\n",
-                encoding="utf-8",
+                "\\setkeys{Gin}{draft=true}",
             )
-            cmd += ["--include-in-header", str(draft_header)]
 
         image_bake_report = None
         if bake_images:
@@ -328,13 +328,17 @@ class PandocRenderer(Renderer):
             }
             bake_lua = out_dir / f"{plan.render_id}.image_bake.lua"
             bake_lua.write_text(image_bake_lua(), encoding="utf-8")
-            bake_header = out_dir / f"{plan.render_id}.image_bake_header.tex"
-            bake_header.write_text(
+            preamble.add(
+                "image_bake",
                 "% Optical Foundry lossless image bake (engine/image_bake.py).\n"
-                f"\\directlua{{dofile(\"{bake_lua}\")}}\n",
-                encoding="utf-8",
+                f"\\directlua{{dofile(\"{bake_lua}\")}}",
             )
-            cmd += ["--include-in-header", str(bake_header)]
+
+        # The render's one preamble route. Pandoc drops the source's metadata
+        # header-includes once this is given; the Preamble already carries them.
+        preamble_file = preamble.write(out_dir, plan.render_id)
+        if preamble_file is not None:
+            cmd += ["--include-in-header", str(preamble_file)]
 
         # --- execute ---
         try:
@@ -652,6 +656,7 @@ class PandocRenderer(Renderer):
                 "render_mode": "draft" if draft else ("measure" if measure else "full"),
                 **({"image_bake": image_bake_report} if image_bake_report else {}),
                 **({"strikeout_support": True} if strikeout_support else {}),
+                "preamble": preamble.evidence(preamble_file),
                 "rendered_at": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
                 "success": success,
                 "profile_version": defaults_meta.get("profile_version", "unknown"),
@@ -1451,10 +1456,13 @@ class PandocRenderer(Renderer):
         defaults_stack: list[Path],
         out_dir: Path,
         render_id: str,
-        base_defaults: Path | None = None,
-        source_header_includes: list[str] | None = None,
-    ) -> tuple[Path | None, list[dict[str, str]]]:
+    ) -> tuple[Path | None, list[dict[str, str]], list[str]]:
         """Materialize a render-only font fallback overlay for non-macOS hosts.
+
+        Returns the overlay (font variables only), the fallbacks applied, and the
+        preamble lines that re-point the yugen style family at installed fonts;
+        those go to the render's ``Preamble`` (engine/preamble.py), not into
+        the overlay.
 
         Several imported profile defaults name macOS fonts such as Helvetica or
         Menlo. The profile resolver records those names as declared system
@@ -1464,7 +1472,7 @@ class PandocRenderer(Renderer):
         """
         requested = PandocRenderer._collect_font_variables(defaults_stack)
         if not requested:
-            return None, []
+            return None, [], []
         available = PandocRenderer._available_font_families()
         fallback_map = {
             "Helvetica": "DejaVu Sans",
@@ -1485,7 +1493,7 @@ class PandocRenderer(Renderer):
                 variables[role] = fallback
                 fallbacks.append({"role": role, "requested": family, "applied": fallback})
 
-        header_includes = [*(source_header_includes or []), *PandocRenderer._header_includes_from_defaults(base_defaults)]
+        header_includes: list[str] = []
         yugen_font_roles = {
             "mainfont": "Times New Roman",
             "sansfont": "Helvetica",
@@ -1514,20 +1522,15 @@ class PandocRenderer(Renderer):
                 if applied:
                     fallbacks.append({"role": f"yugencommon.{role}", "requested": family, "applied": applied})
 
-        if not variables and not header_includes:
-            return None, []
+        if not variables:
+            return None, fallbacks, header_includes
         path = out_dir / f"{render_id}.font_fallbacks.yaml"
         import yaml
-        payload: dict[str, Any] = {}
-        if variables:
-            payload["variables"] = variables
-        if header_includes:
-            payload.setdefault("variables", {})["header-includes"] = list(dict.fromkeys(header_includes))
         path.write_text(
-            yaml.safe_dump(payload, sort_keys=False),
+            yaml.safe_dump({"variables": variables}, sort_keys=False),
             encoding="utf-8",
         )
-        return path, fallbacks
+        return path, fallbacks, header_includes
 
     @staticmethod
     def _collect_font_variables(defaults_stack: list[Path]) -> dict[str, str]:
@@ -1562,23 +1565,6 @@ class PandocRenderer(Renderer):
         # DejaVu families are part of the baseline NixOS/XeTeX surface even
         # when fontconfig reports only the primary Sans family in `fc-list`.
         return family in available or family.startswith("DejaVu ")
-
-    @staticmethod
-    def _header_includes_from_defaults(defaults_path: Path | None) -> list[str]:
-        if defaults_path is None or not defaults_path.exists():
-            return []
-        try:
-            import yaml
-            data = yaml.safe_load(defaults_path.read_text()) or {}
-        except Exception:
-            return []
-        variables = data.get("variables", {}) if isinstance(data, dict) else {}
-        header_includes = variables.get("header-includes", []) if isinstance(variables, dict) else []
-        if isinstance(header_includes, str):
-            return [header_includes]
-        if isinstance(header_includes, list):
-            return [str(item) for item in header_includes]
-        return []
 
     @staticmethod
     def _available_font_families() -> set[str]:
@@ -1742,18 +1728,8 @@ class PandocRenderer(Renderer):
             return None
         path = out_dir / f"{plan.render_id}.page_geometry.yaml"
         import yaml
-        header_includes = [
-            *PandocRenderer._source_header_includes(plan.render_source),
-            r"\special{papersize=\the\paperwidth,\the\paperheight}",
-        ]
-        variables: dict[str, Any] = {
-            "geometry": geometry,
-            "header-includes": list(dict.fromkeys(header_includes)),
-        }
+        variables: dict[str, Any] = {"geometry": geometry}
         if plan.delivery.get("mode") == "bound":
-            variables["header-includes"] = list(
-                dict.fromkeys([*variables["header-includes"], *PandocRenderer._bound_delivery_header_includes(plan)])
-            )
             if plan.delivery.get("page_numbers") == "outer":
                 variables["pagestyle"] = "ofBoundOuter"
             if plan.delivery.get("footer_metadata", {}).get("suppress_repeated", False):
@@ -1774,6 +1750,18 @@ class PandocRenderer(Renderer):
         payload = {"variables": variables}
         path.write_text(yaml.safe_dump(payload, sort_keys=False), encoding="utf-8")
         return path
+
+    @staticmethod
+    def _page_geometry_preamble(plan: ProjectionPlan, resolved_profile: ResolvedProfile) -> list[str]:
+        """Preamble lines that go with the page-geometry overlay.
+
+        XeTeX can emit a letter MediaBox unless the paper special follows
+        geometry. Bound-delivery pagestyles and rails ride the same condition
+        (a requested page geometry), as they did when both lived in the overlay.
+        """
+        if not PandocRenderer._page_geometry_options(plan, resolved_profile):
+            return []
+        return [r"\special{papersize=\the\paperwidth,\the\paperheight}"]
 
     @staticmethod
     def _bound_delivery_header_includes(plan: ProjectionPlan) -> list[str]:
@@ -1942,27 +1930,7 @@ class PandocRenderer(Renderer):
 
     @staticmethod
     def _source_header_includes(render_source: Path) -> list[str]:
-        if not render_source.exists():
-            return []
-        text = render_source.read_text(encoding="utf-8", errors="ignore")
-        if not text.startswith("---\n"):
-            return []
-        end = text.find("\n---", 4)
-        if end == -1:
-            return []
-        try:
-            import yaml
-            frontmatter = yaml.safe_load(text[4:end]) or {}
-        except Exception:
-            return []
-        if not isinstance(frontmatter, dict):
-            return []
-        includes = frontmatter.get("header-includes") or frontmatter.get("header_includes")
-        if includes is None:
-            return []
-        if isinstance(includes, list):
-            return [str(item) for item in includes if item]
-        return [str(includes)] if includes else []
+        return source_header_includes(render_source)
 
     @staticmethod
     def _source_contains_strikeout(render_source: Path, defaults_stack: Iterable[Path]) -> bool:

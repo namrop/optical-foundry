@@ -509,7 +509,7 @@ def test_pandoc_renderer_layout_images_are_pdf_latex_gated(tmp_path):
     assert prepared.boundary_assertions == {}
 
 
-def test_layout_image_source_header_includes_survive_font_runtime_defaults(tmp_path):
+def test_layout_image_source_header_includes_reach_the_preamble(tmp_path):
     src = tmp_path / "layout-image-font-overlay.md"
     src.write_text(
         "```of-image\n"
@@ -528,20 +528,16 @@ def test_layout_image_source_header_includes_survive_font_runtime_defaults(tmp_p
     )
     renderer = PandocRenderer()
     prepared = renderer._prepare_layout_image_source(plan, tmp_path / "render-out")
-    resolved = resolve_profile("mythic")
+    # The layout preprocessor's preamble lines reach the render's one preamble
+    # (engine/preamble.py) whatever overlays the render also uses.
+    from engine.preamble import Preamble
 
-    defaults_path, _ = renderer._font_runtime_defaults(
-        resolved.defaults_stack,
-        tmp_path / "render-out",
-        prepared.render_id,
-        None,
-        source_header_includes=renderer._source_header_includes(prepared.render_source),
-    )
-
-    assert defaults_path is not None
-    defaults_text = defaults_path.read_text()
-    assert "\\usepackage{wrapfig}" in defaults_text
-    assert "\\usepackage{tikz}" in defaults_text
+    preamble = Preamble()
+    preamble.add_source(prepared.render_source)
+    preamble.add("draft", "\\setkeys{Gin}{draft=true}")
+    text = preamble.text()
+    assert "\\usepackage{wrapfig}" in text
+    assert "\\usepackage{tikz}" in text
 
 
 def test_pandoc_renderer_layout_images_support_mythic_pdf_profiles(tmp_path):
