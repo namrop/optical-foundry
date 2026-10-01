@@ -1,4 +1,5 @@
 """Tests for optional layout-image source blocks."""
+from engine import source_preparation
 import os
 import shutil
 import subprocess
@@ -13,7 +14,6 @@ from engine.layout_images import LayoutImageRenderError, preprocess_layout_image
 from engine.manifest_compiler import MarkdownDocumentCompiler
 from engine.profile_resolver import resolve_profile
 from engine.projection_plan import ProjectionPlan
-from renderers.pandoc_renderer import PandocRenderer
 
 
 def test_layout_image_wrap_block_rewrites_to_wrapfig_with_header_includes(tmp_path):
@@ -328,7 +328,7 @@ def test_pandoc_renderer_records_image_initial_evidence(tmp_path):
         boundary_assertions={},
     )
 
-    prepared = PandocRenderer()._prepare_layout_image_source(plan, tmp_path / "render-out")
+    prepared = source_preparation.layout_images(plan, tmp_path / "render-out", resolve_profile(plan.profile_id))
 
     assert prepared.figure_inventory[0]["kind"] == "image_initial"
     assert prepared.boundary_assertions["image_initials_enabled"] is True
@@ -368,7 +368,7 @@ def test_markdown_document_manifest_layout_images_include_original_source_root(t
         }
     )
 
-    prepared = PandocRenderer()._prepare_layout_image_source(plan, output_dir)
+    prepared = source_preparation.layout_images(plan, output_dir, resolve_profile(plan.profile_id))
 
     roots = prepared.boundary_assertions["layout_image_graphicspath_roots"]
     assert f"{source_dir.as_posix()}/" in roots
@@ -466,7 +466,7 @@ def test_pandoc_renderer_prepares_layout_image_source_before_pandoc(tmp_path):
         boundary_assertions={},
     )
 
-    prepared = PandocRenderer()._prepare_layout_image_source(plan, tmp_path / "render-out")
+    prepared = source_preparation.layout_images(plan, tmp_path / "render-out", resolve_profile(plan.profile_id))
 
     assert prepared.render_source != src
     assert "```of-image" not in prepared.render_source.read_text()
@@ -502,7 +502,7 @@ def test_pandoc_renderer_layout_images_are_pdf_latex_gated(tmp_path):
         boundary_assertions={},
     )
 
-    prepared = PandocRenderer()._prepare_layout_image_source(plan, tmp_path / "render-out")
+    prepared = source_preparation.layout_images(plan, tmp_path / "render-out", resolve_profile(plan.profile_id))
 
     assert prepared.render_source == src
     assert prepared.figure_inventory == []
@@ -526,8 +526,7 @@ def test_layout_image_source_header_includes_reach_the_preamble(tmp_path):
         figure_inventory=[],
         boundary_assertions={},
     )
-    renderer = PandocRenderer()
-    prepared = renderer._prepare_layout_image_source(plan, tmp_path / "render-out")
+    prepared = source_preparation.layout_images(plan, tmp_path / "render-out", resolve_profile(plan.profile_id))
     # The layout preprocessor's preamble lines reach the render's one preamble
     # (engine/preamble.py) whatever overlays the render also uses.
     from engine.preamble import Preamble
@@ -561,7 +560,7 @@ def test_pandoc_renderer_layout_images_support_mythic_pdf_profiles(tmp_path):
             boundary_assertions={},
         )
 
-        prepared = PandocRenderer()._prepare_layout_image_source(plan, tmp_path / f"render-out-{profile_id}")
+        prepared = source_preparation.layout_images(plan, tmp_path / f"render-out-{profile_id}", resolve_profile(plan.profile_id))
         rewritten = prepared.render_source.read_text()
 
         assert prepared.render_source != src

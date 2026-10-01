@@ -1,4 +1,5 @@
 """Tests for Codex 0 inline edition variant preprocessing."""
+from engine import source_preparation
 from pathlib import Path
 import sys
 
@@ -15,7 +16,6 @@ from engine.codex_editions import (  # noqa: E402
 )
 from engine.profile_resolver import resolve_profile  # noqa: E402
 from engine.projection_plan import ProjectionPlan  # noqa: E402
-from renderers.pandoc_renderer import PandocRenderer  # noqa: E402
 
 
 def test_codex_edition_preprocessor_selects_tagged_override_over_base(tmp_path):
@@ -367,7 +367,7 @@ def test_pandoc_renderer_codex_prepass_runs_before_layout_images(tmp_path):
     )
     plan = ProjectionPlan(profile_id="codex0", render_id="image-variant", render_source=src)
 
-    prepared = PandocRenderer()._prepare_codex_edition_source(plan, tmp_path, resolve_profile("codex0"))
+    prepared = source_preparation.codex_edition(plan, tmp_path, resolve_profile("codex0"))
     rewritten = prepared.render_source.read_text()
 
     assert "Reader-only prose." in rewritten
@@ -385,7 +385,7 @@ def test_pandoc_renderer_codex_prepass_formats_visible_editorial_callouts(tmp_pa
     )
     plan = ProjectionPlan(profile_id="codex0", render_id="draft-callout", render_source=src)
 
-    prepared = PandocRenderer()._prepare_codex_edition_source(plan, tmp_path, resolve_profile("codex0"))
+    prepared = source_preparation.codex_edition(plan, tmp_path, resolve_profile("codex0"))
     rewritten = prepared.render_source.read_text()
 
     assert '::: {.codex-editorial-note kind="note" title="Lux note"}' in rewritten
@@ -408,7 +408,7 @@ def test_pandoc_renderer_fails_closed_for_cx0_markers_under_non_codex_profile(tm
     plan = ProjectionPlan(profile_id="keeper", render_id="wrong-profile", render_source=src)
 
     with pytest.raises(CodexEditionRenderError, match="require profile codex0"):
-        PandocRenderer()._prepare_codex_edition_source(plan, tmp_path, resolve_profile("keeper"))
+        source_preparation.codex_edition(plan, tmp_path, resolve_profile("keeper"))
 
 
 def test_pandoc_renderer_leaves_other_profiles_with_plain_callouts_unchanged(tmp_path):
@@ -416,7 +416,7 @@ def test_pandoc_renderer_leaves_other_profiles_with_plain_callouts_unchanged(tmp
     src.write_text("---\ntitle: Ordinary\n---\n\n> [!note] Plain Obsidian note.\n")
     plan = ProjectionPlan(profile_id="keeper", render_id="ordinary-callout", render_source=src)
 
-    prepared = PandocRenderer()._prepare_codex_edition_source(plan, tmp_path, resolve_profile("keeper"))
+    prepared = source_preparation.codex_edition(plan, tmp_path, resolve_profile("keeper"))
 
     assert prepared.render_source == src
     assert prepared.boundary_assertions == {}
@@ -427,7 +427,7 @@ def test_pandoc_renderer_leaves_other_renders_without_markers_unchanged(tmp_path
     src.write_text("---\ntitle: Ordinary\n---\n\nPlain prose.\n")
     plan = ProjectionPlan(profile_id="keeper", render_id="ordinary", render_source=src)
 
-    prepared = PandocRenderer()._prepare_codex_edition_source(plan, tmp_path, resolve_profile("keeper"))
+    prepared = source_preparation.codex_edition(plan, tmp_path, resolve_profile("keeper"))
 
     assert prepared.render_source == src
     assert prepared.boundary_assertions == {}

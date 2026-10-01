@@ -5,7 +5,7 @@ note_role: architecture_note
 validation_profile: standard
 status: draft
 created: 2026-08-25T12:05:00-04:00
-updated: 2026-10-01T16:40:00-04:00
+updated: 2026-10-01T16:32:00-04:00
 beam_home: 42_optical_foundry
 title: "Codex 0 → Optical Foundry — capability promotion map (post-delivery)"
 tags:
@@ -33,7 +33,7 @@ last_touched:
   model: claude-opus-5-5
   provider: custom:primary
   voyage: "t3-code:hermes-acp"
-  at: 2026-10-01T16:40:00-04:00
+  at: 2026-10-01T16:32:00-04:00
 ---
 
 # Codex 0 → Optical Foundry — capability promotion map

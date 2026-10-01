@@ -1,4 +1,5 @@
 """Golden generated-figure pipeline test covering all supported figure lanes."""
+from engine import source_preparation
 import json
 import sys
 from pathlib import Path
@@ -74,12 +75,11 @@ def test_generated_figure_golden_pipeline_rewrites_all_supported_fences(tmp_path
         figure_inventory=[],
         boundary_assertions={},
     )
-    renderer = PandocRenderer()
     out_dir = tmp_path / "render-out"
-    plan = renderer._prepare_mermaid_source(plan, out_dir, mermaid_renderer=fake_text_renderer, mermaid_output_format="svg")
-    plan = renderer._prepare_vega_source(plan, out_dir, vega_renderer=fake_vega_renderer, vega_output_format="svg")
-    plan = renderer._prepare_d2_source(plan, out_dir, d2_renderer=fake_text_renderer, d2_output_format="svg")
-    plan = renderer._prepare_graphviz_source(plan, out_dir, graphviz_renderer=fake_text_renderer, graphviz_output_format="svg")
+    plan = source_preparation.mermaid(plan, out_dir, renderer=fake_text_renderer, output_format="svg")
+    plan = source_preparation.vega(plan, out_dir, renderer=fake_vega_renderer, output_format="svg")
+    plan = source_preparation.d2(plan, out_dir, renderer=fake_text_renderer, output_format="svg")
+    plan = source_preparation.graphviz(plan, out_dir, renderer=fake_text_renderer, output_format="svg")
 
     rewritten = plan.render_source.read_text()
     assert "```mermaid" not in rewritten

@@ -1,4 +1,5 @@
 """Tests for Pandoc render dispatch and document renderer."""
+from engine import source_preparation
 import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -222,7 +223,7 @@ def test_pandoc_renderer_prepares_render_only_emoji_substitution(tmp_path):
         render_source=src,
     )
 
-    prepared = PandocRenderer()._prepare_emoji_substitution_source(plan, tmp_path / "out")
+    prepared = source_preparation.emoji(plan, tmp_path / "out", resolve_profile(plan.profile_id))
 
     assert prepared.render_source != src
     assert prepared.render_source.read_text(encoding="utf-8").count(r"\OFEmoji{") == 1
@@ -668,11 +669,11 @@ def test_pandoc_renderer_prepares_mermaid_source_before_pandoc(tmp_path):
         figure_inventory=[],
         boundary_assertions={},
     )
-    prepared = PandocRenderer()._prepare_mermaid_source(
+    prepared = source_preparation.mermaid(
         plan,
         tmp_path / "render-out",
-        mermaid_renderer=fake_renderer,
-        mermaid_output_format="svg",
+        renderer=fake_renderer,
+        output_format="svg",
     )
 
     assert prepared.render_source != src
@@ -710,11 +711,11 @@ def test_pandoc_renderer_prepares_vega_source_before_pandoc(tmp_path):
         figure_inventory=[],
         boundary_assertions={},
     )
-    prepared = PandocRenderer()._prepare_vega_source(
+    prepared = source_preparation.vega(
         plan,
         tmp_path / "render-out",
-        vega_renderer=fake_renderer,
-        vega_output_format="svg",
+        renderer=fake_renderer,
+        output_format="svg",
     )
 
     assert prepared.render_source != src
@@ -745,11 +746,11 @@ def test_pandoc_renderer_prepares_d2_source_before_pandoc(tmp_path):
         figure_inventory=[],
         boundary_assertions={},
     )
-    prepared = PandocRenderer()._prepare_d2_source(
+    prepared = source_preparation.d2(
         plan,
         tmp_path / "render-out",
-        d2_renderer=fake_renderer,
-        d2_output_format="svg",
+        renderer=fake_renderer,
+        output_format="svg",
     )
 
     assert prepared.render_source != src
@@ -782,11 +783,11 @@ def test_pandoc_renderer_prepares_graphviz_source_before_pandoc(tmp_path):
         figure_inventory=[],
         boundary_assertions={},
     )
-    prepared = PandocRenderer()._prepare_graphviz_source(
+    prepared = source_preparation.graphviz(
         plan,
         tmp_path / "render-out",
-        graphviz_renderer=fake_renderer,
-        graphviz_output_format="svg",
+        renderer=fake_renderer,
+        output_format="svg",
     )
 
     assert prepared.render_source != src
@@ -811,7 +812,7 @@ def test_pandoc_renderer_strips_unsafe_titlepage_background_frontmatter(tmp_path
         "# Body\n"
     )
 
-    guarded = PandocRenderer._titlepage_background_normalized_source(src, tmp_path, "unsafe-title-bg")
+    guarded = source_preparation.titlepage_background_guard(src, tmp_path, "unsafe-title-bg")
     text = guarded.read_text()
 
     assert guarded != src
@@ -833,7 +834,7 @@ def test_pandoc_renderer_keeps_safe_titlepage_background_frontmatter(tmp_path):
         "# Body\n"
     )
 
-    guarded = PandocRenderer._titlepage_background_normalized_source(src, tmp_path, "safe-title-bg")
+    guarded = source_preparation.titlepage_background_guard(src, tmp_path, "safe-title-bg")
 
     assert guarded == src
 

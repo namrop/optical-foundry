@@ -1,6 +1,8 @@
 """Contracts for manifest-declared, work-owned render resource roots."""
 from __future__ import annotations
 
+from engine import source_preparation
+from engine.profile_resolver import resolve_profile
 import argparse
 import os
 from pathlib import Path
@@ -363,7 +365,7 @@ def test_pandoc_and_latex_receive_the_same_effective_semantic_order(tmp_path, mo
     )
     roots = effective_resource_roots(plan, profile, run_root)
 
-    prepared = PandocRenderer()._prepare_layout_image_source(plan, run_root)
+    prepared = source_preparation.layout_images(plan, run_root, profile)
     pandoc_options = PandocRenderer._resource_path_options(
         roots,
         manifest_resource_roots=plan.manifest_resource_roots,
@@ -403,7 +405,7 @@ def test_absent_manifest_roots_preserve_legacy_pandoc_options_and_layout_order(
     )
     roots = effective_resource_roots(plan, profile, run_root)
 
-    prepared = PandocRenderer()._prepare_layout_image_source(plan, run_root)
+    prepared = source_preparation.layout_images(plan, run_root, profile)
     pandoc_options = PandocRenderer._resource_path_options(
         roots,
         manifest_resource_roots=plan.manifest_resource_roots,
@@ -587,7 +589,7 @@ def test_manifest_only_template_resources_receive_graphicspath_and_winner_eviden
     profile = _profile([])
     monkeypatch.setattr(pandoc_renderer_module, "resolve_profile", lambda _profile_id: profile)
 
-    prepared = PandocRenderer()._prepare_layout_image_source(plan, run_root)
+    prepared = source_preparation.layout_images(plan, run_root, profile)
     roots = effective_resource_roots(prepared, profile, run_root)
     evidence = resource_resolution_evidence(prepared, roots)
 
@@ -629,7 +631,7 @@ def test_emitted_manifest_graphicspath_resolves_titlepage_and_logo_with_xelatex(
         "resolve_profile",
         lambda _profile_id: _profile([]),
     )
-    prepared = PandocRenderer()._prepare_layout_image_source(plan, run_root)
+    prepared = source_preparation.layout_images(plan, run_root, resolve_profile(plan.profile_id))
     graphicspath = next(
         include
         for include in PandocRenderer._source_header_includes(prepared.render_source)
@@ -679,7 +681,7 @@ def test_image_free_plain_markdown_remains_layout_preprocessor_noop_on_unsafe_pa
         render_source=source,
     )
 
-    prepared = PandocRenderer()._prepare_layout_image_source(plan, tmp_path / "run")
+    prepared = source_preparation.layout_images(plan, tmp_path / "run", resolve_profile(plan.profile_id))
 
     assert prepared is plan
     assert prepared.render_source == source

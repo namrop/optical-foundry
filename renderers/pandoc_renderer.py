@@ -15,19 +15,9 @@ import shutil
 import subprocess
 import time
 import uuid
-from dataclasses import replace
 from pathlib import Path
 from typing import Any, Iterable
 
-from engine.codex_editions import (
-    CodexEditionRenderError,
-    edition_from_source_frontmatter,
-    preprocess_codex_edition_blocks,
-    source_contains_codex_edition_markers,
-    source_contains_codex_editorial_callouts,
-)
-from engine.d2 import D2RenderError, preprocess_d2_blocks
-from engine.graphviz import GraphvizRenderError, preprocess_graphviz_blocks
 from engine.glyph_lint import format_missing_character_failures, scan_missing_character_warnings
 from engine.furnish import (
     DividerMarkerSanitizationError,
@@ -48,10 +38,6 @@ from engine.image_bake import (
     discover_png_references,
     lua_callback_source as image_bake_lua,
 )
-from engine.emoji_substitution import preprocess_emoji_substitutions
-from engine.layout_images import LayoutImageRenderError, preprocess_layout_image_blocks
-from engine.mermaid import MermaidRenderError, preprocess_mermaid_blocks
-from engine.vega import VegaRenderError, preprocess_vega_blocks
 from engine.page_size import (
     collect_profile_classoption,
     collect_profile_geometry,
@@ -63,13 +49,13 @@ from engine.profile_resolver import LOCAL_IMPORT, ResolvedProfile, resolve_profi
 from engine.projection_plan import ProjectionPlan
 from engine.preamble import Preamble, source_header_includes
 from engine.template_contract import contract_text
+from engine.source_preparation import (
+    PREPARATION_ERRORS,
+    prepare as prepare_source,
+    safe_frontmatter_resource_path,
+)
 from engine.resource_roots import (
     ResolvedResourceRoot,
-    TEMPLATE_RESOURCE_KEYS,
-    effective_resource_roots,
-    pin_render_resources,
-    resource_resolution_evidence,
-    resource_root_paths,
 )
 from renderers.base import Renderer
 
@@ -156,43 +142,21 @@ class PandocRenderer(Renderer):
             f".{plan.render_id}.compile-stage-{compile_token}.txt"
         )
 
-        # --- build pandoc command ---
+        # --- source preparation: every rewrite before pandoc (engine/source_preparation.py) ---
+        resolved_profile = resolve_profile(plan.profile_id)
         try:
-            resolved_profile = resolve_profile(plan.profile_id)
-            plan = self._prepare_codex_edition_source(plan, out_dir, resolved_profile)
-            plan = self._prepare_layout_image_source(plan, out_dir)
-            plan = self._prepare_mermaid_source(plan, out_dir)
-            plan = self._prepare_vega_source(plan, out_dir)
-            plan = self._prepare_d2_source(plan, out_dir)
-            plan = self._prepare_graphviz_source(plan, out_dir)
-            plan = self._prepare_emoji_substitution_source(plan, out_dir)
-        except (CodexEditionRenderError, LayoutImageRenderError, MermaidRenderError, VegaRenderError, D2RenderError, GraphvizRenderError) as exc:
+            prepared = prepare_source(plan, resolved_profile, out_dir)
+        except PREPARATION_ERRORS as exc:
             elapsed = time.monotonic() - start
             return self._evidence_error(
                 plan, out_dir / f"{plan.render_id}{plan.output_extension}", evidence_file, elapsed, str(exc), ["source-preprocessor"]
             )
+        plan = prepared.plan
+        resource_roots = prepared.resource_roots
+        resource_resolution = prepared.resource_resolution
+        cmd_source = prepared.source
 
-        render_source = plan.render_source.resolve()
-        resource_roots = effective_resource_roots(plan, resolved_profile, out_dir)
-        resource_resolution = resource_resolution_evidence(plan, resource_roots)
-
-        # profile defaults/template/resource environment: single-object profile
-        # resolution is centralized in engine.profile_resolver. Manifest-family
-        # assembly decisions remain outside this renderer.
-        cmd_source = self._stationery_normalized_source(
-            render_source, out_dir, plan.render_id, resolved_profile.profile_family
-        )
-        cmd_source = self._titlepage_background_normalized_source(cmd_source, out_dir, plan.render_id)
-        # Pin relative image references to the files the root chain picks, so
-        # LaTeX cannot fall back to the profile folder first (engine/resource_roots.py,
-        # "Raw-LaTeX resource pinning"). Render-only copy; the source is untouched.
-        cmd_source, resource_resolution["raw_latex_pins"] = self._pinned_resource_source(
-            cmd_source, out_dir, plan.render_id, resource_roots, resolved_profile.render_environment.cwd
-        )
-        resource_resolution["warnings"] = [
-            *resource_resolution["warnings"],
-            *resource_resolution["raw_latex_pins"].pop("warnings"),
-        ]
+        # --- build pandoc command ---
         cmd = ["pandoc", str(cmd_source), "-o", str(compile_pdf)]
         # Every preamble line of this render, in one place (engine/preamble.py).
         preamble = Preamble()
@@ -662,6 +626,7 @@ class PandocRenderer(Renderer):
                 **({"image_bake": image_bake_report} if image_bake_report else {}),
                 **({"strikeout_support": True} if strikeout_support else {}),
                 "preamble": preamble.evidence(preamble_file),
+                "source_preparation": prepared.record,
                 "rendered_at": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
                 "success": success,
                 "profile_version": defaults_meta.get("profile_version", "unknown"),
@@ -975,420 +940,6 @@ class PandocRenderer(Renderer):
             "warning_count": len(furnish.warnings),
         }
 
-    def _prepare_codex_edition_source(
-        self,
-        plan: ProjectionPlan,
-        out_dir: Path,
-        resolved_profile: ResolvedProfile,
-    ) -> ProjectionPlan:
-        """Select source-visible Codex 0 edition variants before other preprocessors.
-
-        The culler is intentionally fail-closed: if `cx0:` edition sentinels are
-        present under a non-Codex profile, rendering fails rather than leaking all
-        editions into a reader proof. Sources without sentinels are unchanged.
-        """
-
-        if not plan.render_source.exists():
-            return plan
-
-        has_markers = source_contains_codex_edition_markers(plan.render_source)
-        has_callouts = source_contains_codex_editorial_callouts(plan.render_source)
-        edition, strip_callouts = edition_from_source_frontmatter(plan.render_source)
-        has_codex_controls = has_markers or bool(edition) or strip_callouts
-        if has_codex_controls and resolved_profile.canonical_profile_id != "codex0":
-            raise CodexEditionRenderError(
-                f"Codex edition controls require profile codex0; got {resolved_profile.canonical_profile_id}"
-            )
-
-        if resolved_profile.canonical_profile_id != "codex0":
-            return plan
-
-        format_callouts = has_callouts and not strip_callouts
-        if not has_markers and not strip_callouts and not format_callouts:
-            return plan
-
-        result = preprocess_codex_edition_blocks(
-            plan.render_source,
-            out_dir,
-            plan.render_id,
-            edition,
-            strip_editorial_callouts=strip_callouts,
-            format_editorial_callouts=format_callouts,
-        )
-        if not result.changed:
-            return plan
-
-        boundary = dict(plan.boundary_assertions)
-        warnings = [*boundary.get("warnings", []), *result.warnings]
-        boundary.update(
-            {
-                "codex_edition_preprocessor_enabled": True,
-                "codex_edition_profile_scope": resolved_profile.canonical_profile_id,
-                "codex_edition": result.edition,
-                "codex_edition_variant_count": result.variant_count,
-                "codex_edition_selected_count": result.selected_count,
-                "codex_edition_fallback_count": result.fallback_count,
-                "codex_edition_selected_variant_ids": result.selected_variant_ids,
-                "codex_edition_fallback_variant_ids": result.fallback_variant_ids,
-                "codex_editorial_callouts_stripped": result.editorial_callouts_stripped,
-                "codex_editorial_callouts_formatted": result.editorial_callouts_formatted,
-                "codex_edition_render_mode": "pre_pandoc_comment_sentinel_culler",
-            }
-        )
-        if warnings:
-            boundary["warnings"] = warnings
-        return replace(plan, render_source=result.rewritten_source, boundary_assertions=boundary)
-
-    def _prepare_emoji_substitution_source(
-        self,
-        plan: ProjectionPlan,
-        out_dir: Path,
-    ) -> ProjectionPlan:
-        """Rewrite supported emoji to vendored image assets for PDF/LaTeX output."""
-
-        if not plan.render_source.exists():
-            return plan
-
-        resolved_profile = resolve_profile(plan.profile_id)
-        if not self._layout_images_supported(plan, resolved_profile):
-            return plan
-
-        result = preprocess_emoji_substitutions(plan.render_source, out_dir, plan.render_id)
-        if not result.changed:
-            return plan
-
-        boundary = dict(plan.boundary_assertions)
-        figure_count_by_kind = dict(boundary.get("figure_count_by_kind", {}))
-        total = 0
-        counts_by_key: dict[str, int] = {}
-        fallback_counts: dict[str, int] = {}
-        for entry in result.inventory:
-            kind = str(entry.get("kind", "emoji_asset"))
-            if kind == "glyph_fallback_font":
-                fallback_counts[str(entry["family"])] = int(entry.get("characters", 0))
-                continue
-            count = int(entry.get("count", 0))
-            figure_count_by_kind[kind] = figure_count_by_kind.get(kind, 0) + count
-            total += count
-            counts_by_key[str(entry.get("asset_key", ""))] = count
-
-        warnings = [*boundary.get("warnings", []), *result.warnings]
-        boundary.update(
-            {
-                "emoji_policy": "vendored_image_assets",
-                "emoji_asset_family": "noto_emoji",
-                "emoji_render_mode": "pre_pandoc_raw_latex_inline_image",
-                "emoji_substitution_count": total,
-                "emoji_substitution_counts_by_key": counts_by_key,
-                "emoji_asset_paths": result.asset_paths,
-                "host_emoji_fonts_required": False,
-                "figure_count_by_kind": figure_count_by_kind,
-                # Glyph registry (engine/glyph_registry.py): characters set in a
-                # vendored fallback font, and the per-render filter that lowers
-                # registered glyphs inside inline code.
-                "glyph_fallback_characters_by_family": fallback_counts,
-                "glyph_code_lua_filter": str(result.lua_filter) if result.lua_filter else "",
-            }
-        )
-        if warnings:
-            boundary["warnings"] = warnings
-
-        return replace(
-            plan,
-            render_source=result.rewritten_source,
-            figure_inventory=[*plan.figure_inventory, *result.inventory],
-            boundary_assertions=boundary,
-        )
-
-    def _prepare_layout_image_source(
-        self,
-        plan: ProjectionPlan,
-        out_dir: Path,
-    ) -> ProjectionPlan:
-        """Rewrite optional source-placed layout image blocks before Pandoc.
-
-        This is intentionally opt-in. Ordinary Markdown images keep their normal
-        behavior; only fenced `of-image` blocks become wrapfig/TikZ/shipout raw
-        LaTeX for PDF profiles.
-        """
-
-        if not plan.render_source.exists():
-            return plan
-
-        resolved_profile = resolve_profile(plan.profile_id)
-        if not self._layout_images_supported(plan, resolved_profile):
-            return plan
-
-        if plan.manifest_resource_roots:
-            roots = effective_resource_roots(plan, resolved_profile, out_dir)
-            layout_roots = resource_root_paths(roots)
-        else:
-            # Preserve the clean-HEAD layout search order when the additive
-            # manifest field is absent: authored source, render output, then the
-            # profile/source compatibility roots used by the prior runtime.
-            layout_roots = [
-                plan.render_source.resolve().parent,
-                Path(out_dir).resolve(),
-                LOCAL_IMPORT,
-                *resolved_profile.asset_roots,
-                *plan.source_resource_roots,
-            ]
-        result = preprocess_layout_image_blocks(
-            plan.render_source,
-            out_dir,
-            plan.render_id,
-            layout_roots,
-            force_graphicspath=bool(plan.manifest_resource_roots),
-        )
-        if not result.changed:
-            return plan
-
-        boundary = dict(plan.boundary_assertions)
-        figure_count_by_kind = dict(boundary.get("figure_count_by_kind", {}))
-        for entry in result.figure_inventory:
-            kind = str(entry.get("kind", "layout_image"))
-            figure_count_by_kind[kind] = figure_count_by_kind.get(kind, 0) + 1
-        layout_image_count = sum(1 for entry in result.figure_inventory if entry.get("kind") == "layout_image")
-        image_initials = [entry for entry in result.figure_inventory if entry.get("kind") == "image_initial"]
-        warnings = [*boundary.get("warnings", []), *result.warnings]
-        updates = {
-            "layout_image_supported_profiles": "pdf_latex_profiles",
-            "layout_image_profile_family": resolved_profile.profile_family,
-            "layout_image_canonical_profile": resolved_profile.canonical_profile_id,
-            "layout_image_render_mode": "pre_pandoc_raw_latex",
-            "layout_image_graphicspath_roots": result.graphicspath_roots,
-            "figure_count_by_kind": figure_count_by_kind,
-        }
-        if layout_image_count:
-            updates.update(
-                {
-                    "layout_images_enabled": True,
-                    "layout_image_count": layout_image_count,
-                }
-            )
-        if image_initials:
-            updates.update(
-                {
-                    "image_initials_enabled": True,
-                    "image_initial_count": len(image_initials),
-                    "image_initial_default_alignment": image_initials[0].get("alignment", "bottom"),
-                }
-            )
-        boundary.update(updates)
-        if warnings:
-            boundary["warnings"] = warnings
-        return replace(
-            plan,
-            render_source=result.rewritten_source,
-            figure_inventory=[*plan.figure_inventory, *result.figure_inventory],
-            boundary_assertions=boundary,
-        )
-
-    @staticmethod
-    def _layout_images_supported(plan: ProjectionPlan, resolved_profile: ResolvedProfile) -> bool:
-        """Return true when `of-image` blocks can safely lower to raw LaTeX."""
-
-        return (
-            str(plan.output_format).lower() == "pdf"
-            and plan.output_extension == ".pdf"
-            and resolved_profile.template_path.suffix.lower() == ".tex"
-        )
-
-    def _prepare_mermaid_source(
-        self,
-        plan: ProjectionPlan,
-        out_dir: Path,
-        mermaid_renderer=None,
-        mermaid_output_format: str = "pdf",
-    ) -> ProjectionPlan:
-        """Pre-render Mermaid fences and return an updated ProjectionPlan.
-
-        This method is intentionally pre-Pandoc so document renders and manifest
-        assembly renders share the same behavior: whatever Markdown source the
-        plan points at is scanned, Mermaid fences become generated figures, and
-        the final Pandoc pass only sees ordinary image references.
-        """
-
-        if not plan.render_source.exists():
-            # Preserve the renderer's existing missing-source error semantics;
-            # Mermaid preprocessing is only a transform for readable Markdown.
-            return plan
-
-        result = preprocess_mermaid_blocks(
-            plan.render_source,
-            profile_id=plan.profile_id,
-            output_dir=out_dir,
-            render_id=plan.render_id,
-            renderer=mermaid_renderer,
-            output_format=mermaid_output_format,
-        )
-        if not result.changed:
-            return plan
-
-        boundary = dict(plan.boundary_assertions)
-        figure_count_by_kind = dict(boundary.get("figure_count_by_kind", {}))
-        figure_count_by_kind["mermaid"] = figure_count_by_kind.get("mermaid", 0) + len(result.figure_inventory)
-        boundary.update(
-            {
-                "generated_figures_enabled": True,
-                "figure_count_by_kind": figure_count_by_kind,
-                "mermaid_enabled": True,
-                "mermaid_diagram_count": len(result.figure_inventory),
-                "mermaid_theme": result.theme,
-                "mermaid_render_mode": "pre_pandoc_generated_asset",
-            }
-        )
-        return replace(
-            plan,
-            render_source=result.rewritten_source,
-            figure_inventory=[*plan.figure_inventory, *result.figure_inventory],
-            boundary_assertions=boundary,
-        )
-
-    def _prepare_vega_source(
-        self,
-        plan: ProjectionPlan,
-        out_dir: Path,
-        vega_renderer=None,
-        vega_output_format: str = "pdf",
-    ) -> ProjectionPlan:
-        """Pre-render full Vega fences and return an updated ProjectionPlan."""
-
-        if not plan.render_source.exists():
-            return plan
-
-        settings = plan.document_settings
-        result = preprocess_vega_blocks(
-            plan.render_source,
-            profile_id=plan.profile_id,
-            output_dir=out_dir,
-            render_id=plan.render_id,
-            renderer=vega_renderer,
-            output_format=vega_output_format,
-            figure_captions=bool(settings.figure_captions) if settings else False,
-            figure_numbering=bool(settings.figure_numbering) if settings else False,
-            figure_numbering_section=bool(settings.figure_numbering_section) if settings else False,
-        )
-        if not result.changed:
-            return plan
-
-        boundary = dict(plan.boundary_assertions)
-        figure_count_by_kind = dict(boundary.get("figure_count_by_kind", {}))
-        figure_count_by_kind["vega"] = figure_count_by_kind.get("vega", 0) + len(result.figure_inventory)
-        boundary.update(
-            {
-                "generated_figures_enabled": True,
-                "figure_count_by_kind": figure_count_by_kind,
-                "vega_enabled": True,
-                "vega_chart_count": len(result.figure_inventory),
-                "vega_theme": result.theme,
-                "vega_render_mode": "pre_pandoc_generated_asset",
-            }
-        )
-        warnings = [warning for fig in result.figure_inventory for warning in fig.get("warnings", [])]
-        if warnings:
-            boundary["warnings"] = [*list(boundary.get("warnings", [])), *warnings]
-        return replace(
-            plan,
-            render_source=result.rewritten_source,
-            figure_inventory=[*plan.figure_inventory, *result.figure_inventory],
-            boundary_assertions=boundary,
-        )
-
-    def _prepare_d2_source(
-        self,
-        plan: ProjectionPlan,
-        out_dir: Path,
-        d2_renderer=None,
-        d2_output_format: str = "svg",
-    ) -> ProjectionPlan:
-        """Pre-render D2 architecture/system diagram fences and return an updated ProjectionPlan."""
-
-        if not plan.render_source.exists():
-            return plan
-
-        result = preprocess_d2_blocks(
-            plan.render_source,
-            profile_id=plan.profile_id,
-            output_dir=out_dir,
-            render_id=plan.render_id,
-            renderer=d2_renderer,
-            output_format=d2_output_format,
-        )
-        if not result.changed:
-            return plan
-
-        boundary = dict(plan.boundary_assertions)
-        figure_count_by_kind = dict(boundary.get("figure_count_by_kind", {}))
-        figure_count_by_kind["d2"] = figure_count_by_kind.get("d2", 0) + len(result.figure_inventory)
-        boundary.update(
-            {
-                "generated_figures_enabled": True,
-                "figure_count_by_kind": figure_count_by_kind,
-                "d2_enabled": True,
-                "d2_diagram_count": len(result.figure_inventory),
-                "d2_theme": result.theme,
-                "d2_render_mode": "pre_pandoc_generated_asset",
-            }
-        )
-        warnings = [warning for fig in result.figure_inventory for warning in fig.get("warnings", [])]
-        if warnings:
-            boundary["warnings"] = [*list(boundary.get("warnings", [])), *warnings]
-        return replace(
-            plan,
-            render_source=result.rewritten_source,
-            figure_inventory=[*plan.figure_inventory, *result.figure_inventory],
-            boundary_assertions=boundary,
-        )
-
-    def _prepare_graphviz_source(
-        self,
-        plan: ProjectionPlan,
-        out_dir: Path,
-        graphviz_renderer=None,
-        graphviz_output_format: str = "svg",
-    ) -> ProjectionPlan:
-        """Pre-render Graphviz/DOT topology diagram fences and return an updated ProjectionPlan."""
-
-        if not plan.render_source.exists():
-            return plan
-
-        result = preprocess_graphviz_blocks(
-            plan.render_source,
-            profile_id=plan.profile_id,
-            output_dir=out_dir,
-            render_id=plan.render_id,
-            renderer=graphviz_renderer,
-            output_format=graphviz_output_format,
-        )
-        if not result.changed:
-            return plan
-
-        boundary = dict(plan.boundary_assertions)
-        figure_count_by_kind = dict(boundary.get("figure_count_by_kind", {}))
-        figure_count_by_kind["graphviz_dot"] = figure_count_by_kind.get("graphviz_dot", 0) + len(result.figure_inventory)
-        boundary.update(
-            {
-                "generated_figures_enabled": True,
-                "figure_count_by_kind": figure_count_by_kind,
-                "graphviz_dot_enabled": True,
-                "graphviz_dot_diagram_count": len(result.figure_inventory),
-                "graphviz_dot_theme": result.theme,
-                "graphviz_dot_render_mode": "pre_pandoc_generated_asset",
-            }
-        )
-        warnings = [warning for fig in result.figure_inventory for warning in fig.get("warnings", [])]
-        if warnings:
-            boundary["warnings"] = [*list(boundary.get("warnings", [])), *warnings]
-        return replace(
-            plan,
-            render_source=result.rewritten_source,
-            figure_inventory=[*plan.figure_inventory, *result.figure_inventory],
-            boundary_assertions=boundary,
-        )
-
-    # ── helpers ──────────────────────────────
-
     def _find_profile_defaults(self, profile_id: str) -> Path | None:
         """Compatibility helper: return the final defaults file for a profile.
 
@@ -1611,68 +1162,6 @@ class PandocRenderer(Renderer):
         if isinstance(vars_, dict) and vars_.get("profile_version"):
             out["profile_version"] = str(vars_["profile_version"])
         return out
-
-    @staticmethod
-    def _stationery_normalized_source(
-        render_source: Path, out_dir: Path, render_id: str, profile_family: str
-    ) -> Path:
-        """Return a render-only Markdown copy with duplicate salutation removed.
-
-        Atrium letter sources often keep `variables.opening` for templates while
-        also keeping the salutation in body Markdown for source readability. The
-        imported Johannah stationery template renders `opening` itself, so the
-        first body line must be removed only for the render copy when it matches
-        the template opening exactly. The canonical source is not modified.
-        """
-        if profile_family != "stationery_art" or not render_source.exists():
-            return render_source
-        text = render_source.read_text(encoding="utf-8", errors="ignore")
-        if not text.startswith("---\n"):
-            return render_source
-        end = text.find("\n---", 4)
-        if end == -1:
-            return render_source
-        frontmatter_raw = text[4:end]
-        body = text[end + 4:]
-        try:
-            import yaml
-            frontmatter = yaml.safe_load(frontmatter_raw) or {}
-        except Exception:
-            return render_source
-        if not isinstance(frontmatter, dict):
-            return render_source
-        variables = frontmatter.get("variables", {})
-        if not isinstance(variables, dict):
-            return render_source
-        opening = variables.get("opening") or frontmatter.get("opening")
-        if not isinstance(opening, str) or not opening.strip():
-            return render_source
-
-        def _plain_markdown_line(line: str) -> str:
-            plain = line.strip()
-            # Salutations are sometimes kept source-readable as **My love,**
-            # while the template variable is unadorned. Compare the textual
-            # value, not the Markdown emphasis wrapper.
-            plain = re.sub(r"^([*_`]+)(.*)\1$", r"\2", plain).strip()
-            return plain
-
-        leading_newlines = len(body) - len(body.lstrip("\n"))
-        body_after_leading = body[leading_newlines:]
-        first_line, sep, rest = body_after_leading.partition("\n")
-        normalized_body = "\n" + body_after_leading.lstrip("\n")
-        if sep and _plain_markdown_line(first_line) == _plain_markdown_line(opening):
-            normalized_body = "\n" + rest.lstrip("\n")
-
-        lines = normalized_body.splitlines()
-        nonempty = [(idx, line.strip()) for idx, line in enumerate(lines) if line.strip()]
-        if len(nonempty) >= 2 and nonempty[-1][1] in {"Luis", "Luis E. Ramirez"}:
-            closing_idx, closing_line = nonempty[-2]
-            if closing_line.startswith("With ") or closing_line.endswith(","):
-                normalized_body = "\n" + "\n".join(lines[:closing_idx]).strip() + "\n"
-        normalized = text[: end + 4] + normalized_body
-        path = out_dir / f"{render_id}.stationery_source.md"
-        path.write_text(normalized, encoding="utf-8")
-        return path
 
     @staticmethod
     def _resolved_pdf_engine(defaults_stack: list[Path]) -> str:
@@ -1974,79 +1463,6 @@ class PandocRenderer(Renderer):
         return '"t":"Strikeout"' in result.stdout
 
     @staticmethod
-    def _pinned_resource_source(
-        render_source: Path,
-        out_dir: Path,
-        render_id: str,
-        roots: list[ResolvedResourceRoot],
-        latex_cwd: Path | None,
-    ) -> tuple[Path, dict[str, Any]]:
-        """Return a render-only copy whose relative image references are absolute winners."""
-        if not render_source.exists():
-            return render_source, {"pinned": [], "unpinned": [], "warnings": []}
-        text = render_source.read_text(encoding="utf-8", errors="ignore")
-        pinned_text, record = pin_render_resources(
-            text, roots, latex_cwd=latex_cwd, template_keys=TEMPLATE_RESOURCE_KEYS
-        )
-        if pinned_text == text:
-            return render_source, record
-        path = out_dir / f"{render_id}.resources_pinned.md"
-        path.write_text(pinned_text, encoding="utf-8")
-        return path, record
-
-    @staticmethod
-    def _titlepage_background_normalized_source(render_source: Path, out_dir: Path, render_id: str) -> Path:
-        """Return a render-only copy with unsafe title-page background paths removed.
-
-        Direct Markdown sources can expose Pandoc template variables through
-        top-level YAML metadata or through nested `variables:`. Because
-        `titlepage_background_image` is interpolated into a LaTeX
-        `\\includegraphics` path, keep only relative PNG/JPG/PDF resource paths
-        and strip unsafe values from the render copy without mutating the source.
-        """
-        if not render_source.exists():
-            return render_source
-        text = render_source.read_text(encoding="utf-8", errors="ignore")
-        if not text.startswith("---\n"):
-            return render_source
-        end = text.find("\n---", 4)
-        if end == -1:
-            return render_source
-        frontmatter_raw = text[4:end]
-        body = text[end + 4:]
-        try:
-            import yaml
-            frontmatter = yaml.safe_load(frontmatter_raw) or {}
-        except Exception:
-            return render_source
-        if not isinstance(frontmatter, dict):
-            return render_source
-
-        changed = False
-        if "titlepage_background_image" in frontmatter and not PandocRenderer._safe_frontmatter_resource_path(
-            frontmatter.get("titlepage_background_image")
-        ):
-            frontmatter.pop("titlepage_background_image", None)
-            changed = True
-
-        variables = frontmatter.get("variables")
-        if isinstance(variables, dict) and "titlepage_background_image" in variables:
-            if not PandocRenderer._safe_frontmatter_resource_path(variables.get("titlepage_background_image")):
-                variables = dict(variables)
-                variables.pop("titlepage_background_image", None)
-                frontmatter["variables"] = variables
-                changed = True
-
-        if not changed:
-            return render_source
-
-        path = out_dir / f"{render_id}.titlepage_guarded.md"
-        import yaml
-        fm_yaml = yaml.safe_dump(frontmatter, sort_keys=False, allow_unicode=True).rstrip()
-        path.write_text(f"---\n{fm_yaml}\n---{body}", encoding="utf-8")
-        return path
-
-    @staticmethod
     def _frontmatter_variables_defaults(render_source: Path, out_dir: Path, render_id: str) -> Path | None:
         """Materialize nested frontmatter `variables:` as a final defaults file.
 
@@ -2139,7 +1555,7 @@ class PandocRenderer(Renderer):
         for key, value in variables.items():
             if not isinstance(key, str) or not isinstance(value, (str, int, float, bool)):
                 continue
-            if key == "titlepage_background_image" and not PandocRenderer._safe_frontmatter_resource_path(value):
+            if key == "titlepage_background_image" and not safe_frontmatter_resource_path(value):
                 continue
             # If the body already carries a manual signoff, render that signoff
             # through the stationery template instead of appending the default
@@ -2158,17 +1574,6 @@ class PandocRenderer(Renderer):
         import yaml
         path.write_text(yaml.safe_dump({"variables": safe_variables}, sort_keys=False), encoding="utf-8")
         return path
-
-    @staticmethod
-    def _safe_frontmatter_resource_path(value: Any) -> bool:
-        if not isinstance(value, str) or not value.strip() or "\x00" in value or "://" in value:
-            return False
-        if any(ch in value for ch in ("{", "}", "$", "`")):
-            return False
-        path = Path(value)
-        if path.is_absolute() or ".." in path.parts:
-            return False
-        return path.suffix.lower() in {".png", ".jpg", ".jpeg", ".pdf"}
 
     @staticmethod
     def _sha256_file(path: Path) -> str:

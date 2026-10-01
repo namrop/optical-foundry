@@ -52,6 +52,9 @@ class ResolvedProfile:
     font_policy: dict[str, Any]
     boundary: dict[str, Any]
     warnings: list[str] = field(default_factory=list)
+    # The source-preparation steps this profile uses (engine/source_preparation.py);
+    # None means it declares none and gets every step (ruling 01a0f930-407c).
+    source_preparation: tuple[str, ...] | None = None
 
 
 ALIASES: dict[str, str] = {
@@ -74,6 +77,9 @@ ALIASES: dict[str, str] = {
 }
 
 # Explicit current mapping. Later this can be data-driven from profile YAML.
+# A spec may name the source-preparation steps it uses with
+# "source_preparation": [...] (step names in engine/source_preparation.STEPS);
+# a spec that does not gets every step.
 PROFILE_SPECS: dict[str, dict[str, Any]] = {
     "document-spine": {
         "family": "document_spine",
@@ -199,6 +205,15 @@ def resolve_profile(profile_id: str) -> ResolvedProfile:
     ]
     texinputs = ":".join(str(p) for p in texinputs_parts if p.exists()) + ":"
 
+    source_preparation = spec.get("source_preparation")
+    if source_preparation is not None:
+        from engine.source_preparation import validate_declaration
+
+        errors = validate_declaration(source_preparation)
+        if errors:
+            raise ValueError(f"profile {canonical}: {'; '.join(errors)}")
+        source_preparation = tuple(source_preparation)
+
     uses_local = any(source == "local" for source in defaults_sources) or template_source == "local"
     font_policy = resolve_fonts_from_defaults(defaults_stack)
     warnings: list[str] = []
@@ -233,6 +248,7 @@ def resolve_profile(profile_id: str) -> ResolvedProfile:
             "font_policy": POLICY_NAME,
         },
         warnings=warnings,
+        source_preparation=source_preparation,
     )
 
 

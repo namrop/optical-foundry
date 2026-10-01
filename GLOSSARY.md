@@ -5,7 +5,7 @@ note_role: glossary
 validation_profile: standard
 status: draft
 created: 2026-10-01T13:55:00-04:00
-updated: 2026-10-01T16:45:00-04:00
+updated: 2026-10-01T16:32:00-04:00
 beam_home: 42_optical_foundry
 title: "Optical Foundry glossary — the domain language"
 summary: "The Foundry's domain language: one canonical word per concept, with the words to avoid. Started 2026-10-01 at the keeper's request ('we should make a GLOSSARY.md file as well') alongside the first improve-codebase-architecture review, in the format of the domain-modeling skill (mattpocock/skills v1.3): terms only, no implementation detail. Drawn from DESIGN.md, the plan notes and RULINGS.md; where those use two words for one thing, the pick is proposed and open to the keeper. Updated inline as terms are settled."
@@ -127,6 +127,10 @@ _Avoid_: emoji asset (for the general concept), font fallback (for the engine's 
 **Render**:
 One run of the Foundry from a source or manifest to an artifact and its evidence.
 _Avoid_: build (for a single run), compile
+
+**Source preparation**:
+The named rewrites a render makes to a render-only copy of the source before pandoc reads it; a profile may declare which ones it uses.
+_Avoid_: preprocessing, filters (pandoc's own Lua filters are a different thing)
 
 **Render mode**:
 Whether a render is full, measure (only measured by a later step) or draft (images as empty boxes). Only a full render is a deliverable.
