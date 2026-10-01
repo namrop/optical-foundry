@@ -80,3 +80,40 @@
 \providecommand{\OFSetRunningDivision}[1]{}
 \providecommand{\OFSetRunningTagline}[1]{}
 \providecommand{\OFSetRunningFooter}[1]{}
+
+% ---- Volumes (engine/volumes.py; promotion map B1, B2) ----------------------
+% \OFSeatBodyFolio{N}: start the body of this volume at folio N. Under a
+% two-sided layout an odd folio must fall on an odd physical page (and an even
+% on an even), or the outer margin lands in the gutter, so a blank leaf is
+% inserted first when the parities differ. totalpages counts the pages already
+% shipped, so the next page's physical number is totalpages + 1. Templates that
+% seat $body_folio_start$ themselves (codex0) never receive this command.
+\makeatletter
+\providecommand{\OFSeatBodyFolio}[1]{%
+  \clearpage
+  \if@twoside
+    \ifodd\numexpr\value{totalpages}+1+#1\relax
+      \null\thispagestyle{empty}\clearpage
+    \fi
+  \fi
+  \pagenumbering{arabic}%
+  \setcounter{page}{#1}%
+}
+\makeatother
+% The contents of the whole work, in each volume's front matter. A row:
+% {title}{volume label}{folio}{1 if that folio is in this volume}. A row in
+% this volume links to its page (hyperref names page anchors page.<folio>).
+\providecommand{\OFWorkContentsBegin}[1]{%
+  \clearpage
+  \markboth{#1}{#1}%
+  \begin{center}{\Large\bfseries #1}\end{center}\par\medskip
+}
+\providecommand{\OFWorkContentsVolume}[1]{%
+  \par\addvspace{\medskipamount}\noindent{\bfseries #1}\par\nopagebreak
+}
+\providecommand{\OFWorkContentsRow}[4]{%
+  \par\noindent\hspace*{1.5em}#1\dotfill
+  \ifnum#4=1 \ifdefined\hyperlink\hyperlink{page.#3}{#3}\else #3\fi
+  \else #2\,\textperiodcentered\,#3\fi\par
+}
+\providecommand{\OFWorkContentsEnd}{\clearpage}

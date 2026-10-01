@@ -32,6 +32,11 @@ Selection file::
     group:
       by: month                   # month | year | directory | none
       divider: {title: "{month_name} {year}", subtitle: "{count} capture{plural}", force_right_page: true}
+    volumes:                      # optional: the work in N physical volumes (map B1)
+      count: 6                    # split at group boundaries, balanced by text length
+      title: "Volume {roman}"     # fields: n, roman, first, last (group titles), span
+      subtitle: "{span}"          # "first – last", or one title when they are the same
+      # or a list, each volume starting at a group key: [{from: "2026-01"}, ...]
     sources:                      # per-source defaults
       chapter_opener: true        # title from the body's title H1, else frontmatter title, else file name
       include_frontmatter: none
@@ -348,6 +353,8 @@ def select(spec: dict[str, Any], *, spec_path: Path) -> SelectionResult:
         }
         sources.append(entry)
 
+    volumes = _volumes(spec.get("volumes"), pool, sources, dividers, group_by, root_of)
+
     bundle = dict(spec.get("bundle") or {})
     presentation = dict(bundle.get("presentation") or {})
     # A composed book is dated by its composition unless the selection says otherwise.
@@ -362,6 +369,7 @@ def select(spec: dict[str, Any], *, spec_path: Path) -> SelectionResult:
         **bundle,
         "sources": sources,
         "section_dividers": dividers,
+        **({"volumes": volumes} if volumes else {}),
         "selection": {
             "selection_file": str(spec_path.resolve()),
             "selection_sha256": hashlib.sha256(spec_path.read_bytes()).hexdigest() if spec_path.is_file() else None,
@@ -375,6 +383,83 @@ def select(spec: dict[str, Any], *, spec_path: Path) -> SelectionResult:
         },
     }
     return SelectionResult(manifest=manifest, selected=pool, excluded=excluded)
+
+
+def _roman(n: int) -> str:
+    from engine.volumes import roman
+
+    return roman(n)
+
+
+def _volumes(
+    vol_spec: Any,
+    pool: list[Candidate],
+    sources: list[dict[str, Any]],
+    dividers: list[dict[str, Any]],
+    group_by: str,
+    root_of: dict[Path, Path],
+) -> list[dict[str, Any]]:
+    """Cut the ordered sources into volumes at group boundaries (whole groups only)."""
+    if not vol_spec:
+        return []
+    # Units: one per group, or one per source when not grouping.
+    units: list[dict[str, Any]] = []
+    for c, src in zip(pool, sources):
+        key = _group_key(c, group_by, root_of)[0] if group_by != "none" else src["uid"]
+        if not units or units[-1]["key"] != key:
+            title = next((d["title"] for d in dividers if d["before_source_uid"] == src["uid"]), src["title"])
+            units.append({"key": key, "first_uid": src["uid"], "title": title, "size": 0})
+        units[-1]["size"] += len(c.body)
+    if isinstance(vol_spec, dict):
+        count = int(vol_spec.get("count", 0))
+        if count < 2:
+            raise SelectionError("volumes.count must be at least 2")
+        if count > len(units):
+            raise SelectionError(f"volumes.count {count} is more than the {len(units)} groups it must split whole")
+        # cum[j] = text before group j. Volume k starts at the boundary nearest
+        # k/count of the whole, keeping every volume at least one group.
+        cum = [0]
+        for u in units:
+            cum.append(cum[-1] + u["size"])
+        total = cum[-1]
+        starts = [0]
+        for k in range(1, count):
+            lo, hi = starts[-1] + 1, len(units) - (count - k)
+            target = total * k / count
+            starts.append(min(range(lo, hi + 1), key=lambda j: (abs(cum[j] - target), j)))
+        title_tpl = vol_spec.get("title", "Volume {roman}")
+        subtitle_tpl = vol_spec.get("subtitle")
+    else:
+        keys = [u["key"] for u in units]
+        starts = []
+        for i, item in enumerate(_list(vol_spec)):
+            frm = item.get("from")
+            if i == 0 and frm is None:
+                starts.append(0)
+                continue
+            if str(frm) not in keys:
+                raise SelectionError(f"volumes[{i}].from {frm!r} is not a group key; groups: {keys}")
+            starts.append(keys.index(str(frm)))
+        if not starts or starts[0] != 0:
+            starts.insert(0, 0)
+        if starts != sorted(set(starts)):
+            raise SelectionError("volumes must start at increasing groups")
+        title_tpl, subtitle_tpl = "Volume {roman}", None
+    ends = starts[1:] + [len(units)]
+    out = []
+    for n, (a, b) in enumerate(zip(starts, ends), start=1):
+        first, last = units[a]["title"], units[b - 1]["title"]
+        fields = {"n": n, "roman": _roman(n), "first": first, "last": last,
+                  "span": first if first == last else f"{first} – {last}"}
+        item = vol_spec[n - 1] if isinstance(vol_spec, list) and n - 1 < len(vol_spec) else {}
+        vol: dict[str, Any] = {"id": _roman(n).lower(), "title": item.get("title") or _format(title_tpl, fields)}
+        sub = item.get("subtitle") or (_format(subtitle_tpl, fields) if subtitle_tpl else None)
+        if sub:
+            vol["subtitle"] = sub
+        if a:
+            vol["before_source_uid"] = units[a]["first_uid"]
+        out.append(vol)
+    return out
 
 
 def emit(spec_path: Path, out_path: Path | None = None) -> tuple[Path, SelectionResult]:

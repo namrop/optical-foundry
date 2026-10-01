@@ -5,7 +5,7 @@ note_role: glossary
 validation_profile: standard
 status: draft
 created: 2026-10-01T13:55:00-04:00
-updated: 2026-10-01T13:55:00-04:00
+updated: 2026-10-01T16:45:00-04:00
 beam_home: 42_optical_foundry
 title: "Optical Foundry glossary — the domain language"
 summary: "The Foundry's domain language: one canonical word per concept, with the words to avoid. Started 2026-10-01 at the keeper's request ('we should make a GLOSSARY.md file as well') alongside the first improve-codebase-architecture review, in the format of the domain-modeling skill (mattpocock/skills v1.3): terms only, no implementation detail. Drawn from DESIGN.md, the plan notes and RULINGS.md; where those use two words for one thing, the pick is proposed and open to the keeper. Updated inline as terms are settled."
@@ -169,6 +169,22 @@ _Avoid_: padded PDF
 **Build stamp**:
 The line in a bound artifact naming the build and the source state it was made from.
 _Avoid_: version string, watermark
+
+**Volume**:
+One physically bound part of a work that is too long to bind as one; the work's folios run on unbroken from one volume to the next.
+_Avoid_: book (for one volume of a work), part
+
+**Folio**:
+A page's number in the work's sequence, as its PDF page label records it, whether or not the page prints it.
+_Avoid_: page number (ambiguous with the physical page), printed number
+
+**Seat**:
+To start a volume's body at a given folio, on the physical side that folio's parity requires.
+_Avoid_: offset, restart numbering
+
+**Contents of the Work**:
+The list, in every volume, of the work's dividers with their volumes and folios.
+_Avoid_: master index, combined TOC
 
 ### Checking
 

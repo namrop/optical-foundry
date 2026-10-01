@@ -5,7 +5,7 @@ note_role: architecture_note
 validation_profile: standard
 status: draft
 created: 2026-08-25T12:05:00-04:00
-updated: 2026-09-30T22:00:00-04:00
+updated: 2026-10-01T16:40:00-04:00
 beam_home: 42_optical_foundry
 title: "Codex 0 → Optical Foundry — capability promotion map (post-delivery)"
 tags:
@@ -33,7 +33,7 @@ last_touched:
   model: claude-opus-5-5
   provider: custom:primary
   voyage: "t3-code:hermes-acp"
-  at: 2026-09-30T22:00:00-04:00
+  at: 2026-10-01T16:40:00-04:00
 ---
 
 # Codex 0 → Optical Foundry — capability promotion map
@@ -161,9 +161,9 @@ The band that makes "compose a book out of arbitrary Atrium files" possible at a
 
 ### Band B — Multi-volume and cross-reference machinery
 
-- [ ] **B1 ★ — Volume splitting with continuous folio seating.** *Now:* `--volume {I,II,III}` + `--body-folio-start` in the book tooling, plus the **physical-sheet parity law** (`12ef7af`, print-critical: folio parity must match physical parity or `twoside` puts the outer rail in the gutter — build 45/46 shipped that defect and it looked fine on screen). *Generalization:* one logical document, N physical volumes, one continuous folio run. *Second consumer:* a keeper-capture corpus is large enough to want volumes on the first try.
+- [x] **B1 ★ — Volume splitting with continuous folio seating.** *Built 2026-10-01 as step 3 (`engine/volumes.py`, manifest `volumes:`) — §11.* *Now:* `--volume {I,II,III}` + `--body-folio-start` in the book tooling, plus the **physical-sheet parity law** (`12ef7af`, print-critical: folio parity must match physical parity or `twoside` puts the outer rail in the gutter — build 45/46 shipped that defect and it looked fine on screen). *Generalization:* one logical document, N physical volumes, one continuous folio run. *Second consumer:* a keeper-capture corpus is large enough to want volumes on the first try.
 
-- [ ] **B2 ★ — Linked contents via PDF page-label harvest.** *Now:* `_pdf_part_pages`, `_page_footer_folios`, `_volume_locator_rows`, `_reading_volume_locator_rows`. *The doctrine, and it is the reusable part:* **folio authority is PDF page labels, not printed footers.** Printed-folio scraping undercounts every time a volume ends on suppressed leaves — plates and trailing blanks own a folio and print none. Build 56 seated Vol II at a duplicate folio because of exactly this. Label arithmetic on both sides agrees by construction. *Second consumer:* any multi-file bound corpus wants a real contents.
+- [x] **B2 ★ — Linked contents via PDF page-label harvest.** *Built 2026-10-01 as step 3, the contents of the whole work (`render.work_contents`) — §11.* *Now:* `_pdf_part_pages`, `_page_footer_folios`, `_volume_locator_rows`, `_reading_volume_locator_rows`. *The doctrine, and it is the reusable part:* **folio authority is PDF page labels, not printed footers.** Printed-folio scraping undercounts every time a volume ends on suppressed leaves — plates and trailing blanks own a folio and print none. Build 56 seated Vol II at a duplicate folio because of exactly this. Label arithmetic on both sides agrees by construction. *Second consumer:* any multi-file bound corpus wants a real contents.
 
 - [ ] **B3 ★ — Multi-pass render orchestration with fixed-point proofs.** *Now:* `build/run_full_build.sh`, 511 lines, passes A · B · C · D1..D1d · G1..G3 · D2 · E · F. **This is the item Luis named directly** ("the multiple passes to do a linked table of contents across volumes"). *Generalization, and the thing worth promoting is the contract more than the code:* **a pass that consumes a prior render's labels must prove the prior render did not move.** C3, D1c and G3 are three instances of one gate. So is the rule attached to G3 — *if it fails, do not add a retry; past a body-folio move the fixed point is not guaranteed to exist.* The script also carries two lessons that are pure engine material: pick the **newest** bundle by mtime, not the lexically-first (a press build straddling midnight silently re-rendered a volume with no folio seat), and the CC14 **one-stamp-per-build** gate. *Blast radius:* medium — it becomes a pass planner, and the gates become engine assertions. *Note:* Luis has said this is optional-by-default. Correct — it should be a declared capability of a bundle, not a mandatory pipeline.
 
@@ -283,7 +283,7 @@ For each candidate, Luis rules one of:
 |---|---|---|
 | Custody | C-A, C-B, C-C, C-D | all four ruled and done (2026-09-01/02) |
 | A — composition | A1★ A2★ A3★ A4 A5 | A3 PROMOTE, done (2026-09-28); A2 built (2026-09-30, §10); rest — |
-| B — multi-volume | B1★ B2★ B3★ B4 | B3 PROMOTE (2026-09-28): assertion half done — draft renders + `renders-agree` in the engine; the pass order stays in the book (one consumer = contract, not code). `2026-09-28_codex0_build_performance_plan.md` §5; rest — |
+| B — multi-volume | B1★ B2★ B3★ B4 | B1, B2 built (2026-10-01, §11); B3 PROMOTE (2026-09-28): assertion half done — draft renders + `renders-agree` in the engine; the pass order stays in the book (one consumer = contract, not code). `2026-09-28_codex0_build_performance_plan.md` §5; rest — |
 | C — edition gating | C1 C2 | — |
 | D — furniture | D1★ D2★ D3 D4 D5 | — |
 | E — physical | E1★ E2 E3 E4 | E1 PROMOTE, done (2026-09-28); rest — |
@@ -586,3 +586,87 @@ Not yet right, for the next steps rather than this one:
   (`CODEX0_REGRESSION=1`, branch Foundry): every gate passes, **CLEAN** — every contact sheet
   identical, resolved sources and manifests identical. The book is untouched by this step.
 
+---
+
+## 11. 2026-10-01 — step 3: A1's residue, B1 and B2
+
+Step 3 of the order (`RULINGS.md` 01a0f458-a0ce, amended by 01a0f8ba-4937), after the
+architecture review's candidates 2, 1 and 4. Branch `dev/arch-review-20261001`.
+
+### 11.1 A1 — what the spine tool still does that a manifest cannot say
+
+The 2026-09-01 ruling turned A1 from "promote the spine compiler" into "dissolve it":
+whatever survives is what a manifest cannot express yet. The spine tool
+(`codex0_v5/tooling/spine_to_bundle_manifest.py`, 4,541 lines) already writes ordinary
+bundle manifests, one per volume, so everything inside a volume is expressible. Its
+functions fall into five groups:
+
+| Group | Functions | Where it belongs |
+|---|---|---|
+| The book's ritual pages | `_generate_part_divider_recto_source`, `_generate_half_plate_verso_source`, `_spine_movement_index`, the plate and divider-poem uids, `_ask_page_count`, `_read_front_ask_epigraph`, `_generate_ask_pages_source`, `_part_codex_register`, `_vol3_section_titles` | **Tenant** (§4). Each writes a Markdown file that the manifest names as a divider `source:`; the manifest already expresses the result. |
+| Choosing and naming sources | `load_spine`, `select_parts`, `_list_matter_files` and its front/back variants, `_source_uid`, `_read_divider_epigraph`, `_delivery_block`, `_declare_work_resource_root` | **Expressible**: A2 selection (§10), A3 (done), `render.delivery`, `resource_roots`. Missing in the selector: a per-root `role` (front and back matter directories). Small. |
+| Volumes | `--volume`, `--body-folio-start`, `_select_volume_parts`, `_volume_body_source_paths`, the shell build's folio seating | **B1 — built**, §11.2. |
+| Contents across volumes | `_pdf_part_pages`, `_page_footer_folios`, `_volume_locator_rows`, `_reading_volume_locator_rows`, `_generate_reading_volume_contents_source`, `_validate_grouped_toc_body` | **B2 — built**, §11.3, as the mechanism. The book's eleven-movement grouping and its typography stay tenant. |
+| Not yet anywhere | `_harvest_volume_endnotes` + `_generate_vol3_notes_source` (**B4**); `_measure_sources_words` and friends (**A5**); the interior-plate strip and chip passes (source preparation — candidate 3, then D3) | Later items in the order. |
+
+So after this step the residue of A1 is B4, A5, a selector `role`, and source
+preparation. Codex 0 still builds through its own tool and shell passes, unchanged: moving
+it onto the engine's volumes would change how it compiles, and the B3 ruling keeps its pass
+order in the book. That move is now possible; it is not taken here.
+
+### 11.2 B1 — volumes
+
+A bundle manifest may carry `volumes:` — each volume an `id`, an optional `title` and
+`subtitle`, and the source it starts before. `cli manifest` sees it and hands the manifest to
+`engine/volumes.py`, which:
+
+- cuts it into one ordinary bundle manifest per volume (its sources and their dividers, a
+  `volume:` block, `-vol-<id>` bundle id, the volume title in the subtitle);
+- renders them in order, each body starting at the folio after the previous volume's last
+  **PDF page label**;
+- seats the body on the right physical side when the layout is two-sided (an odd folio on an
+  odd page: the parity law of `12ef7af`), inserting a blank leaf when the parities differ.
+
+The seat is template behaviour. `codex0.tex` already seats `$body_folio_start$`, so a codex0
+volume gets the variable. Every other template gets the engine's `\OFSeatBodyFolio` (in the
+template contract) and roman-numbered front matter, so the body's arabic folios are the only
+arabic labels in a volume. The selector can ask for volumes: `volumes: {count: N}` cuts at
+group boundaries, balanced by text length, or a list names the group each volume starts at.
+
+### 11.3 B2 — the contents of the work
+
+With `render.work_contents` on, the first pass is rendered in draft. The engine reads each
+volume's divider-page map (`<render_id>.divider_pages.json`, from the furnish marker) and turns
+every divider's page into its PDF page label: folio authority is the label, never the printed
+footer. The second pass gives every volume a **Contents of the Work** — each divider with its
+volume and folio, linked when it is in that volume — in the front matter, ahead of the seated
+body. The contents therefore cannot move a body folio. The second pass checks that anyway:
+if any volume's first or last body folio, or any divider's folio, differs from the first pass,
+the run fails. The run writes `<bundle_id>.volumes.json`.
+
+### 11.4 The keeper-capture book in six volumes
+
+`manifests/keeper_capture_book.selection.yaml` now asks for `volumes: {count: 6}` and the
+contents of the work. The six-volume count is a starting point, not a ruling. Rendered on
+2026-10-01 (12.5 min, both passes):
+
+| Volume | Months | Pages | Folios |
+|---|---|---|---|
+| I | October–December 2025 | 305 | 1–299 |
+| II | January–March 2026 | 308 | 300–602 |
+| III | April–May 2026 | 370 | 603–966 |
+| IV | June 2026 | 244 | 967–1204 |
+| V | July 2026 | 177 | 1205–1375 |
+| VI | August 2026 – undated | 300 | 1376–1668 |
+
+13 contents rows; the contents moved no folio. Checked by eye: Volume II's title page,
+colophon, contents, contents of the work and the first divider. Found and fixed: the contents
+of the work carried the in-volume contents' running head. Not yet right: balancing by text
+length is rough (Volume III is twice Volume V); the volumes render one after another (the
+second pass could run in parallel, as Codex 0's final wave does).
+
+### 11.5 Verification
+
+`tests/test_volumes.py` covers the split, the validation of bad cuts, the two seats, the
+selector's volumes and a two-volume render (continuous folios, roman front matter, parity,
+contents). Full-suite and whole-book results are recorded in the session ledger.

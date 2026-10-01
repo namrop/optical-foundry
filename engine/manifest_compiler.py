@@ -26,6 +26,13 @@ from pathlib import Path
 from typing import Any
 
 from engine.template_contract import READ_TIME_DEFINITIONS
+from engine.volumes import (
+    FRONT_MATTER_ROMAN,
+    seat_lines,
+    template_seats_body_folio,
+    volume_errors,
+    work_contents_lines,
+)
 from engine.render_planner import RenderPlan, plan_manifest_render
 from engine.projection_plan import AssemblyView, ProjectionPlan
 from engine.profile_resolver import resolve_profile
@@ -1373,6 +1380,11 @@ class CompositeBundleCompiler(ManifestCompiler):
         if errors:
             raise ValueError(f"manifest validation failed: {'; '.join(errors)}")
 
+        if manifest.get("volumes"):
+            raise ValueError(
+                "this manifest is a work in several volumes; render it with `cli manifest`, "
+                "which splits it and renders each volume (engine/volumes.py)"
+            )
         manifest_resource_roots = resolve_manifest_resource_roots(
             manifest, manifest_path=kwargs.get("manifest_path")
         )
@@ -1413,6 +1425,19 @@ class CompositeBundleCompiler(ManifestCompiler):
         # so only allowlisted keys reach the assembled intermediate.
         raw_manifest_variables = manifest.get("variables", {}) if isinstance(manifest.get("variables", {}), dict) else {}
         accepted_manifest_variables, rejected_manifest_variables = _guard_manifest_variables(raw_manifest_variables)
+
+        # B1: one volume of a work. Its body starts at volume.body_folio_start.
+        # A template that seats $body_folio_start$ itself (codex0) gets the
+        # variable; any other gets the engine's seat and roman front matter.
+        volume_cfg = manifest.get("volume") if isinstance(manifest.get("volume"), dict) else None
+        volume_seat: int | None = None
+        generic_volume_seat = False
+        if volume_cfg and volume_cfg.get("body_folio_start") is not None:
+            volume_seat = int(volume_cfg["body_folio_start"])
+            if template_seats_body_folio(profile):
+                accepted_manifest_variables["body_folio_start"] = volume_seat
+            else:
+                generic_volume_seat = True
 
         sources = manifest.get("sources", [])
         figures = manifest.get("figures", [])
@@ -1473,6 +1498,10 @@ class CompositeBundleCompiler(ManifestCompiler):
         # TOC is handled by PandocRenderer's --toc flag via ProjectionPlan.toc.
         # Do not emit \tableofcontents here (would duplicate pandoc --toc).
 
+        # B2: the contents of the whole work, in this volume's front matter.
+        if volume_cfg:
+            lines.extend(work_contents_lines(volume_cfg))
+
         # reader guide
         rg = gen_cfg.get("reader_guide", {})
         if rg.get("enabled", False):
@@ -1485,6 +1514,7 @@ class CompositeBundleCompiler(ManifestCompiler):
 
         # source sections
         source_order_uid = []
+        volume_seat_emitted = False
         body_metadata_blocks_removed: dict[str, int] = {}
         frontmatter_seen = False
         mainmatter_started = False
@@ -1506,6 +1536,10 @@ class CompositeBundleCompiler(ManifestCompiler):
             elif src_role != "frontmatter" and frontmatter_seen and not mainmatter_started:
                 lines.append("\\mainmatter")
                 mainmatter_started = True
+            if generic_volume_seat and src_role != "frontmatter":
+                lines.extend(seat_lines(volume_seat))
+                generic_volume_seat = False
+                volume_seat_emitted = True
             if src_role == "appendix" and not appendices_started:
                 lines.append("\\OFBeginAppendices")
                 appendices_started = True
@@ -1735,11 +1769,17 @@ class CompositeBundleCompiler(ManifestCompiler):
         }
         if _colophon_active:
             merged_frontmatter_variables.pop("titlepage_blank_after", None)
+        frontmatter: dict[str, Any] = {}
         if merged_frontmatter_variables:
             frontmatter = {
                 **merged_frontmatter_variables,
                 "variables": dict(merged_frontmatter_variables),
             }
+        if volume_seat_emitted:
+            # Front matter in roman, so the seated body's arabic folios are the
+            # only arabic labels in the volume.
+            frontmatter["header-includes"] = [FRONT_MATTER_ROMAN]
+        if frontmatter:
             assembled_content = _frontmatter_to_markdown(frontmatter, assembled_content)
         render_source = _write_temp_markdown(f"bundle_{bundle_id}", assembled_content)
 
@@ -1793,6 +1833,18 @@ class CompositeBundleCompiler(ManifestCompiler):
                 "rejected_title_page_variables": rejected_title_page_variables,
                 "accepted_manifest_variables": sorted(accepted_manifest_variables.keys()),
                 "rejected_manifest_variables": rejected_manifest_variables,
+                "volume": (
+                    {
+                        "id": volume_cfg.get("id"),
+                        "number": volume_cfg.get("number"),
+                        "count": volume_cfg.get("count"),
+                        "body_folio_start": volume_seat,
+                        "seat": ("template" if volume_seat is not None and not volume_seat_emitted else
+                                 "engine" if volume_seat_emitted else None),
+                        "work_contents_rows": len((volume_cfg.get("work_contents") or {}).get("rows") or []),
+                    }
+                    if volume_cfg else None
+                ),
                 "body_metadata_blocks_removed": body_metadata_blocks_removed,
                 "delivery_colophon_emitted": delivery_colophon_emitted,
                 "section_divider_numbering": section_divider_numbering,
@@ -1812,6 +1864,7 @@ class CompositeBundleCompiler(ManifestCompiler):
 
         # The schema is the manifest's whole interface (schemas/bundle_manifest_v1.yaml).
         errors.extend(bundle_schema_errors(manifest))
+        errors.extend(volume_errors(manifest))
 
         # envelope
         kind = manifest.get("kind")

@@ -31,6 +31,7 @@ NAME_TO_PATH = {
     "aw": ("generated", "afterword"),
     "fig": ("figures", "[]"),
     "f": ("figures", "[]"),
+    "volume_cfg": ("volume",),
 }
 # Reads of these names outside the bundle path belong to other manifest kinds.
 OTHER_KIND_KEYS = {"document_id", "source", "metadata", "packet", "labels", "layout", "cells",

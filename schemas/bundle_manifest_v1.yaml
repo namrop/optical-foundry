@@ -66,6 +66,66 @@ properties:
       allowlist (engine/manifest_compiler.py DOCUMENT_VARIABLE_ALLOWLIST); a key
       outside it is recorded in evidence as rejected and not passed on.
 
+  volumes:
+    type: array
+    minItems: 2
+    description: >
+      The work in several physical volumes (promotion map B1). Each volume
+      starts before a named source; the first starts at the first source.
+      `cli manifest` splits the manifest into one bundle per volume and renders
+      them in order, each body continuing the folios of the volume before
+      (engine/volumes.py).
+    items:
+      type: object
+      required: [id]
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+          pattern: "^[a-z0-9][a-z0-9_-]*$"
+        title:
+          type: string
+          description: Defaults to "Volume <roman numeral>".
+        subtitle:
+          type: string
+        before_source_uid:
+          type: string
+          description: The volume starts with this source (omit for the first volume).
+
+  volume:
+    type: object
+    description: >
+      Written by engine/volumes.py into each volume's bundle; not written by hand.
+    additionalProperties: false
+    required: [id, number, count]
+    properties:
+      id: { type: string }
+      number: { type: integer, minimum: 1 }
+      count: { type: integer, minimum: 1 }
+      title: { type: string }
+      subtitle: { type: string }
+      body_folio_start:
+        type: integer
+        minimum: 1
+        description: The folio the body starts at (seated on a recto when two-sided).
+      work_contents:
+        type: object
+        additionalProperties: false
+        properties:
+          title: { type: string }
+          rows:
+            type: array
+            items:
+              type: object
+              required: [volume, volume_title, volume_label, title, folio]
+              properties:
+                volume: { type: string }
+                volume_title: { type: string }
+                volume_label: { type: string }
+                title: { type: string }
+                folio: { type: integer }
+                uid: { type: string }
+
   selection:
     type: object
     x-of-unread: true
@@ -412,6 +472,18 @@ properties:
       numbering:
         type: string
         description: Alias for numbering_strategy.
+      work_contents:
+        description: >
+          With `volumes`, give every volume a contents of the whole work: each
+          divider with its volume and folio, read from the rendered volumes' PDF
+          page labels (promotion map B2). true, or {enabled, title}.
+        oneOf:
+          - type: boolean
+          - type: object
+            additionalProperties: false
+            properties:
+              enabled: { type: boolean }
+              title: { type: string }
       delivery:
         type: object
         description: >

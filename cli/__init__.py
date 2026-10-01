@@ -198,6 +198,27 @@ def cmd_manifest(args: argparse.Namespace) -> int:
             print(f"VALIDATION ERROR: {err}", file=sys.stderr)
         return 1
 
+    if raw.get("volumes"):
+        # A work in several volumes: split, seat the folios, and add the
+        # contents of the work if asked (engine/volumes.py, map B1/B2).
+        from engine.volumes import VolumeError, render_volumes
+
+        volume_kwargs = {k: True for k in ("measure", "bake_images") if getattr(args, k, False)}
+        try:
+            report = render_volumes(raw, Path(args.output), manifest_path=manifest_path.resolve(),
+                                    draft=bool(getattr(args, "draft", False)), **volume_kwargs)
+        except (VolumeError, ValueError) as exc:
+            print(json.dumps({"status": "error", "error": str(exc)}, indent=2))
+            return 1
+        print(json.dumps({
+            "status": "ok",
+            "report": report["report_path"],
+            "volumes": [{"id": v["id"], "output": v["pdf"], "pages": v["pages"],
+                         "folios": f"{v['first_body_folio']}-{v['last_body_folio']}"} for v in report["volumes"]],
+            "work_contents_rows": (report.get("work_contents") or {}).get("rows", 0),
+        }, indent=2))
+        return 0
+
     try:
         plan = compiler.compile(raw, manifest_path=manifest_path.resolve())
     except ValueError as exc:
