@@ -3,6 +3,10 @@ from pathlib import Path
 GF = Path(__file__).resolve().parents[1]
 BASE_TEMPLATE = GF / "profiles" / "40_latex_import" / "templates" / "base.tex"
 CODEX0_TEMPLATE = GF / "profiles" / "40_latex_import" / "templates" / "codex0.tex"
+# The page-placement Lua, lifted out of codex0.tex on 2026-10-01 (architecture review candidate 5).
+CODEX0_LUA_DIR = CODEX0_TEMPLATE.parents[1] / "styles" / "texmf" / "tex" / "latex" / "codex0"
+CODEX0_ORNAMENT_LAW_LUA = CODEX0_LUA_DIR / "codex0_ornament_law.lua"
+CODEX0_PLATE_FLOAT_LUA = CODEX0_LUA_DIR / "codex0_plate_float.lua"
 CLIENT_TEMPLATE = GF / "profiles" / "40_latex_import" / "templates" / "client_report.tex"
 CLIENT_STY = (
     GF / "profiles" / "40_latex_import" / "styles" / "texmf" / "tex" / "latex"
@@ -123,10 +127,12 @@ def test_codex0_template_registers_the_ornament_page_position_callback():
     routine knows where the page actually broke.
     """
     text = CODEX0_TEMPLATE.read_text()
+    lua = CODEX0_ORNAMENT_LAW_LUA.read_text()
 
     assert "\\usepackage{luacode}" in text
-    assert 'luatexbase.new_attribute("codex0ornamentband")' in text
-    assert 'luatexbase.add_to_callback("pre_output_filter"' in text
+    assert '\\directlua{require("codex0_ornament_law")}' in text
+    assert 'luatexbase.new_attribute("codex0ornamentband")' in lua
+    assert 'luatexbase.add_to_callback("pre_output_filter"' in lua
     assert "\\NewDocumentCommand{\\CodexOrnamentBand}{m +m}" in text
     assert "\\attributedef\\CodexOrnamentBandAttr" in text
 
@@ -152,8 +158,7 @@ def test_codex0_ornament_band_wrapper_is_never_a_body_providecommand():
 
 def test_codex0_ornament_law_never_empties_a_page():
     """A page whose whole body is ornament is deliberate, not a stranding."""
-    text = CODEX0_TEMPLATE.read_text()
-    block = text[text.index("% --- Ornament page-position law") :]
+    block = CODEX0_ORNAMENT_LAW_LUA.read_text()
 
     assert "if #doomed >= #bx then" in block
     assert "no other content -- left alone" in block
@@ -161,8 +166,7 @@ def test_codex0_ornament_law_never_empties_a_page():
 
 def test_codex0_ornament_law_keeps_the_first_structural_ornament_at_a_page_foot():
     """Tailpieces and thresholds may sit at a page foot — either/or, not both."""
-    text = CODEX0_TEMPLATE.read_text()
-    block = text[text.index("% --- Ornament page-position law") :]
+    block = CODEX0_ORNAMENT_LAW_LUA.read_text()
 
     assert "kept_structural" in block
     assert "either/or" in block
@@ -202,3 +206,26 @@ def test_codex0_held_object_centres_between_its_anchors_by_construction():
     ]
     assert "\\hspace{\\dimexpr\\CodexHeldIndent+\\CodexHeldMeasure\\relax}" in seat
     assert "\\wd\\CodexHeldObjectBox" not in seat
+
+
+def test_codex0_page_placement_lua_lives_in_files_the_template_requires(tmp_path):
+    """No Lua is inlined in the template; each file parses and LuaTeX's kpse finds it."""
+    import os
+    import shutil
+    import subprocess
+
+    text = CODEX0_TEMPLATE.read_text()
+    assert "\\begin{luacode*}" not in text
+    for lua in (CODEX0_ORNAMENT_LAW_LUA, CODEX0_PLATE_FLOAT_LUA):
+        assert f'\\directlua{{require("{lua.stem}")}}' in text
+    if not (shutil.which("texlua") and shutil.which("kpsewhich")):
+        return
+    check = tmp_path / "parse.lua"
+    check.write_text("for _, f in ipairs(arg) do assert(loadfile(f)) end\n", encoding="utf-8")
+    subprocess.run(["texlua", str(check), str(CODEX0_ORNAMENT_LAW_LUA), str(CODEX0_PLATE_FLOAT_LUA)], check=True)
+    env = {**os.environ, "TEXMFHOME": str(CODEX0_TEMPLATE.parents[1] / "styles" / "texmf")}
+    found = subprocess.run(
+        ["kpsewhich", "-progname=lualatex", "-format=lua", "codex0_ornament_law.lua", "codex0_plate_float.lua"],
+        capture_output=True, text=True, env=env,
+    ).stdout.split()
+    assert [Path(f).resolve() for f in found] == [CODEX0_ORNAMENT_LAW_LUA.resolve(), CODEX0_PLATE_FLOAT_LUA.resolve()]
