@@ -5,7 +5,7 @@ note_role: architecture_note
 validation_profile: standard
 status: draft
 created: 2026-08-25T12:05:00-04:00
-updated: 2026-09-30T18:47:00-04:00
+updated: 2026-09-30T22:00:00-04:00
 beam_home: 42_optical_foundry
 title: "Codex 0 → Optical Foundry — capability promotion map (post-delivery)"
 tags:
@@ -33,7 +33,7 @@ last_touched:
   model: claude-opus-5-5
   provider: custom:primary
   voyage: "t3-code:hermes-acp"
-  at: 2026-09-30T18:47:00-04:00
+  at: 2026-09-30T22:00:00-04:00
 ---
 
 # Codex 0 → Optical Foundry — capability promotion map
@@ -151,7 +151,7 @@ The band that makes "compose a book out of arbitrary Atrium files" possible at a
 
 - [ ] **A1 ★ — The spine → bundle compiler.** *Now:* `codex0_v5/tooling/spine_to_bundle_manifest.py`, 4,548 lines. *Goes to:* `engine/` as a first-class compiler beside `manifest_compiler.py`. *Generalization:* an ordered tree of sources (part → chapter → passage) with manifest-owned numbering, projected into a bundle manifest. Nothing in that sentence is about a memoir. *Second consumer:* both new books. *Blast radius:* total — this is the book. Must be split from its codex0-specific generators (see §4) before it can move. **The largest single item here, and the one everything else in Band A waits on.**
 
-- [ ] **A2 ★ — Selection manifests (query-driven source sets). NEW, not a promotion.** *Now:* does not exist. Codex 0's spine is 682 lines of hand-authored YAML naming every file. *Wanted:* select sources by predicate — beam + `note_role` + tag + date range + status — and order them (chronological by `created`, by beam, by uid, by explicit override), emitting a spine A1 then compiles. *Second consumer:* this **is** the keeper-capture book; there is no other way to build it. *Note:* this is the one candidate that is genuinely new construction rather than relocation, and it is the gate on the whole new-use-case.
+- [x] **A2 ★ — Selection manifests (query-driven source sets). NEW, not a promotion.** *Built 2026-09-30 as step 2 of the ruled order (`RULINGS.md` 01a0f458-a0ce), as a selector that emits the bundle manifest (the 2026-09-01 "manifest should be authoritative" ruling) — §10.* *Now:* does not exist. Codex 0's spine is 682 lines of hand-authored YAML naming every file. *Wanted:* select sources by predicate — beam + `note_role` + tag + date range + status — and order them (chronological by `created`, by beam, by uid, by explicit override), emitting a spine A1 then compiles. *Second consumer:* this **is** the keeper-capture book; there is no other way to build it. *Note:* this is the one candidate that is genuinely new construction rather than relocation, and it is the gate on the whole new-use-case.
 
 - [x] **A3 ★ — Frontmatter-driven epigraph harvest + layered attribution grammar.** *Now:* split — harvest in `spine_to_bundle_manifest.py::_read_divider_epigraph`, lowering in `engine/manifest_compiler.py` (`_inline_chapter_opener_epigraph_lines`), typography in `codex0.tex` (`\CodexOpenerEpigraph`, ratified 2026-07-28), with a generic `\OFChapterOpenerEpigraph` fallback already present. *Generalization:* any Atrium file may carry `epigraph_*` fields; the engine harvests them; the profile decides how they set. The layered model — dramatic line (speaker/context) over bibliographic line (author/source/translator/date), with `epigraph_register` inverting upright/italic — is already general, and its hardest-won rule (**`epigraph_date` means when the work was authored, which is why the translator slot exists**) is a corpus rule, not a book rule. *Blast radius:* low; the fallback macro already exists. **Closest to ready of anything in this survey.** *PROMOTE, ruled 2026-09-28 (`RULINGS.md` 01a0e9ab-077c); done the same day — §8.*
 
@@ -282,7 +282,7 @@ For each candidate, Luis rules one of:
 | Band | Candidates | Ruled |
 |---|---|---|
 | Custody | C-A, C-B, C-C, C-D | all four ruled and done (2026-09-01/02) |
-| A — composition | A1★ A2★ A3★ A4 A5 | A3 PROMOTE, done (2026-09-28); rest — |
+| A — composition | A1★ A2★ A3★ A4 A5 | A3 PROMOTE, done (2026-09-28); A2 built (2026-09-30, §10); rest — |
 | B — multi-volume | B1★ B2★ B3★ B4 | B3 PROMOTE (2026-09-28): assertion half done — draft renders + `renders-agree` in the engine; the pass order stays in the book (one consumer = contract, not code). `2026-09-28_codex0_build_performance_plan.md` §5; rest — |
 | C — edition gating | C1 C2 | — |
 | D — furniture | D1★ D2★ D3 D4 D5 | — |
@@ -510,3 +510,79 @@ started step 1: the four open defects together with F2. Worked on branch
   baked renders give it; any profile whose render relies on frontmatter `header-includes` and
   is rendered with `--draft` or `--bake-images` would lose them. Not observed to matter for
   Codex 0 (drafts agree with finals, PASS H); not investigated further.
+
+## 10. 2026-09-30 — step 2: glyph growth and A2, and the first keeper-capture book
+
+Step 2 of the order ruled that day (`01a0f458-a0ce`): the glyph-growth ruling of 2026-09-01
+("The glyphs should grow to support what is needed") and A2 under the selector-first ruling of
+the same night. Branch `dev/step2-glyphs-a2-20260930`, verified, fast-forwarded to `main`.
+Scoped, as §5 said, as a discovery pass.
+
+### 10.1 Glyph growth
+
+- **`engine/glyph_registry.py`** and **`profiles/40_latex_import/assets/glyph_registry.json`**
+  replace the one-entry table in `engine/emoji_substitution.py`. Three kinds of substitute:
+  emoji → a vendored Noto Emoji image (v2.051 SVG, converted to vector PDF; Apache-2.0); CJK and
+  kana → `OFFallbackCJK`, Noto Sans CJK (JP face) subset to exactly the registered characters;
+  symbols the body face lacks but DejaVu Sans has (✓, ✔) → `OFFallbackSymbols`, DejaVu Sans
+  subset. Fallback-font characters stay real, searchable text. The fail-closed lint is unchanged.
+- **`python3 -m cli glyphs scan|grow <sources…>`** reports or vendors what a source set needs.
+  A code point counts only when the faces the body is set in lack it (TeX-tree DejaVu Serif,
+  Serif Bold, Sans, Sans Bold, intersected), so covered characters stay text.
+- **Inline code.** A per-render pandoc Lua filter lowers registered glyphs inside code spans,
+  only where the code face (DejaVu Sans Mono) lacks them. Code blocks are verbatim and untouched.
+- **Grown for the capture corpus:** 11 emoji (🕯 🪐 🧠 ❌ ⏩ 🧬 🛡 ✅ 🎙 🖥 🔖),
+  3 CJK (斩 杀 线), 2 symbols (✓ ✔). The thirteen code points of §7 are all covered.
+- Known limit: a fallback character is set in its fallback face whatever the profile's own
+  font covers (a ✓ in an Iowan document would set in DejaVu Sans). Codex 0's sources carry
+  only the existing ⚠ seed and one ✅ in a placeholder.
+
+### 10.2 A2 — selection manifests
+
+- **`engine/selection.py`**, **`python3 -m cli select <file>`**. A `kind: selection` file names
+  roots (with an explicit recursion rule), excludes, predicates (`kind`, `note_role`, `status`,
+  `beam_home`, `tags_any`, `tags_all`, `created` window; compared normalized), order (`created`,
+  `path`, `title`, `uid`; undated first/last; pins), grouping into dividers (`month`, `year`,
+  `directory`, `none`, with title/subtitle templates), per-source defaults, and the bundle
+  settings. It writes an ordinary `composite_bundle` manifest — the authoritative composition
+  record — with a `selection:` block (selection file, its sha256, counts, date and title
+  origins) and per-source `selection:` provenance. No spine.
+- Dates: frontmatter `created`, else a date in the file name, else undated. Titles: the body's
+  title heading (its first heading, if level 1; a kicker line above it is allowed), else
+  frontmatter `title`, else the file name; Markdown emphasis is removed for the opener.
+- **Two source keys in the bundle compiler**, both opt-in and set by the selector:
+  `strip_leading_heading` removes the body's title heading when the chapter opener carries it
+  (the "title twice" finding of §7); `strip_body_metadata_blocks` removes YAML blocks inside a
+  body, which pandoc reads as document metadata in an assembled bundle (first render: one
+  capture's legacy second frontmatter put `2025-12-06` on the book's title page). Counted in
+  evidence as `body_metadata_blocks_removed`.
+
+### 10.3 The first keeper-capture book
+
+`manifests/keeper_capture_book.selection.yaml` → `manifests/keeper_capture_book.composite-bundle.yaml`
+(the captures at the top level of the beam as on 2026-09-01, dated by `created`, `FRONTIERS.md`
+undated; month dividers). Rendered on the keeper profile: **status ok, one very long volume,
+about 3 minutes**, every glyph lint passing, contents and section numbering correct
+(`numbersections: false` honoured). 154 emoji and 27 fallback-font characters substituted.
+Looked at by raster: title page, contents, a month divider, chapter openers (emoji in titles and
+running heads render; no doubled titles), CJK and check-mark pages.
+
+Not yet right, for the next steps rather than this one:
+- **One very long volume** — B1 (volumes) is needed before it can be printed, as predicted.
+- **Long unbreakable paths in inline code** run past the right margin; the keeper template does
+  not break `\texttt` at slashes.
+- The safe-area overlay of the bindery preflight timed out on a book this long and crashed the
+  CLI. Now a timeout is reported in the preflight record instead (`OF_PREFLIGHT_TIMEOUT_S`,
+  default 120 s); the book's render still lacks a safe-area guide.
+- The keeper profile prints its DRAFT watermark (profile behaviour).
+- The sub-lanes `epistemics/`, `letters/`, `source_maps/` are out; including them is a line in
+  the selection file, and a choice for the keeper.
+
+### 10.4 Verification
+
+- Full suite: 620 pass, 7 known failures (unchanged set). New: `tests/test_glyph_registry.py`,
+  `tests/test_selection_manifests.py`, and a preflight-timeout test.
+- Codex 0 whole-book regression, `of-step1-candidate-2026-09-30` vs `of-step2-candidate-2026-09-30`
+  (`CODEX0_REGRESSION=1`, branch Foundry): every gate passes, **CLEAN** — every contact sheet
+  identical, resolved sources and manifests identical. The book is untouched by this step.
+
