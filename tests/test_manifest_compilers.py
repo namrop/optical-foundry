@@ -720,7 +720,8 @@ def test_markdown_document_rejects_reserved_body_folio_ingress_bypasses(tmp_path
 
 def test_composite_bundle_records_divider_stock_and_print_image():
     """section_dividers[].stock and .print_image reach the section_dividers
-    evidence inventory. Unknown/absent stock values default to `text`.
+    evidence inventory. An absent stock defaults to `text`; an unknown one is a
+    schema error since the schema became the manifest's interface (2026-10-01).
     """
     compiler = CompositeBundleCompiler()
     manifest = {
@@ -735,7 +736,6 @@ def test_composite_bundle_records_divider_stock_and_print_image():
             {"uid": "d-card", "before_source_uid": "s1", "title": "Part I", "stock": "cardstock",
              "print_image": "assets/dividers/part_i_bg.png"},
             {"uid": "d-text", "before_source_uid": "s2", "title": "Chapter A"},  # defaults to text
-            {"uid": "d-unknown", "before_source_uid": "s3", "title": "Section B", "stock": "papyrus"},
         ],
     }
     plan = compiler.compile(manifest)
@@ -744,8 +744,10 @@ def test_composite_bundle_records_divider_stock_and_print_image():
     assert inv["d-card"]["print_image"] == "assets/dividers/part_i_bg.png"
     assert inv["d-text"]["stock"] == "text"
     assert inv["d-text"]["print_image"] == ""
-    # Unknown stock silently normalizes to text.
-    assert inv["d-unknown"]["stock"] == "text"
+    manifest["section_dividers"].append(
+        {"uid": "d-unknown", "before_source_uid": "s3", "title": "Section B", "stock": "papyrus"}
+    )
+    assert any("stock" in error and "papyrus" in error for error in compiler.validate(manifest))
 
 
 def test_composite_bundle_emits_bound_colophon_at_body_start():

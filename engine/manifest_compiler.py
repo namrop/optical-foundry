@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import hashlib
 import os
+import functools
 import re
 import tempfile
 import uuid
@@ -1328,6 +1329,34 @@ class MarkdownDocumentCompiler(ManifestCompiler):
         return errors
 
 
+BUNDLE_SCHEMA_PATH = Path(__file__).resolve().parents[1] / "schemas" / "bundle_manifest_v1.yaml"
+
+
+@functools.lru_cache(maxsize=1)
+def _bundle_schema_validator():
+    import yaml as _yaml
+    from jsonschema import Draft202012Validator
+
+    schema = _yaml.safe_load(BUNDLE_SCHEMA_PATH.read_text(encoding="utf-8"))
+    return Draft202012Validator(schema)
+
+
+def bundle_schema_errors(manifest: dict[str, Any]) -> list[str]:
+    """Errors from validating a bundle manifest against its schema.
+
+    The manifest is compared as JSON (dates and other YAML scalars become
+    strings), so an unquoted YAML date is still a string here.
+    """
+    import json as _json
+
+    normalized = _json.loads(_json.dumps(manifest, default=str))
+    errors = []
+    for error in sorted(_bundle_schema_validator().iter_errors(normalized), key=lambda e: list(e.absolute_path)):
+        where = "/".join(str(part) for part in error.absolute_path) or "(top)"
+        errors.append(f"schema: {where}: {error.message}")
+    return errors
+
+
 class CompositeBundleCompiler(ManifestCompiler):
     """Compile a composite_bundle / bundle_manifest_v1 manifest.
 
@@ -1780,6 +1809,9 @@ class CompositeBundleCompiler(ManifestCompiler):
 
         if not isinstance(manifest, dict):
             return ["manifest is not a dict"]
+
+        # The schema is the manifest's whole interface (schemas/bundle_manifest_v1.yaml).
+        errors.extend(bundle_schema_errors(manifest))
 
         # envelope
         kind = manifest.get("kind")

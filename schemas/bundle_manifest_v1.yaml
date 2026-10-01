@@ -8,6 +8,16 @@ description: >
   profile styling into a single styled artifact. Generic composite bundles, CAM Stack,
   and Codex 0 may share this schema family with distinct kind values when needed.
 
+  This file is the manifest's whole interface (architecture review 2026-10-01,
+  candidate 4; ruling 01a0f8ba-4937). The bundle compilers validate every
+  manifest against it before compiling, so a key that is not declared here is
+  an error, not a silent no-op. A key marked `x-of-unread: true` is accepted
+  for compatibility with existing manifests but nothing in the engine reads it.
+  `tests/test_bundle_schema.py` checks both directions: every key the bundle
+  compiler reads is declared, and no declared-unread key is read.
+
+additionalProperties: false
+
 required:
   - kind
   - schema_version
@@ -49,9 +59,29 @@ properties:
       type: string
       minLength: 1
 
+  variables:
+    type: object
+    description: >
+      Bundle-level template variables. Keys are checked against the engine's
+      allowlist (engine/manifest_compiler.py DOCUMENT_VARIABLE_ALLOWLIST); a key
+      outside it is recorded in evidence as rejected and not passed on.
+
+  selection:
+    type: object
+    x-of-unread: true
+    description: >
+      Provenance written by `cli select` (engine/selection.py): the selection
+      file this manifest was composed from, its hash, counts and origins.
+
+  fidelity_notes:
+    type: object
+    x-of-unread: true
+    description: Free-form notes on how faithfully this manifest reproduces a target artifact.
+
   presentation:
     type: object
     description: Title-page / reader-facing metadata. This is not Forge packet lifecycle state.
+    additionalProperties: false
     properties:
       title:
         type: string
@@ -73,6 +103,7 @@ properties:
           expose `titlepage_background_image` to compatible LaTeX templates.
           The path must be relative to render resource roots; absolute paths,
           parent traversal, URLs, and LaTeX control tokens are rejected.
+        additionalProperties: false
         properties:
           enabled:
             type: boolean
@@ -93,6 +124,7 @@ properties:
     items:
       type: object
       required: [uid, path, role, order]
+      additionalProperties: false
       properties:
         uid:
           type: string
@@ -122,6 +154,63 @@ properties:
         order:
           type: integer
           minimum: 1
+        profile_id:
+          type: string
+          x-of-unread: true
+          description: Recorded intent only; a bundle renders through its one profile.
+        chapter_opener:
+          type: object
+          additionalProperties: false
+          description: >
+            The heading block that begins this source: its title, and optionally
+            an epigraph (inline, or harvested from a file's epigraph_* frontmatter).
+          properties:
+            title:
+              type: string
+            epigraph:
+              type: object
+              additionalProperties: false
+              properties:
+                text: { type: string }
+                author: { type: string }
+                source: { type: string }
+                date: { type: string }
+                translator: { type: string }
+                speaker: { type: string }
+                context: { type: string }
+                register: { type: string }
+            epigraph_from:
+              type: string
+              description: Path (relative to the manifest) of a file whose epigraph_* frontmatter supplies the epigraph.
+            epigraph_from_source:
+              type: boolean
+              description: Take the epigraph from this source's own epigraph_* frontmatter.
+        page_break_before:
+          type: boolean
+          default: true
+          description: >
+            Start this source on a new page. A source carrying a chapter opener
+            always does.
+        passage_separator:
+          type: string
+          description: Ornament marker emitted between flowing sources when page_break_before is false.
+        codex_register:
+          type: string
+          description: Source-level register; codex_bundle manifests on the codex0 profile only.
+        strip_leading_heading:
+          type: boolean
+          default: false
+          description: Remove the body's title heading (its first heading, if level 1); the chapter opener carries it.
+        strip_body_metadata_blocks:
+          type: boolean
+          default: false
+          description: >
+            Remove YAML blocks inside the body, which pandoc would otherwise read
+            as document metadata in the assembled bundle. Counted in evidence.
+        selection:
+          type: object
+          x-of-unread: true
+          description: Provenance written by `cli select` (date and title origins).
         running_text:
           type: object
           description: >
@@ -182,6 +271,7 @@ properties:
     items:
       type: object
       required: [uid]
+      additionalProperties: false
       properties:
         uid:
           type: string
@@ -242,8 +332,11 @@ properties:
         source:
           type: object
           description: Optional Markdown source to use as the divider page.
+          additionalProperties: false
           properties:
             path:
+              type: string
+            heading_transform:
               type: string
             include_frontmatter:
               type: string
@@ -277,6 +370,7 @@ properties:
     items:
       type: object
       required: [path, caption]
+      additionalProperties: false
       properties:
         path:
           type: string
@@ -292,10 +386,44 @@ properties:
 
   render:
     type: object
+    additionalProperties: false
     properties:
       include_toc:
         type: boolean
         default: true
+      toc_depth:
+        type: integer
+        default: 3
+      numbersections:
+        type: boolean
+      assembly_strategy:
+        type: string
+        description: combined_markdown (default) or faithful_stack (keeps source heading levels, no wrapper headings).
+      suppress_source_wrapper_headings:
+        type: boolean
+        description: Do not write a heading per source (defaults on for faithful_stack and section-divider numbering).
+      preserve_source_heading_levels:
+        type: boolean
+        description: Keep each source's heading levels instead of demoting them under the source.
+      emit_visible_provenance:
+        type: boolean
+        default: true
+        description: Append a Provenance & Evidence section listing every source and its hash.
+      numbering:
+        type: string
+        description: Alias for numbering_strategy.
+      delivery:
+        type: object
+        description: >
+          How the artifact is meant to be used physically (screen or bound,
+          binding, duplex, margins, running headers, colophon, illumination,
+          imposition). Validated by engine/delivery.py.
+      passthrough_single_source:
+        x-of-unread: true
+      emit_provenance_section:
+        x-of-unread: true
+      preserve_source_metadata:
+        x-of-unread: true
       numbering_strategy:
         type: string
         enum: [continuous, section_dividers, faithful_section_dividers]
@@ -304,9 +432,6 @@ properties:
           Use section_dividers/faithful_section_dividers to make manifest section
           dividers own numbered top-level sections, demote source headings below
           their divider, and emit frontmatter/mainmatter/appendix transitions.
-      toc_depth:
-        type: integer
-        default: 3
       page_size:
         type: string
         enum: [letter, a4, A4, a4paper, a5, A5, a5paper, half_letter, half-letter, "half letter", halfletter, statement]
@@ -318,13 +443,13 @@ properties:
           kinds should continue to use their sheet specs instead.
       margin:
         type: string
-        pattern: '^(?:\\d+(?:\\.\\d+)?|\\.\\d+)(?:in|pt|mm|cm|pc|em|ex)$'
+        pattern: '^(?:\d+(?:\.\d+)?|\.\d+)(?:in|pt|mm|cm|pc|em|ex)$'
         description: >
           Optional uniform page-margin override for document-spine profiles,
           e.g. 0.7in. Omit to preserve the active profile default margin.
       page_margin:
         type: string
-        pattern: '^(?:\\d+(?:\\.\\d+)?|\\.\\d+)(?:in|pt|mm|cm|pc|em|ex)$'
+        pattern: '^(?:\d+(?:\.\d+)?|\.\d+)(?:in|pt|mm|cm|pc|em|ex)$'
         description: Alias for margin.
       margins:
         type: object
@@ -343,31 +468,34 @@ properties:
           Values must be plain TeX dimensions such as 0.7in or 18mm.
       preserve_source_provenance:
         type: boolean
-        default: true
+        x-of-unread: true
       text_integrity_check:
         type: boolean
-        default: true
+        x-of-unread: true
       visual_page_samples:
         type: boolean
-        default: true
+        x-of-unread: true
       page_sample_format:
         type: string
         enum: [png, jpg]
-        default: png
+        x-of-unread: true
 
   validation:
     type: object
+    additionalProperties: false
+    description: >
+      Declared expectations. The bundle compiler always requires every source
+      path to exist and every uid to be unique, whatever these say.
     properties:
       require_all_source_paths:
         type: boolean
-        default: true
+        x-of-unread: true
       require_all_figure_paths:
         type: boolean
-        default: true
+        x-of-unread: true
       require_unique_uids:
         type: boolean
-        default: true
+        x-of-unread: true
       required_text_markers:
+        x-of-unread: true
         type: array
-        items:
-          type: string
