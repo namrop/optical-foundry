@@ -48,70 +48,8 @@
 \usepackage{graphicx}
 \usepackage{eso-pic}
 
-% Intentional blank / recto-start helpers for packet title/divider pages.
-% Page 1 is treated as recto/right; if the next page number is even, insert a labeled blank.
-\newcommand{\OFIntentionalBlankPage}{%
-  \thispagestyle{empty}%
-  \vspace*{\fill}%
-  \begin{center}{\small\itshape this page was intentionally left blank}\end{center}%
-  \vspace*{\fill}%
-  \clearpage%
-}
-\newcommand{\OFEnsureRightPage}{%
-  \clearpage%
-  \ifodd\value{page}\relax%
-  \else%
-    \OFIntentionalBlankPage%
-  \fi%
-}
-% Furnish-marker ink suppression. engine/manifest_compiler.py stamps an
-% `[[OFDIV:<uid>]]` string at 1pt on every divider page. The renderer
-% extracts it from the compile-stage PDF into an out-of-band divider-page map,
-% then removes the marker's text-show operator from the final PDF. The /OFDIV
-% marked-content bracket lets the sanitizer distinguish this marker from other
-% hidden text. PDF text render mode 3 ("neither fill nor stroke") keeps it
-% machine-readable during extraction while drawing no ink. Needed because
-% divider pages are no longer always full-bleed artwork:
-% codex0 v5 poem versos are white, where 1pt type prints as a visible hairline
-% across the poem's first line. Defined here rather than emitted into the body
-% because pandoc's raw_tex reader mangles the primitive's space-separated
-% argument (`literal{3 Tr}` -> `literal\{3 Tr\}`), so only a single token may
-% cross the pandoc boundary. Engine-guarded: luatex takes \pdfextension, pdftex
-% \pdfliteral, and xelatex/dvipdfmx the \special; anything else degrades to the
-% previous plain-1pt behaviour rather than dying on an undefined control
-% sequence. engine/manifest_compiler.py provides no-op compatibility fallbacks;
-% profiles that use those rather than a tagged template compile, but the renderer
-% fails closed during finalization instead of emitting an unsanitized marker.
-\newcommand{\OFDivMarkerHideBegin}{%
-  \ifdefined\pdfextension\pdfextension literal{/OFDIV BMC 3 Tr}%
-  \else\ifdefined\pdfliteral\pdfliteral{/OFDIV BMC 3 Tr}%
-  \else\special{pdf:literal direct /OFDIV BMC 3 Tr}\fi\fi
-}
-\newcommand{\OFDivMarkerHideEnd}{%
-  \ifdefined\pdfextension\pdfextension literal{0 Tr EMC}%
-  \else\ifdefined\pdfliteral\pdfliteral{0 Tr EMC}%
-  \else\special{pdf:literal direct 0 Tr EMC}\fi\fi
-}
-\newcommand{\OFSectionDividerBackground}[1]{%
-  \AddToShipoutPictureBG*{%
-    \AtPageLowerLeft{%
-      \includegraphics[width=\paperwidth,height=\paperheight]{#1}%
-    }%
-  }%
-}
-\newcommand{\OFApplySectionDividerProfile}[2]{%
-  % Divider-local profile hook. The assembled document still renders through one
-  % Pandoc profile; this command gives templates a stable surface for
-  % profile-aware divider styling without mutating source content.
-}
-\newcommand{\OFBeginAppendices}{%
-  \clearpage%
-  \appendix%
-  \setcounter{section}{0}%
-  \renewcommand{\thesection}{\Alph{section}}%
-  \renewcommand{\thesubsection}{\thesection.\arabic{subsection}}%
-  \renewcommand{\thesubsubsection}{\thesubsection.\arabic{subsubsection}}%
-}
+% Divider, furnish-marker and appendix commands: engine/latex/template_contract.tex
+% (engine-owned defaults; define one here only to restyle it).
 
 
 

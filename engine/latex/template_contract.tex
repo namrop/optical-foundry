@@ -1,0 +1,82 @@
+% Optical Foundry template contract (engine/template_contract.py).
+%
+% Every LaTeX command the engine writes into a render's body, defined once.
+% Loaded at the END of every render's preamble with \providecommand, so a
+% template or style package that defines one of these keeps its own: a profile
+% styles only what it wants to look different. Before 2026-10-01 these were
+% copied into each template (five commands, ten identical copies), and a
+% profile without a copy could not compile what the engine emitted
+% (architecture review 2026-10-01, candidate 1; ruling 01a0f8ba-4937).
+%
+% Definitions here need graphicx and eso-pic only when used.
+
+% ---- Divider pages ---------------------------------------------------------
+% Intentional blank / recto-start helpers for title and divider pages.
+% Page 1 is treated as recto/right; if the next page number is even, insert a
+% labeled blank.
+\providecommand{\OFIntentionalBlankPage}{%
+  \thispagestyle{empty}%
+  \vspace*{\fill}%
+  \begin{center}{\small\itshape this page was intentionally left blank}\end{center}%
+  \vspace*{\fill}%
+  \clearpage%
+}
+\providecommand{\OFEnsureRightPage}{%
+  \clearpage%
+  \ifodd\value{page}\relax%
+  \else%
+    \OFIntentionalBlankPage%
+  \fi%
+}
+% Full-page divider art, behind the page's content.
+\providecommand{\OFSectionDividerBackground}[1]{%
+  \AddToShipoutPictureBG*{%
+    \AtPageLowerLeft{%
+      \includegraphics[width=\paperwidth,height=\paperheight]{#1}%
+    }%
+  }%
+}
+% Divider-local profile hook {resolved profile id}{profile family}. The
+% assembled document still renders through one profile; this gives templates a
+% stable surface for profile-aware divider styling.
+\providecommand{\OFApplySectionDividerProfile}[2]{}
+
+% ---- Furnish-marker ink suppression -----------------------------------------
+% engine/manifest_compiler.py stamps an `[[OFDIV:<uid>]]` string at 1pt on
+% every divider page, between \OFDivMarkerHideBegin and \OFDivMarkerHideEnd.
+% The renderer extracts it from the compile-stage PDF into an out-of-band
+% divider-page map, then removes the marker's text-show operator from the final
+% PDF (engine/furnish.py). The /OFDIV marked-content bracket lets the sanitizer
+% find it; PDF text render mode 3 keeps it machine-readable while drawing no
+% ink. Two argument-less commands because pandoc's raw_tex reader strips an
+% unknown macro that takes a braced argument, and mangles the primitive's
+% space-separated keyword if it is written in the body. Engine-guarded: luatex
+% \pdfextension, pdftex \pdfliteral, xelatex/dvipdfmx \special.
+\providecommand{\OFDivMarkerHideBegin}{%
+  \ifdefined\pdfextension\pdfextension literal{/OFDIV BMC 3 Tr}%
+  \else\ifdefined\pdfliteral\pdfliteral{/OFDIV BMC 3 Tr}%
+  \else\special{pdf:literal direct /OFDIV BMC 3 Tr}\fi\fi
+}
+\providecommand{\OFDivMarkerHideEnd}{%
+  \ifdefined\pdfextension\pdfextension literal{0 Tr EMC}%
+  \else\ifdefined\pdfliteral\pdfliteral{0 Tr EMC}%
+  \else\special{pdf:literal direct 0 Tr EMC}\fi\fi
+}
+
+% ---- Matter ----------------------------------------------------------------
+\providecommand{\OFBeginAppendices}{%
+  \clearpage%
+  \appendix%
+  \setcounter{section}{0}%
+  \renewcommand{\thesection}{\Alph{section}}%
+  \renewcommand{\thesubsection}{\thesection.\arabic{subsection}}%
+  \renewcommand{\thesubsubsection}{\thesubsection.\arabic{subsubsection}}%
+}
+
+% ---- Running text ----------------------------------------------------------
+% Per-source and per-divider running header/footer text. Profiles with running
+% heads define these (yugencommon.sty, clientcommon.sty, codex0.tex); a profile
+% without running heads has nothing to set, so the default does nothing.
+\providecommand{\OFSetRunningDivision}[1]{}
+\providecommand{\OFSetRunningTagline}[1]{}
+\providecommand{\OFSetRunningFooter}[1]{}

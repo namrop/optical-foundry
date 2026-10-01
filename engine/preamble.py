@@ -34,6 +34,7 @@ ORIGINS: tuple[str, ...] = (
     "strikeout",       # soul / lua-ul when the source has ~~text~~
     "draft",           # graphicx draft mode
     "image_bake",      # the lossless image-bake callback
+    "contract",        # engine/template_contract.py defaults, last so every other definition wins
 )
 
 

@@ -62,6 +62,7 @@ from engine.page_size import (
 from engine.profile_resolver import LOCAL_IMPORT, ResolvedProfile, resolve_profile
 from engine.projection_plan import ProjectionPlan
 from engine.preamble import Preamble, source_header_includes
+from engine.template_contract import contract_text
 from engine.resource_roots import (
     ResolvedResourceRoot,
     TEMPLATE_RESOURCE_KEYS,
@@ -333,6 +334,10 @@ class PandocRenderer(Renderer):
                 "% Optical Foundry lossless image bake (engine/image_bake.py).\n"
                 f"\\directlua{{dofile(\"{bake_lua}\")}}",
             )
+
+        # Defaults for every command the engine emits (engine/template_contract.py);
+        # last, so the template's and style packages' own definitions win.
+        preamble.add("contract", contract_text())
 
         # The render's one preamble route. Pandoc drops the source's metadata
         # header-includes once this is given; the Preamble already carries them.

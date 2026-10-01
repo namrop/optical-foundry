@@ -24,6 +24,7 @@ from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Any
 
+from engine.template_contract import READ_TIME_DEFINITIONS
 from engine.render_planner import RenderPlan, plan_manifest_render
 from engine.projection_plan import AssemblyView, ProjectionPlan
 from engine.profile_resolver import resolve_profile
@@ -945,76 +946,6 @@ def _strip_title_heading(body: str) -> str:
     return body if span is None else body[: span[0]] + body[span[1]:]
 
 
-_CHAPTER_OPENER_FALLBACK_DEFS = [
-    # Tagged fallbacks for profiles whose template does not define the divider
-    # marker wrappers (2026-09-30). They are the same engine-guarded pair
-    # codex0.tex and base.tex define: the `[[OFDIV:...]]` furnish marker goes
-    # into an /OFDIV marked-content span in invisible render mode, which is what
-    # the final-PDF sanitizer (engine/furnish.py) looks for and removes. The
-    # earlier no-op fallbacks let such profiles compile, but the sanitizer then
-    # failed closed, so a divider could not publish on any profile outside
-    # codex0/base. Templates that define the wrappers keep theirs (\providecommand
-    # yields). Fenced as raw LaTeX: outside a fence pandoc mangles the literal's
-    # space-separated keyword (`literal{3 Tr}` -> `literal\{`).
-    "```{=latex}\n"
-    "\\providecommand{\\OFDivMarkerHideBegin}{\\ifdefined\\pdfextension\\pdfextension literal{/OFDIV BMC 3 Tr}"
-    "\\else\\ifdefined\\pdfliteral\\pdfliteral{/OFDIV BMC 3 Tr}"
-    "\\else\\special{pdf:literal direct /OFDIV BMC 3 Tr}\\fi\\fi}\n"
-    "\\providecommand{\\OFDivMarkerHideEnd}{\\ifdefined\\pdfextension\\pdfextension literal{0 Tr EMC}"
-    "\\else\\ifdefined\\pdfliteral\\pdfliteral{0 Tr EMC}"
-    "\\else\\special{pdf:literal direct 0 Tr EMC}\\fi\\fi}\n"
-    "```",
-    # Ritual no-inject zone marks (codex0 defines the Lua-backed versions).
-    "\\providecommand{\\CodexPlateRitualBegin}{}",
-    "\\providecommand{\\CodexPlateRitualEnd}{}",
-    "\\providecommand{\\OFChapterOpener}[1]{{\\par\\bigskip\\begingroup\\centering\\Large #1\\par\\endgroup\\medskip}}",
-    "\\providecommand{\\OFChapterOpenerEpigraph}[2]{{\\par\\bigskip\\begingroup\\centering\\Large #1\\par\\smallskip\\small\\itshape #2\\par\\endgroup\\medskip}}",
-    # Fallbacks so a non-codex0 profile can still render a codex-quote epigraph
-    # beneath the opener heading. codex0 defines richer versions; these only
-    # apply if the profile left them undefined. The attribution fallback mirrors
-    # codex0's empty-author handling (emdash+author when author present, else
-    # italic source), so source/date survive even without an author.
-    "\\providecommand{\\CodexQuoteAttribution}[3]{{\\par\\smallskip{\\raggedleft\\small"
-    "\\if\\relax\\detokenize{#1}\\relax\\if\\relax\\detokenize{#2}\\relax\\else\\emph{#2}\\fi"
-    "\\else\\textemdash{} #1\\if\\relax\\detokenize{#2}\\relax\\else, \\emph{#2}\\fi\\fi"
-    "\\if\\relax\\detokenize{#3}\\relax\\else\\ (#3)\\fi\\par}}}",
-    "\\ifdefined\\CodexQuoteBlock\\else\\newenvironment{CodexQuoteBlock}[3]{\\par\\medskip\\begin{quote}\\itshape}{\\end{quote}\\par\\medskip}\\fi",
-    # Layered chapter-opener epigraph (2026-07-28 grammar). codex0 defines the
-    # rich version (small-caps speaker line, middot bibliographic line, gold
-    # context line, register-inverted body); this fallback keeps any other
-    # profile safe with a best-effort italic body + em-dash attribution.
-    # Args: {register}{text}{speaker}{context}{author}{source}{date}
-    #
-    # ⚠ THIS FALLBACK IS THE LIVE PATH for the codex0 book, and has been since
-    # the grammar landed (found 2026-08-06, print-eve A/B: template hook at 20em
-    # produced byte-identical geometry). Pandoc's latex_macros extension reads
-    # this providecommand and EXPANDS \CodexOpenerEpigraph calls at READ time,
-    # so the template's \NewDocumentCommand (codex0.tex:857) never sees a call.
-    # Same mechanism as the 2026-07-25 \OFChapterOpener detection note. That is
-    # why the 2026-08-03 gap ruling (2.2em) and the 2026-08-06 doubling (4.4em)
-    # were both inert, and why witness epigraphs print italic against the
-    # template contract. The \ifdefined guard below survives pandoc's textual
-    # expansion into the emitted .tex and evaluates at COMPILE time, so the
-    # template-side \CodexEpigraphToBodyGap hook (Luis-ruled 2026-08-06:
-    # doubled) is now honoured on the live path while any template-less profile
-    # still degrades to \smallskip. Full grammar activation (register inversion,
-    # smallcaps, gold context line) remains a separate decision — it would
-    # restyle 78 openers sight-unseen and is NOT taken here.
-    "\\providecommand{\\CodexSmallCaps}[1]{\\textsc{#1}}",
-    "\\providecommand{\\CodexOpenerEpigraph}[8]{{\\par\\smallskip"
-    "\\begin{quote}\\itshape #2\\end{quote}"
-    "{\\raggedleft"
-    "\\if\\relax\\detokenize{#3}\\relax\\else{\\small\\textemdash{}~\\textsc{#3}"
-    "\\if\\relax\\detokenize{#4}\\relax\\else, #4\\fi\\par}\\fi"
-    "{\\footnotesize"
-    "\\if\\relax\\detokenize{#3}\\relax\\textemdash{}~\\fi"
-    "\\if\\relax\\detokenize{#5}\\relax\\else#5\\fi"
-    "\\if\\relax\\detokenize{#6}\\relax\\else\\space\\textperiodcentered\\space\\emph{#6}\\fi"
-    "\\if\\relax\\detokenize{#7}\\relax\\else\\space\\textperiodcentered\\space tr.~#7\\fi"
-    "\\if\\relax\\detokenize{#8}\\relax\\else\\space\\textperiodcentered\\space#8\\fi\\par}"
-    "\\par}"
-    "\\ifdefined\\CodexEpigraphToBodyGap\\CodexEpigraphToBodyGap\\fi}}",
-]
 
 
 def _inline_chapter_opener_epigraph_lines(epigraph: dict[str, Any]) -> list[str]:
@@ -1535,7 +1466,7 @@ class CompositeBundleCompiler(ManifestCompiler):
         # made any non-codex0 profile with dividers and no openers fail to
         # compile (2026-09-01 keeper-capture proof render, attempt 1).
         if dividers_by_before_uid or any(isinstance(s.get("chapter_opener"), dict) for s in sorted_sources):
-            lines.extend(_CHAPTER_OPENER_FALLBACK_DEFS)
+            lines.extend(READ_TIME_DEFINITIONS)
             lines.append("")
         for src in sorted_sources:
             uid = src["uid"]

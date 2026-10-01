@@ -1412,9 +1412,13 @@ def test_source_backed_section_divider_preserves_authored_heading_for_numbering(
 
 
 def test_latex_templates_use_required_intentional_blank_page_text():
-    template = (Path(__file__).resolve().parents[1] / "profiles" / "40_latex_import" / "templates" / "cam.tex").read_text()
-    assert "this page was intentionally left blank" in template
-    assert "This page intentionally left blank" not in template
+    # The default lives in the engine's template contract since 2026-10-01.
+    from engine.template_contract import contract_text
+
+    assert "this page was intentionally left blank" in contract_text()
+    templates = (Path(__file__).resolve().parents[1] / "profiles" / "40_latex_import" / "templates")
+    for template in templates.glob("*.tex"):
+        assert "This page intentionally left blank" not in template.read_text(), template.name
 
 
 def test_cam_stack_compile_uses_bundle_semantics_with_cam_kind():
