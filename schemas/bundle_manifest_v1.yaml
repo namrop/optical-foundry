@@ -108,6 +108,14 @@ properties:
         type: integer
         minimum: 1
         description: The folio the body starts at (seated on a recto when two-sided).
+      endnotes:
+        type: object
+        description: Written by engine/volumes.py (B4); marks maps source uid to {note id -> number}.
+        properties:
+          sink: { type: string }
+          marks: { type: object }
+          count: { type: integer }
+          notes_source_uid: { type: string }
       extent:
         type: object
         description: The whole work's measured extent (A5), recorded on every volume.
@@ -507,6 +515,20 @@ properties:
             properties:
               enabled: { type: boolean }
               title: { type: string }
+      endnotes:
+        type: object
+        description: >
+          With `volumes`, print every other volume's Markdown footnotes in one
+          volume (`sink`), grouped by the volume that carries them and numbered from
+          1 in each; the carrying volumes keep only the raised numbers (map B4).
+        additionalProperties: false
+        required: [sink]
+        properties:
+          sink: { type: string }
+          title: { type: string }
+          intro: { type: string }
+          group_title: { type: string }
+          before_source_uid: { type: string }
       delivery:
         type: object
         description: >

@@ -1443,6 +1443,7 @@ class CompositeBundleCompiler(ManifestCompiler):
         volume_cfg = manifest.get("volume") if isinstance(manifest.get("volume"), dict) else None
         volume_seat: int | None = None
         generic_volume_seat = False
+        endnote_marks_set: dict[str, int] = {}
         if volume_cfg and volume_cfg.get("body_folio_start") is not None:
             volume_seat = int(volume_cfg["body_folio_start"])
             if template_seats_body_folio(profile):
@@ -1590,6 +1591,14 @@ class CompositeBundleCompiler(ManifestCompiler):
                 # (promotion map §7, 2026-09-01). Only the body's first heading is
                 # removed, and only when it is level 1 (see _title_heading_span).
                 body = _strip_title_heading(body)
+            # B4: in a volume whose notes print in another volume, each marker
+            # becomes a raised number and its definition is dropped here.
+            _endnote_marks = (((volume_cfg or {}).get("endnotes") or {}).get("marks") or {}).get(uid)
+            if _endnote_marks:
+                from engine.endnotes import rewrite_markers
+
+                body, _n = rewrite_markers(body, _endnote_marks)
+                endnote_marks_set[uid] = _n
 
             # Per-source page break. A source may opt out (page_break_before:
             # false) to flow continuously after the previous source — e.g. a
@@ -1858,6 +1867,11 @@ class CompositeBundleCompiler(ManifestCompiler):
                 ),
                 "body_metadata_blocks_removed": body_metadata_blocks_removed,
                 "extent": extent_record or ((volume_cfg or {}).get("extent")),
+                "endnotes": (
+                    {**{k: v for k, v in ((volume_cfg or {}).get("endnotes") or {}).items() if k != "marks"},
+                     "marks_set": endnote_marks_set}
+                    if (volume_cfg or {}).get("endnotes") else None
+                ),
                 "delivery_colophon_emitted": delivery_colophon_emitted,
                 "section_divider_numbering": section_divider_numbering,
                 "section_dividers_enabled": bool(section_divider_inventory),

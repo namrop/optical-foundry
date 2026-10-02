@@ -89,8 +89,14 @@ def volume_errors(manifest: dict[str, Any]) -> list[str]:
     return errors
 
 
-def split_manifest(manifest: dict[str, Any], *, base: Path | None = None) -> list[dict[str, Any]]:
-    """One ordinary bundle manifest per volume, in order."""
+def split_manifest(
+    manifest: dict[str, Any], *, base: Path | None = None, generated_dir: Path | None = None
+) -> list[dict[str, Any]]:
+    """One ordinary bundle manifest per volume, in order.
+
+    ``generated_dir`` receives sources the engine writes for the work (B4's notes);
+    a temporary directory when not given.
+    """
     errors = volume_errors(manifest)
     if errors:
         raise VolumeError("; ".join(errors))
@@ -133,7 +139,60 @@ def split_manifest(manifest: dict[str, Any], *, base: Path | None = None) -> lis
         if extent:
             part["volume"]["extent"] = dict(extent)
         out.append(part)
+    _sink_endnotes(manifest, out, base=base, generated_dir=generated_dir)
     return out
+
+
+def _sink_endnotes(manifest: dict[str, Any], parts: list[dict[str, Any]], *, base: Path | None,
+                   generated_dir: Path | None) -> None:
+    """B4: number the other volumes' notes and print them all in the sink volume."""
+    from engine.endnotes import endnotes_config, harvest_volume, notes_source
+
+    cfg = endnotes_config(manifest)
+    if cfg is None:
+        return
+    sink_id = str(cfg["sink"])
+    sink = next((p for p in parts if p["volume"]["id"] == sink_id), None)
+    if sink is None:
+        raise VolumeError(f"render.endnotes.sink {sink_id!r} is not a volume id")
+    groups = []
+    for part in parts:
+        if part is sink:
+            continue
+        marks, notes = harvest_volume(part["sources"], base=base)
+        if marks:
+            part["volume"]["endnotes"] = {"sink": sink_id, "marks": marks, "count": len(notes)}
+        vol = part["volume"]
+        fields = {"title": vol["title"], "id": vol["id"], "number": vol["number"], "roman": roman(vol["number"])}
+        groups.append((str(cfg.get("group_title", "Notes to {title}")).format(**fields), notes))
+    if not any(notes for _, notes in groups):
+        return
+    if generated_dir is None:
+        import tempfile
+
+        generated_dir = Path(tempfile.mkdtemp(prefix="of_volumes_"))
+    generated_dir = Path(generated_dir)
+    generated_dir.mkdir(parents=True, exist_ok=True)
+    uid = f"{manifest['bundle_id']}-endnotes"
+    path = generated_dir / f"{uid}.md"
+    path.write_text(notes_source(groups, title=str(cfg.get("title", "Notes")), intro=cfg.get("intro"), uid=uid),
+                    encoding="utf-8")
+    sources = sink["sources"]
+    entry = {"uid": uid, "path": str(path), "role": "appendix", "title": str(cfg.get("title", "Notes")),
+             "include_frontmatter": "none", "suppress_frontmatter": True}
+    before = cfg.get("before_source_uid")
+    if before:
+        at = next((i for i, s in enumerate(sources) if s["uid"] == before), None)
+        if at is None:
+            raise VolumeError(f"render.endnotes.before_source_uid {before!r} is not a source of volume {sink_id}")
+    else:
+        at = len(sources)
+    sources.insert(at, entry)
+    # Orders stay increasing: the notes take the slot, the rest shift by one.
+    for i, s in enumerate(sources):
+        s["order"] = i + 1
+    sink["volume"]["endnotes"] = {"sink": sink_id, "notes_source_uid": uid,
+                                  "count": sum(len(n) for _, n in groups)}
 
 
 def template_seats_body_folio(profile_id: str) -> bool:
@@ -253,7 +312,11 @@ def render_volumes(
     **render_kwargs: Any,
 ) -> dict[str, Any]:
     """Render every volume, seat the folios, and (if asked) add the contents of the work."""
-    parts = split_manifest(manifest, base=Path(manifest_path).resolve().parent if manifest_path else None)
+    parts = split_manifest(
+        manifest,
+        base=Path(manifest_path).resolve().parent if manifest_path else None,
+        generated_dir=Path(output_dir) / "generated",
+    )
     render_cfg = manifest.get("render") or {}
     contents_cfg = render_cfg.get("work_contents")
     if isinstance(contents_cfg, bool):

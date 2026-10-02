@@ -117,3 +117,8 @@
   \else #2\,\textperiodcentered\,#3\fi\par
 }
 \providecommand{\OFWorkContentsEnd}{\clearpage}
+
+% ---- Endnote marks (map B4) -------------------------------------------------
+% A note whose text prints in another volume (render.endnotes.sink): only the
+% raised number stays on the page.
+\providecommand{\OFEndnoteMark}[1]{\textsuperscript{#1}}
