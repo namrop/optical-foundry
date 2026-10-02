@@ -52,7 +52,7 @@ _Avoid_: input file, note (when the role in a render is meant)
 
 **Work**:
 A body of content that owns its own sources and assets and is rendered as one or more artifacts; Codex 0 and the keeper-capture book are works.
-_Avoid_: book (for the general concept), tenant (for the content itself) *(proposed)*
+_Avoid_: book (for the general concept), tenant (for the content itself) (adopted 2026-10-02, ruling `01a0fe8b-e963`)
 
 **Asset**:
 A non-text file a work or profile supplies to a render, such as a plate, ornament or logo. Assets are content, never engine.
@@ -74,9 +74,9 @@ _Avoid_: packet, stack (except in the CAM Stack's own name)
 A short declaration of which sources a manifest should contain, by folder, field and date, from which the manifest is composed. The manifest it produces is the record; the selection is how it was made.
 _Avoid_: query, spine
 
-**Spine**:
-Codex 0's own hand-authored ordering of parts, chapters and passages. Book data, not a Foundry concept; the Foundry's direction is for manifests to make it unnecessary.
-_Avoid_: using it for any work other than Codex 0
+**Spine** (retired 2026-10-02, ruling `01a0fe8b-e963`):
+Codex 0's hand-authored ordering of parts, chapters and passages, and the tool that compiled it into manifests. Retired: works are manifest native, and their order lives in the manifest (or the selection that emits it).
+_Avoid_: the word, for any work; say manifest or selection
 
 ### How it is set
 
