@@ -121,3 +121,44 @@ def test_body_metadata_blocks_are_removed_but_code_and_rules_stay():
     out, n = _strip_body_metadata_blocks(body)
     assert n == 1
     assert "date: 2025-12-06" not in out and "after rule" in out and "a: 1" in out
+
+
+# --- A4: deterministic source uids -------------------------------------------------
+
+
+def test_uids_come_from_frontmatter_else_path_and_survive_insertion(corpus, tmp_path):
+    _note(corpus, "a.md", {"uid": "01a0aaaa-0000-7000-8000-000000000001", "created": "2025-10-20"}, "# Ay\n")
+    before = {Path(s["path"]).name: s["uid"] for s in select(_spec(corpus), spec_path=tmp_path / "s.yaml").manifest["sources"]}
+    assert before["a.md"] == "01a0aaaa-0000-7000-8000-000000000001"
+    assert before["b_2025-11-02.md"] == "kc-b-2025-11-02"
+    # A capture dated before every other one renames nothing.
+    _note(corpus, "early.md", {"created": "2025-01-01"}, "# Early\n")
+    after = {Path(s["path"]).name: s["uid"] for s in select(_spec(corpus), spec_path=tmp_path / "s.yaml").manifest["sources"]}
+    assert {k: after[k] for k in before} == before
+
+
+def test_position_uids_keep_the_old_numbering(corpus, tmp_path):
+    spec = _spec(corpus, sources={"uid": "position"})
+    uids = [s["uid"] for s in select(spec, spec_path=tmp_path / "s.yaml").manifest["sources"]]
+    assert uids[0] == "kc-001-a" and uids[1] == "kc-002-b-2025-11-02"
+
+
+def test_duplicate_frontmatter_uids_are_numbered_not_fatal(corpus, tmp_path):
+    _note(corpus, "a.md", {"uid": "same", "created": "2025-10-20"}, "# Ay\n")
+    _note(corpus, "undated.md", {"uid": "same"}, "# U\n")
+    uids = [s["uid"] for s in select(_spec(corpus), spec_path=tmp_path / "s.yaml").manifest["sources"]]
+    assert "same" in uids and "same-2" in uids and len(set(uids)) == len(uids)
+
+
+def test_unknown_uid_mode_is_refused(corpus, tmp_path):
+    with pytest.raises(SelectionError, match="sources.uid"):
+        select(_spec(corpus, sources={"uid": "hash"}), spec_path=tmp_path / "s.yaml")
+
+
+def test_emitted_manifest_carries_a_provenance_comment(corpus, tmp_path):
+    spec_path = tmp_path / "s.yaml"
+    spec_path.write_text(yaml.safe_dump(_spec(corpus)), encoding="utf-8")
+    out, _ = emit(spec_path, tmp_path / "out.yaml")
+    head = out.read_text(encoding="utf-8").split("kind:", 1)[0]
+    assert "# selection: kc (sha256 " in head and "uids by frontmatter" in head
+    assert "# sources: 4; dividers: 3; volumes: 1; delivery: flat" in head

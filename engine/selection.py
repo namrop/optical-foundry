@@ -38,12 +38,19 @@ Selection file::
       subtitle: "{span}"          # "first – last", or one title when they are the same
       # or a list, each volume starting at a group key: [{from: "2026-01"}, ...]
     sources:                      # per-source defaults
+      uid: frontmatter            # frontmatter (its uid, else path) | path | position  (map A4)
       chapter_opener: true        # title from the body's title H1, else frontmatter title, else file name
       include_frontmatter: none
     bundle: {...}                 # passed through: profile, presentation, render, validation, ...
 
 Dates: ``created`` from frontmatter, else a ``YYYY-MM-DD`` in the file name,
 else undated. Which one each source used is recorded in the emitted manifest.
+
+Source uids (map A4) are deterministic and stable under recomposition: by default a
+source keeps its own frontmatter ``uid``, so adding or reordering captures renames
+nothing; a file without one is named from its path under its root. ``position``
+numbers sources in order instead (the pre-A4 behaviour), which renames every later
+source when one is inserted.
 """
 from __future__ import annotations
 
@@ -231,6 +238,29 @@ def _group_key(c: Candidate, by: str, root_of: dict[Path, Path]) -> tuple[str, d
     raise SelectionError(f"group.by must be month, year, directory or none, not {by!r}")
 
 
+_UID_MODES = ("frontmatter", "path", "position")
+_UID_SAFE_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
+
+
+def source_uid(c: Candidate, *, mode: str, prefix: str, index: int, root: Path) -> str:
+    """A4: a deterministic uid for a selected source.
+
+    ``frontmatter``: the source's own ``uid`` when it is a safe token, else ``path``.
+    ``path``: ``<prefix>-<slug of the path under its root, without suffix>``.
+    ``position``: ``<prefix>-<NNN>-<slug of the file stem>`` (order-dependent).
+    """
+    if mode not in _UID_MODES:
+        raise SelectionError(f"sources.uid must be one of {list(_UID_MODES)}, not {mode!r}")
+    if mode == "position":
+        return f"{prefix}-{index:03d}-{_slug(c.path.stem)}"
+    if mode == "frontmatter":
+        own = str(c.frontmatter.get("uid") or "").strip()
+        if _UID_SAFE_RE.match(own):
+            return own
+    rel = c.path.relative_to(root).with_suffix("").as_posix()
+    return f"{prefix}-{_slug(rel, 96)}"
+
+
 def _format(template: str, fields: dict[str, Any]) -> str:
     try:
         return template.format(**fields)
@@ -300,6 +330,8 @@ def select(spec: dict[str, Any], *, spec_path: Path) -> SelectionResult:
 
     defaults = dict(spec.get("sources") or {})
     want_opener = defaults.pop("chapter_opener", True)
+    uid_mode = str(defaults.pop("uid", "frontmatter"))
+    uid_prefix = _slug(spec.get("selection_id", "sel"), 12)
     group = spec.get("group") or {}
     group_by = group.get("by", "none")
     divider_cfg = dict(group.get("divider") or {})
@@ -317,8 +349,15 @@ def select(spec: dict[str, Any], *, spec_path: Path) -> SelectionResult:
     sources: list[dict[str, Any]] = []
     dividers: list[dict[str, Any]] = []
     seen_group = None
+    taken: dict[str, int] = {}
     for i, c in enumerate(pool, start=1):
-        uid = f"{_slug(spec.get('selection_id', 'sel'), 12)}-{i:03d}-{_slug(c.path.stem)}"
+        uid = source_uid(c, mode=uid_mode, prefix=uid_prefix, index=i, root=root_of[c.path])
+        if uid in taken:
+            # Two files claiming one frontmatter uid (or one path slug): keep the
+            # first, number the rest, and say so rather than fail the composition.
+            taken[uid] += 1
+            uid = f"{uid}-{taken[uid]}"
+        taken.setdefault(uid, 1)
         gkey, _ = _group_key(c, group_by, root_of)
         if group_by != "none" and gkey != seen_group:
             seen_group = gkey
@@ -375,6 +414,7 @@ def select(spec: dict[str, Any], *, spec_path: Path) -> SelectionResult:
             "selection_sha256": hashlib.sha256(spec_path.read_bytes()).hexdigest() if spec_path.is_file() else None,
             "generated_at": dt.datetime.now().astimezone().isoformat(timespec="seconds"),
             "selected": len(pool),
+            "uid_mode": uid_mode,
             "excluded_by_predicate": len(excluded),
             "date_origins": {o: sum(1 for c in pool if c.date_origin == o)
                              for o in ("created", "filename", "undated")},
@@ -462,6 +502,22 @@ def _volumes(
     return out
 
 
+def provenance_comment(manifest: dict[str, Any]) -> str:
+    """A4: one comment block naming what composed this manifest (the spine tool's
+    ``_provenance_comment``, generalized): selection, its hash, the counts, the
+    volumes and the delivery mode. Comments only; the ``selection:`` block is the record."""
+    sel = manifest.get("selection") or {}
+    delivery = ((manifest.get("render") or {}).get("delivery") or {})
+    volumes = manifest.get("volumes") or []
+    sha = (sel.get("selection_sha256") or "")[:12] or "none"
+    lines = [
+        f"# selection: {manifest.get('bundle_id')} (sha256 {sha}), uids by {sel.get('uid_mode', 'frontmatter')}",
+        f"# sources: {len(manifest.get('sources') or [])}; dividers: {len(manifest.get('section_dividers') or [])}; "
+        f"volumes: {len(volumes) or 1}; delivery: {delivery.get('mode', 'flat')}",
+    ]
+    return "\n".join(lines) + "\n"
+
+
 def emit(spec_path: Path, out_path: Path | None = None) -> tuple[Path, SelectionResult]:
     spec = yaml.safe_load(spec_path.read_text(encoding="utf-8")) or {}
     result = select(spec, spec_path=spec_path)
@@ -477,6 +533,7 @@ def emit(spec_path: Path, out_path: Path | None = None) -> tuple[Path, Selection
         f"# Composed by `python3 -m cli select {spec_path.name}` (A2 selection manifest).\n"
         "# This file is the authoritative composition record: review and commit it; re-run the\n"
         "# selector to recompose. The `selection:` block says what produced it.\n"
+        + provenance_comment(result.manifest)
     )
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(

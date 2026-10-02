@@ -108,6 +108,14 @@ properties:
         type: integer
         minimum: 1
         description: The folio the body starts at (seated on a recto when two-sided).
+      extent:
+        type: object
+        description: The whole work's measured extent (A5), recorded on every volume.
+        properties:
+          exact: { type: integer }
+          rounded: { type: integer }
+          printed: {}
+          sources: { type: integer }
       work_contents:
         type: object
         additionalProperties: false
@@ -177,6 +185,21 @@ properties:
               for enabled full title pages.
           background_image:
             type: string
+      extent:
+        type: object
+        description: >
+          A5. Measure the work's prose words at build time and set
+          `variables.colophon_words` (substituted into <<COLOPHON_WORDS>>), unless the
+          manifest sets that variable itself. A volumed work is measured whole.
+        additionalProperties: false
+        properties:
+          enabled: { type: boolean, default: true }
+          round: { type: integer, minimum: 1, default: 1000 }
+          form: { type: string, enum: [english, number], default: english }
+          visible_commands:
+            type: array
+            description: LaTeX commands whose braced argument is prose (default OFChapterOpener).
+            items: { type: string, pattern: "^[A-Za-z@]+$" }
 
   sources:
     type: array

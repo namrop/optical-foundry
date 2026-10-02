@@ -89,12 +89,18 @@ def volume_errors(manifest: dict[str, Any]) -> list[str]:
     return errors
 
 
-def split_manifest(manifest: dict[str, Any]) -> list[dict[str, Any]]:
+def split_manifest(manifest: dict[str, Any], *, base: Path | None = None) -> list[dict[str, Any]]:
     """One ordinary bundle manifest per volume, in order."""
     errors = volume_errors(manifest)
     if errors:
         raise VolumeError("; ".join(errors))
     volumes = manifest["volumes"]
+    # A5: a volumed work is measured whole, before it is cut, so every volume's
+    # colophon prints the same figure.
+    from engine.extent import apply_extent
+
+    manifest = copy.deepcopy(manifest)
+    extent = apply_extent(manifest, base=base)
     sources = sorted(manifest.get("sources") or [], key=lambda s: s.get("order", 0))
     starts = [0] + [next(i for i, s in enumerate(sources) if s["uid"] == v["before_source_uid"])
                     for v in volumes[1:]]
@@ -124,6 +130,8 @@ def split_manifest(manifest: dict[str, Any]) -> list[dict[str, Any]]:
         part["volume"] = {"id": vid, "number": n, "count": len(volumes), "title": title}
         if vol.get("subtitle"):
             part["volume"]["subtitle"] = vol["subtitle"]
+        if extent:
+            part["volume"]["extent"] = dict(extent)
         out.append(part)
     return out
 
@@ -245,7 +253,7 @@ def render_volumes(
     **render_kwargs: Any,
 ) -> dict[str, Any]:
     """Render every volume, seat the folios, and (if asked) add the contents of the work."""
-    parts = split_manifest(manifest)
+    parts = split_manifest(manifest, base=Path(manifest_path).resolve().parent if manifest_path else None)
     render_cfg = manifest.get("render") or {}
     contents_cfg = render_cfg.get("work_contents")
     if isinstance(contents_cfg, bool):

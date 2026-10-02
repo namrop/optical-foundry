@@ -15,6 +15,7 @@ Concrete compilers:
 
 from __future__ import annotations
 
+import copy
 import hashlib
 import os
 import functools
@@ -1423,6 +1424,16 @@ class CompositeBundleCompiler(ManifestCompiler):
         # variables to flow through a bundle render the same way they do for
         # markdown_document manifests. Guarded through _guard_manifest_variables
         # so only allowlisted keys reach the assembled intermediate.
+        # A5: the work's extent, measured from its sources into `colophon_words`
+        # (a copy: the caller's manifest is not mutated). Volumes arrive already
+        # measured over the whole work, so this is a no-op for them.
+        from engine.extent import apply_extent
+
+        manifest = copy.deepcopy(manifest)
+        _manifest_path = kwargs.get("manifest_path")
+        extent_record = apply_extent(
+            manifest, base=Path(_manifest_path).resolve().parent if _manifest_path else None
+        )
         raw_manifest_variables = manifest.get("variables", {}) if isinstance(manifest.get("variables", {}), dict) else {}
         accepted_manifest_variables, rejected_manifest_variables = _guard_manifest_variables(raw_manifest_variables)
 
@@ -1846,6 +1857,7 @@ class CompositeBundleCompiler(ManifestCompiler):
                     if volume_cfg else None
                 ),
                 "body_metadata_blocks_removed": body_metadata_blocks_removed,
+                "extent": extent_record or ((volume_cfg or {}).get("extent")),
                 "delivery_colophon_emitted": delivery_colophon_emitted,
                 "section_divider_numbering": section_divider_numbering,
                 "section_dividers_enabled": bool(section_divider_inventory),
