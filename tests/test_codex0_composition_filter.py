@@ -10,9 +10,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from engine.profile_resolver import resolve_profile
 
+from tests.codex0_package import codex0_package
+
 GF = Path(__file__).resolve().parents[1]
-PROFILE_ROOT = GF / "profiles" / "40_latex_import"
-FILTER = PROFILE_ROOT / "filters" / "codex0_composition.lua"
+PROFILE_ROOT = GF / "profiles" / "40_latex_import"   # engine defaults (document spine, Johannah)
+CODEX0 = codex0_package()                              # the codex0 profile package (map G2)
+FILTER = CODEX0 / "filters" / "codex0_composition.lua"
 
 
 def _pandoc_latex(tmp_path: Path, body: str) -> str:
@@ -306,8 +309,8 @@ def test_codex0_profile_wires_filter_and_defaults_only_to_codex0():
     ]
     assert resolved.template_path.name == "codex0.tex"
 
-    codex_defaults = yaml.safe_load((PROFILE_ROOT / "defaults" / "codex0.yaml").read_text())
-    assert codex_defaults["filters"] == ["filters/codex0_composition.lua"]
+    codex_defaults = yaml.safe_load((CODEX0 / "defaults" / "codex0.yaml").read_text())
+    assert codex_defaults["filters"] == ["${.}/../filters/codex0_composition.lua"]
     assert codex_defaults["variables"]["codex_hinge_gap_before"] == "0.90em"
     assert codex_defaults["variables"]["codex_breath_ornament_gap"] == "1\\baselineskip"
     assert codex_defaults["variables"]["codex_hinge_ornament_gap"] == "2\\baselineskip"
@@ -545,7 +548,7 @@ Untagged div two.
 
 
 def test_codex0_template_exposes_composition_macros_and_environments():
-    template = (PROFILE_ROOT / "templates" / "codex0.tex").read_text()
+    template = (CODEX0 / "templates" / "codex0.tex").read_text()
 
     assert "\\NewDocumentCommand{\\CodexBreakOrnament}" in template
     assert "\\CodexMaybeDecorativeImage" in template
@@ -562,7 +565,7 @@ def test_codex0_template_exposes_composition_macros_and_environments():
 
 
 def test_codex0_template_wires_pataphor_ranges_to_page_local_role_rails():
-    template = (PROFILE_ROOT / "templates" / "codex0.tex").read_text()
+    template = (CODEX0 / "templates" / "codex0.tex").read_text()
 
     assert "\\NewDocumentCommand{\\CodexRailPoolReset}" in template
     assert "\\NewDocumentCommand{\\CodexRailPoolAdd}{m m m}" in template
@@ -629,7 +632,7 @@ def test_codex0_template_wires_pataphor_ranges_to_page_local_role_rails():
 
 
 def test_codex_pataphor_begin_enters_horizontal_mode_before_saving_first_position():
-    template = (PROFILE_ROOT / "templates" / "codex0.tex").read_text()
+    template = (CODEX0 / "templates" / "codex0.tex").read_text()
 
     begin_macro = template.split(
         "\\NewDocumentCommand{\\CodexPataphorBegin}{m m}", 1

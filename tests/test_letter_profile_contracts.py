@@ -15,6 +15,13 @@ class RecordingPandocRenderer:
         return {"status": "ok", "render_id": plan.render_id, "plan_toc": plan.toc}
 
 
+def _codex0_template():
+    """codex0.tex, from the codex0 profile package (map G2)."""
+    from tests.codex0_package import codex0_package
+
+    return codex0_package() / "templates" / "codex0.tex"
+
+
 @pytest.fixture(autouse=True)
 def reset_recorded_plans(monkeypatch):
     RecordingPandocRenderer.plans = []
@@ -53,7 +60,7 @@ def test_johannah_letter_template_keeps_body_clear_of_header_rule():
 
 
 def test_codex0_template_suppresses_running_header_and_footer_rules():
-    template = Path("profiles/40_latex_import/templates/codex0.tex").read_text()
+    template = _codex0_template().read_text()
     start = template.index("\\fancypagestyle{codexArtifact}")
     end = template.index("% Pass Pandoc variables", start)
     codex_artifact_style = template[start:end]

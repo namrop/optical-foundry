@@ -759,6 +759,8 @@ class PandocRenderer(Renderer):
                 continue
             for entry in data.get("filters") or [] if isinstance(data, dict) else []:
                 path = entry.get("path") if isinstance(entry, dict) else entry
+                if isinstance(path, str) and "${.}" in path:
+                    path = path.replace("${.}", str(Path(defaults).resolve().parent))
                 if isinstance(path, str) and path.endswith(".lua"):
                     candidate = Path(path) if Path(path).is_absolute() else Path(cwd) / path
                     if candidate.is_file():

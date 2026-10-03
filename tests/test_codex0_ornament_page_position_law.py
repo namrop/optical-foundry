@@ -21,8 +21,13 @@ import subprocess
 
 import pytest
 
+from tests.codex0_package import codex0_package
+
 GF = Path(__file__).resolve().parents[1]
-CODEX0_TEMPLATE = GF / "profiles" / "40_latex_import" / "templates" / "codex0.tex"
+
+
+def _codex0() -> Path:
+    return codex0_package()  # the codex0 profile package (map G2), skip where unresolvable
 
 LAW_START = "% --- Ornament page-position law"
 LAW_END = "% --- end ornament page-position law"
@@ -34,7 +39,7 @@ pytestmark = pytest.mark.skipif(
 
 
 def _law_block() -> str:
-    text = CODEX0_TEMPLATE.read_text(encoding="utf-8")
+    text = (_codex0() / "templates" / "codex0.tex").read_text(encoding="utf-8")
     start = text.index(LAW_START)
     end = text.index(LAW_END)
     return text[start : text.index("\n", end) + 1]
@@ -59,9 +64,9 @@ def _compile(tmp_path: Path, body: str, enabled: bool = True) -> Path:
         "\\end{document}\n",
         encoding="utf-8",
     )
-    # The law's Lua lives in the profile's TeX tree since 2026-10-01 (it is
-    # required from there), so kpse must search it as a render does.
-    env = {**os.environ, "TEXMFHOME": str(CODEX0_TEMPLATE.parents[1] / "styles" / "texmf")}
+    # The law's Lua lives in the package's tex/ directory (map G2); a render puts
+    # it on LUAINPUTS, and so does this probe.
+    env = {**os.environ, "LUAINPUTS": f"{_codex0() / 'tex'}:", "TEXINPUTS": f"{_codex0() / 'tex'}:"}
     result = subprocess.run(
         ["lualatex", "-interaction=nonstopmode", "-halt-on-error", "probe.tex"],
         cwd=tmp_path,

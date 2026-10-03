@@ -29,6 +29,11 @@ wins: a package cannot shadow an engine profile silently.
     ornaments: {...}             # engine/ornaments.py
     openers: {...}               # engine/openers.py (map D4)
     markers: {prefix: cx0}       # engine/markers.py (map C2)
+    family: document_spine       # G2: override the extended profile's family
+    base_defaults: [a.yaml, ...] # G2: engine defaults to build on, replacing the extended stack
+    tex: [tex]                   # G2: package directories on TEXINPUTS and LUAINPUTS
+  A defaults file in a package names its own files as ${.}/... (pandoc's defaults-file
+  directory), e.g. ``filters: [${.}/../filters/x.lua]``.
     editions: {labels: [...]}    # engine/editions.py (map C1)
 """
 from __future__ import annotations
@@ -42,7 +47,8 @@ import yaml
 
 SCHEMA = "profile_package_v1"
 _KEYS = {"schema_version", "id", "title", "description", "extends", "template", "defaults",
-         "source_preparation", "ornaments", "openers", "markers", "editions"}
+         "source_preparation", "ornaments", "openers", "markers", "editions",
+         "family", "base_defaults", "tex"}
 
 
 class ProfilePackageError(ValueError):

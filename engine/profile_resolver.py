@@ -31,6 +31,8 @@ class RenderEnvironment:
     texmfhome: Path | None
     texinputs: str
     resource_paths: list[Path] = field(default_factory=list)
+    # LuaTeX's require() path (LUAINPUTS does not follow TEXINPUTS on this TeX).
+    luainputs: str = ""
 
     def env_overrides(self) -> dict[str, str]:
         out: dict[str, str] = {}
@@ -41,7 +43,7 @@ class RenderEnvironment:
         # LuaTeX's require() searches LUAINPUTS, which on this TeX does not
         # include TEXINPUTS: the engine's Lua modules (of_pages, of_plate_float)
         # must be on it explicitly. The trailing ':' keeps the default path.
-        out["LUAINPUTS"] = f"{ENGINE_LATEX_DIR}:"
+        out["LUAINPUTS"] = self.luainputs or f"{ENGINE_LATEX_DIR}:"
         return out
 
 
@@ -129,14 +131,8 @@ PROFILE_SPECS: dict[str, dict[str, Any]] = {
     },
     "cam": {"family": "document_spine", "defaults": ["document_spine.yaml", "yugenbase.yaml", "cam.yaml"], "template": "cam.tex"},
     "mythic": {"family": "document_spine", "defaults": ["document_spine.yaml", "yugenbase.yaml", "mythic.yaml"], "template": "mythic.tex"},
-    "codex0": {
-        "family": "document_spine",
-        "defaults": ["document_spine.yaml", "personal_letter.yaml", "mythic_letter_johannah.yaml", "codex0.yaml"],
-        "template": "codex0.tex",
-        # Map C1/C2 (ruling 01a100da-3cde): its marker namespace and its editions.
-        "markers": {"prefix": "cx0"},
-        "editions": {"labels": ["archival", "johannah", "witness", "reader"]},
-    },
+    # "codex0" left the engine on 2026-10-03 (map G2, ruling 01a100da-3cde): it is the
+    # codex0 package in the profiles repository (optical-foundry-profiles/codex0).
     "codex0-a5": {
         "family": "document_spine",
         "defaults": ["document_spine.yaml", "yugenbase.yaml", "codex0_a5.yaml"],
@@ -212,9 +208,13 @@ def resolve_profile(profile_id: str) -> ResolvedProfile:
         if base_id not in PROFILE_SPECS:
             raise ValueError(f"profile package {canonical}: extends {base_id!r}, which is not an engine profile")
         spec = dict(PROFILE_SPECS[base_id])
-        for key in ("source_preparation", "markers", "editions"):
+        for key in ("source_preparation", "markers", "editions", "family"):
             if package.spec.get(key) is not None:
                 spec[key] = package.spec[key]
+        # G2: a package that carries a whole profile names the engine defaults it
+        # builds on, instead of taking the extended profile's stack.
+        if package.spec.get("base_defaults") is not None:
+            spec["defaults"] = list(package.spec["base_defaults"])
     if spec is None:
         spec = _fallback_spec(canonical)
 
@@ -249,7 +249,16 @@ def resolve_profile(profile_id: str) -> ResolvedProfile:
         LOCAL_IMPORT / "styles" / "texmf" / "tex" / "latex" / "resume",
         LOCAL_IMPORT / "styles" / "texmf" / "tex" / "latex" / "yugen",
     ]
+    # G2: a package's own TeX and Lua directories come first.
+    package_tex = [(package.directory / d).resolve() for d in (package.spec.get("tex") or [])] if package else []
+    for d in package_tex:
+        if not d.is_dir():
+            raise ValueError(f"profile package {canonical}: tex directory missing: {d}")
+    texinputs_parts = [*package_tex, *texinputs_parts]
     texinputs = ":".join(str(p) for p in texinputs_parts if p.exists()) + ":"
+    luainputs = ":".join(str(p) for p in [*package_tex, ENGINE_LATEX_DIR]) + ":"
+    if package is not None:
+        resource_paths = [package.directory, *resource_paths]
 
     source_preparation = spec.get("source_preparation")
     if source_preparation is not None:
@@ -283,6 +292,7 @@ def resolve_profile(profile_id: str) -> ResolvedProfile:
             texmfhome=texmfhome,
             texinputs=texinputs,
             resource_paths=resource_paths,
+            luainputs=luainputs,
         ),
         font_policy=font_policy,
         boundary={

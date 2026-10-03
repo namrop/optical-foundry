@@ -331,6 +331,10 @@ def _build_summary(caps: dict[str, ProfileCapability]) -> dict[str, Any]:
     with_toc = sum(1 for c in caps.values() if c.supports_toc)
     local_defaults = sum(1 for c in caps.values() if c.defaults_source == "local")
     local_templates = sum(1 for c in caps.values() if c.template_source == "local")
+    # Map G2: a profile from a profile package (its own defaults and template) is a
+    # legitimate source, not a missing one.
+    package_defaults = sum(1 for c in caps.values() if "package" in (c.defaults_source or ""))
+    package_templates = sum(1 for c in caps.values() if c.template_source == "package")
     remote_defaults = 0
     remote_templates = 0
     return {
@@ -342,7 +346,9 @@ def _build_summary(caps: dict[str, ProfileCapability]) -> dict[str, Any]:
         "with_templates": with_templates,
         "with_toc_support": with_toc,
         "defaults_local": local_defaults,
+        "defaults_package": package_defaults,
         "defaults_40_latex": remote_defaults,
         "templates_local": local_templates,
+        "templates_package": package_templates,
         "templates_40_latex": remote_templates,
     }

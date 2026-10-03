@@ -102,8 +102,9 @@ def test_codex0_is_bundle_ok():
     assert cap.defaults_found.endswith("/codex0.yaml")
     assert cap.template_found is not None
     assert cap.template_found.endswith("/codex0.tex")
-    assert cap.defaults_source == "local"
-    assert cap.template_source == "local"
+    # Map G2: codex0 is a profile package on engine defaults.
+    assert cap.defaults_source == "local+package"
+    assert cap.template_source == "package"
 
 
 def test_letter_is_bundle_ok():
@@ -245,10 +246,10 @@ def test_all_bundle_ok_profiles_have_local_sources():
     caps = check_all_profiles()
     for pid in BUNDLE_OK:
         cap = caps[pid]
-        assert cap.defaults_source == "local", (
+        assert cap.defaults_source in ("local", "local+package"), (
             f"{pid}: expected defaults_source='local', got '{cap.defaults_source}'"
         )
-        assert cap.template_source == "local", (
+        assert cap.template_source in ("local", "package"), (
             f"{pid}: expected template_source='local', got '{cap.template_source}'"
         )
 
@@ -260,10 +261,10 @@ def test_json_report_includes_source_fields():
     for pid, cap in caps.items():
         assert "defaults_source" in cap, f"Missing defaults_source for {pid}"
         assert "template_source" in cap, f"Missing template_source for {pid}"
-        assert cap["defaults_source"] in ("local", "missing"), (
+        assert cap["defaults_source"] in ("local", "missing", "package", "local+package"), (
             f"{pid}: invalid defaults_source '{cap['defaults_source']}'"
         )
-        assert cap["template_source"] in ("local", "missing"), (
+        assert cap["template_source"] in ("local", "missing", "package"), (
             f"{pid}: invalid template_source '{cap['template_source']}'"
         )
 
@@ -273,8 +274,8 @@ def test_summary_includes_source_counts():
     report = __import__("json").loads(data)
     s = report["summary"]
     # At least some should be local since we have the import dir
-    assert s["defaults_local"] == s["with_defaults"]
-    assert s["templates_local"] == s["with_templates"]
+    assert s["defaults_local"] + s["defaults_package"] == s["with_defaults"]
+    assert s["templates_local"] + s["templates_package"] == s["with_templates"]
     assert s.get("defaults_40_latex", 0) == 0
     assert s.get("templates_40_latex", 0) == 0
 

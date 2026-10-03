@@ -2,9 +2,22 @@ from pathlib import Path
 
 GF = Path(__file__).resolve().parents[1]
 BASE_TEMPLATE = GF / "profiles" / "40_latex_import" / "templates" / "base.tex"
-CODEX0_TEMPLATE = GF / "profiles" / "40_latex_import" / "templates" / "codex0.tex"
-# The page-placement Lua, lifted out of codex0.tex on 2026-10-01 (architecture review candidate 5).
-CODEX0_LUA_DIR = CODEX0_TEMPLATE.parents[1] / "styles" / "texmf" / "tex" / "latex" / "codex0"
+
+
+def _codex0_package() -> Path:
+    """The codex0 profile package (map G2: it left the engine on 2026-10-03)."""
+    try:
+        from engine.profile_resolver import resolve_profile
+
+        return Path(resolve_profile("codex0").boundary.get("profile_package") or "/nonexistent/codex0")
+    except Exception:  # noqa: BLE001 - a host without the profile-repository pointer
+        return Path("/nonexistent/codex0")
+
+
+CODEX0_TEMPLATE = _codex0_package() / "templates" / "codex0.tex"
+# The page-placement Lua, lifted out of codex0.tex on 2026-10-01 (architecture review candidate 5),
+# in the package's tex/ directory since 2026-10-03.
+CODEX0_LUA_DIR = _codex0_package() / "tex"
 CODEX0_ORNAMENT_LAW_LUA = CODEX0_LUA_DIR / "codex0_ornament_law.lua"
 CODEX0_PLATE_FLOAT_LUA = CODEX0_LUA_DIR / "codex0_plate_float.lua"
 CLIENT_TEMPLATE = GF / "profiles" / "40_latex_import" / "templates" / "client_report.tex"
@@ -223,7 +236,7 @@ def test_codex0_page_placement_lua_lives_in_files_the_template_requires(tmp_path
     check = tmp_path / "parse.lua"
     check.write_text("for _, f in ipairs(arg) do assert(loadfile(f)) end\n", encoding="utf-8")
     subprocess.run(["texlua", str(check), str(CODEX0_ORNAMENT_LAW_LUA), str(CODEX0_PLATE_FLOAT_LUA)], check=True)
-    env = {**os.environ, "TEXMFHOME": str(CODEX0_TEMPLATE.parents[1] / "styles" / "texmf")}
+    env = {**os.environ, "LUAINPUTS": f"{CODEX0_LUA_DIR}:"}
     found = subprocess.run(
         ["kpsewhich", "-progname=lualatex", "-format=lua", "codex0_ornament_law.lua", "codex0_plate_float.lua"],
         capture_output=True, text=True, env=env,

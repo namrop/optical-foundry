@@ -65,8 +65,10 @@ def test_codex0_resolves_as_half_letter_johannah_mythic_book_profile():
         "codex0.yaml",
     ]
     assert resolved.template_path.name == "codex0.tex"
-    assert resolved.boundary["defaults_source"] == "local"
-    assert resolved.boundary["template_source"] == "local"
+    # Map G2: the codex0 profile package, on engine defaults.
+    assert resolved.boundary["defaults_source"] == "local+package"
+    assert resolved.boundary["template_source"] == "package"
+    assert resolved.markers == {"prefix": "cx0"}
 
 
 def test_codex0_a5_variant_preserves_compact_a5_profile():
