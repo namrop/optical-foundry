@@ -582,6 +582,36 @@ def cmd_print_sheet(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_duplex(args: argparse.Namespace) -> int:
+    import yaml as _yaml
+
+    from engine.duplex_registration import SHEETS, DuplexError, Station, default_stations, render_instrument, summarize
+
+    try:
+        if args.duplex_command == "instrument":
+            if args.sheet not in SHEETS:
+                raise DuplexError(f"--sheet must be one of {sorted(SHEETS)}")
+            w, h = SHEETS[args.sheet]
+            if args.stations:
+                raw = _yaml.safe_load(Path(args.stations).read_text(encoding="utf-8")) or []
+                stations = [Station(str(r["label"]), float(r["x"]), float(r["y"]), bool(r.get("cross"))) for r in raw]
+            else:
+                stations = default_stations(w, h)
+            out = render_instrument(Path(args.output), stations=stations, width=w, height=h, scale_mm=args.scale_mm)
+            print(f"wrote {out}: {len(stations)} stations; print page 1 on the front, page 2 on the back")
+            return 0
+        if args.duplex_command == "readings":
+            readings = _yaml.safe_load(Path(args.input).read_text(encoding="utf-8")) or []
+            deciding = [x.strip() for x in args.deciding.split(",")] if args.deciding else None
+            print(json.dumps(summarize(readings, deciding=deciding), indent=2))
+            return 0
+    except DuplexError as exc:
+        print(f"ERROR: {exc}", file=sys.stderr)
+        return 1
+    print("duplex: choose instrument or readings", file=sys.stderr)
+    return 2
+
+
 def cmd_bindery(args: argparse.Namespace) -> int:
     import json as _json
 
@@ -771,6 +801,20 @@ def main() -> int:
     ps_ap.add_argument("input", help="print_sheet_v1 manifest YAML")
     ps_ap.add_argument("--output", help="PDF path or directory (default: beside the manifest)")
     ps_ap.set_defaults(func=cmd_print_sheet)
+
+    # duplex (map E4)
+    dx_ap = sub.add_parser("duplex", help="Duplex registration: print the instrument, summarize readings")
+    dx_sub = dx_ap.add_subparsers(dest="duplex_command")
+    di = dx_sub.add_parser("instrument", help="Two-page marks-only instrument (front lines, mirrored back scales)")
+    di.add_argument("--sheet", default="letter-landscape", help="letter-landscape | letter | a4-landscape | a4")
+    di.add_argument("--stations", help="YAML list of {label, x, y, cross} in inches (default: 3 per half)")
+    di.add_argument("--scale-mm", type=int, default=10)
+    di.add_argument("--output", required=True, help="PDF path")
+    di.set_defaults(func=cmd_duplex)
+    dr = dx_sub.add_parser("readings", help="Summarize readings (YAML list of {sheet, station, dx_mm, dy_mm})")
+    dr.add_argument("input")
+    dr.add_argument("--deciding", help="Comma-separated stations whose mean is the number to seat")
+    dr.set_defaults(func=cmd_duplex)
 
     # stamps-agree
     sa_ap = sub.add_parser("stamps-agree", help="Fail unless every file carries one identical build-stamp line")
