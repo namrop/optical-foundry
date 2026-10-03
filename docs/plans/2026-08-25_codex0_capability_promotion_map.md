@@ -171,9 +171,9 @@ The band that makes "compose a book out of arbitrary Atrium files" possible at a
 
 ### Band C — Register and edition gating
 
-- [ ] **C1 ○ — Rename and generalize `engine/codex_editions.py`.** Already named as candidate #1 in the direction doc §7, **and it has a paying use case**: `client_report`'s `classification` field is marking-only (cover and header treatment), with no content gating — so producing internal / client / public versions of one assessment means maintaining separate sources that drift. Codex 0's edition model is the same abstraction at different stakes: one source, N audience branches, guarded regions that fail closed. *Blast radius:* medium, and it touches a client deliverable path this repo's tests cannot see (direction doc §5). *Carries with it:* register issue 23 — guards are intra-file only, no node-level scope. That is a limitation of the general capability, not a book defect.
+- [x] **C1 ○ —  *Built 2026-10-03 (`engine/editions.py`) — §14.*C1 ○ — Rename and generalize `engine/codex_editions.py`.** Already named as candidate #1 in the direction doc §7, **and it has a paying use case**: `client_report`'s `classification` field is marking-only (cover and header treatment), with no content gating — so producing internal / client / public versions of one assessment means maintaining separate sources that drift. Codex 0's edition model is the same abstraction at different stakes: one source, N audience branches, guarded regions that fail closed. *Blast radius:* medium, and it touches a client deliverable path this repo's tests cannot see (direction doc §5). *Carries with it:* register issue 23 — guards are intra-file only, no node-level scope. That is a limitation of the general capability, not a book defect.
 
-- [ ] **C2 ○ — Marker vocabulary becomes profile-declared.** The `cx0:` prefix is hardcoded through `codex0_composition.lua` (1,388 lines) and the engine. A promoted edition mechanism needs the profile to declare its own marker namespace. Prerequisite for C1 being honest rather than renamed.
+- [x] **C2 ○ —  *Built 2026-10-03 (`engine/markers.py`) — §14.*C2 ○ — Marker vocabulary becomes profile-declared.** The `cx0:` prefix is hardcoded through `codex0_composition.lua` (1,388 lines) and the engine. A promoted edition mechanism needs the profile to declare its own marker namespace. Prerequisite for C1 being honest rather than renamed.
 
 ### Band D — Page furniture and typography (the ornamentation work)
 
@@ -207,7 +207,7 @@ The band that makes "compose a book out of arbitrary Atrium files" possible at a
 
 - [x] **G1 ★ — Move content out of the profile tree. The mechanism landed; the content did not.** `engine/resource_roots.py` (302 lines) and manifest-owned asset precedence shipped on this branch (`dd891d5`, plan doc `2026-08-03_...`). The four ownership lanes exist. **And `profiles/40_latex_import/assets/codex0/` is still 307 MB / 39 tracked files** — the direction doc measured 194 MB on 2026-07-27; it grew. The engine can now be told where content lives; nobody has told it. *This is the highest-leverage item in the survey that requires no new design.* *PROMOTE, ruled 2026-09-28 (`RULINGS.md` 01a0e9ab-077c); done the same day — §8.*
 
-- [ ] **G2 ○ — Profile package boundary.** Direction doc **Q3**, still open. A profile declares its asset dependencies without carrying them; tenant profiles (`codex0`, `mythic_letter_johannah`, the client brand set) resolve from outside the engine repo. `client_report` is the existing proof case that this can work — its assets are third-party property and can never enter this repo (direction doc §5). *This is the client/tenant split, and G1 is its precondition.*
+- [x] **G2 ○ —  *Built 2026-10-03 (`codex0 package; engine/profile_package.py`) — §14.*G2 ○ — Profile package boundary.** Direction doc **Q3**, still open. A profile declares its asset dependencies without carrying them; tenant profiles (`codex0`, `mythic_letter_johannah`, the client brand set) resolve from outside the engine repo. `client_report` is the existing proof case that this can work — its assets are third-party property and can never enter this repo (direction doc §5). *This is the client/tenant split, and G1 is its precondition.*
 
 - [ ] **G3 ○ — Repo split.** Explicitly future work per the direction doc §9. Listed only so it stays visibly downstream of G1/G2 and does not get attempted early.
 
@@ -284,11 +284,11 @@ For each candidate, Luis rules one of:
 | Custody | C-A, C-B, C-C, C-D | all four ruled and done (2026-09-01/02) |
 | A — composition | A1★ A2★ A3★ A4 A5 | A3 PROMOTE, done (2026-09-28); A2 built (2026-09-30, §10); A4, A5 built (2026-10-02, §13); A1 residue — |
 | B — multi-volume | B1★ B2★ B3★ B4 | B1, B2 built (2026-10-01, §11); B3 PROMOTE (2026-09-28): assertion half done — draft renders + `renders-agree` in the engine; the pass order stays in the book (one consumer = contract, not code). `2026-09-28_codex0_build_performance_plan.md` §5; planned passes for volumed works built (2026-10-02, §13, optional); B4 built (2026-10-02, §13) |
-| C — edition gating | C1 C2 | — |
+| C — edition gating | C1 C2 | C1, C2 built (2026-10-03, §14) |
 | D — furniture | D1★ D2★ D3 D4 D5 | D1, D2 built (2026-10-01, §12); D3, D4, D5 built (2026-10-02, §13) |
 | E — physical | E1★ E2 E3 E4 | E1 PROMOTE, done (2026-09-28); E2, E3, E4 built (2026-10-02, §13) |
 | F — build identity | F1★ F2 | F1 PROMOTE, done (2026-09-28); F2 done (2026-09-30, §9) |
-| G — tenant split | G1★ G2 G3 | G1 PROMOTE, done (2026-09-28); G2, G3 — |
+| G — tenant split | G1★ G2 G3 | G1 PROMOTE, done (2026-09-28); G2 built (2026-10-03, §14); G3 — |
 
 **On ratification this document is committed to `42_optical_foundry`** and the ruled set
 becomes the port queue.
@@ -755,3 +755,91 @@ outside it:
    `presentation.extent` and `render.endnotes`; its press map, punching guide and labels
    through book scripts rather than `cli bindery` and `cli print-sheet`. Switching each is a
    change to Codex 0's output path, so each wants its own whole-book check.
+
+## 14. 2026-10-03 — step 5 (C1, C2, G2), the architecture vetted again, and the plan for the rest
+
+Ruling `01a100da-3cde`: "I think the ritual can be a special module, or a divider that is
+profile-defined / edition gating is C1 and C2. / the engine should be able to handle the build
+order loop. as an option that supports an arbitrary number of volumes. / 5. we can swap out the
+codex 0 source for the general version we built out / lets do step 5 of the approved build
+order, and plan the rest of it. use the architecture skill again please to vet the
+architecutre". Step 5 was done in this session, not in separate ones, by this ruling.
+
+### 14.1 The architecture review
+
+`improve-codebase-architecture` (mattpocock/skills `d81f3a1`), report
+`/tmp/architecture-review-20261003-0425.html`. Seven candidates; scope: step 5 and the rest of
+the ruling.
+
+| # | Candidate | Strength | Disposition |
+|---|---|---|---|
+| 1 | One marker module, namespace declared by the profile (C2) | Strong | built, `c037d72` |
+| 2 | Editions as an engine module any profile declares (C1) | Strong | built, `c037d72` |
+| 3 | Profile packages that carry a whole profile (G2) | Strong | built, `8a0cab0` |
+| 4 | The volume loop as one work-render module | Strong | step 6 below |
+| 5 | Profile-defined divider kinds (the ritual) | Worth exploring | step 7 below |
+| 6 | Render features behind one seam in the renderer | Worth exploring | step 10 below |
+| 7 | Bundle assembly steps out of the 514-line compile() | Worth exploring | step 10 below |
+
+### 14.2 Step 5 as built
+
+- **C2** (`c037d72`): `engine/markers.py` owns the `<!-- ns:... -->` grammar; a profile declares
+  `markers: {prefix}`. The bundle compiler's separator check and the editions parser ask it.
+  Codex 0's own composition filter keeps its `cx0` pattern (it moved with the profile).
+- **C1** (`c037d72`): `engine/codex_editions.py` → `engine/editions.py` (Codex 0's names
+  re-exported). A profile declares `editions: {labels}`; an undeclared edition or marker label
+  is refused; a profile without editions refuses edition markers in any namespace (the gate
+  used to compare the profile id with "codex0"). Manifests may set `variables.edition`. Tested
+  with a three-audience report (internal / client / public) in another namespace.
+- **G2** (`8a0cab0`, profiles `c8f4ec4`): a package may now carry a whole profile (`family`,
+  `base_defaults`, `tex`, `${.}` paths in its defaults). Codex 0's template, composition
+  filter, defaults and Lua are the `codex0` package in `optical-foundry-profiles`,
+  byte-identical except the filter path; the engine no longer holds Codex 0. Its tests stay in
+  the engine and find the package through the same pointer.
+
+**Checks.** Full suite: 742 pass; 6 fail, all `client_report` (not in this checkout, by design).
+Codex 0 whole-book build from `8a0cab0`, now rendering through the `codex0` package (run
+`of-step5-8a0cab0-2026-10-03`), against `of-small-items-678f238-2026-10-02`: CLEAN — every
+contact sheet identical, all three volumes read and bound, the edition-resolved sources
+byte-identical; the manifests differ only in generation time.
+
+### 14.3 The plan for the rest
+
+Ordered so nothing is built twice. Each step ends with a Codex 0 whole-book check.
+
+6. **The work render loop** (candidate 4; ruling: "the engine should be able to handle the build
+   order loop ... arbitrary number of volumes"). One module replaces `render_volumes` and
+   `_planned`: volumes render in draft passes; every pass harvests every volume's labels
+   (dividers, any volume's own apparatus contents that cite other volumes, notes) and feeds
+   them to the next; the loop ends when a pass reads the labels it produces, and refuses a
+   moved fixed folio rather than retrying; one final wave renders full, in parallel; each final
+   is proved against its draft. Codex 0's passes C, D and G (reading volumes cite Volume III
+   and Volume III cites them) become one manifest option; `run_full_build.sh` keeps only what
+   is the book's (bind shape, press checks) until step 9.
+7. **Divider kinds** (candidate 5; ruling: "a special module, or a divider that is
+   profile-defined"). Proposed: the profile-defined divider. A profile declares divider kinds,
+   each a page sequence with named slots and its LaTeX; a manifest divider names a kind and
+   fills its slots. Codex 0's part ritual (cut leaf, reveal plate, poem verso, half-plate
+   verso, ask pages) becomes the `codex0` package's kinds; the spine tool's generators retire.
+   Fixes the recorded defect on the way: pandoc's read-time expansion empties
+   `\CodexPlateRitualBegin/End` in bundles, so the ritual no-inject zone never sees them.
+8. **Codex 0 onto the general versions** (ruling: "swap out the codex 0 source for the general
+   version"), one swap per commit, each proved identical or each difference shown to Luis:
+   plates (`\CodexFloatingPlate` → `render.plates`, its folio chip as the profile's plate-page
+   style; `check_plate_containment.py` retires); colophon count → `presentation.extent` with
+   `CodexOpenerEpigraph` visible; Volume III notes → `render.endnotes` (needs the harvest to run
+   on edition-resolved text: C1 first, done); rails and the ornament law → D1/D2 from the
+   package; openers → D4 (Codex 0's numbers as its `openers:`); press map, punching guide and
+   labels → `cli bindery`, `cli print-sheet`.
+9. **Codex 0 manifest native** (ruling `01a0fe8b-e963`: spine retired). Codex 0's manifests
+   are written and committed as manifests (or a selection that emits them); the spine tool's
+   ordering becomes the manifest's source list; the selector gains a per-root `role` for front
+   and back matter; `run_full_build.sh` reduces to `cli manifest` plus the bindery commands.
+10. **Candidates 6 and 7**: render features behind one seam; bundle assembly steps. Done when
+    the renderer or the compiler is next opened for a feature, not on their own.
+
+Also outstanding, smaller: `codex0-a5` (an older Codex 0 variant) and `assets/dropcaps/codex0`
+still in the engine; the `codex_register` check keys on the profile id "codex0"; the codex0
+template and filter name the book's art by absolute path (manifest-owned asset variables);
+whether `client_report`'s classification should become its editions needs the client profile,
+which this checkout does not carry.

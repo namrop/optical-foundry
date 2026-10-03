@@ -74,6 +74,18 @@ _Avoid_: packet, stack (except in the CAM Stack's own name)
 A short declaration of which sources a manifest should contain, by folder, field and date, from which the manifest is composed. The manifest it produces is the record; the selection is how it was made.
 _Avoid_: query, spine
 
+**Marker namespace** (2026-10-03, map C2):
+The prefix of a source's comment markers (`<!-- cx0:breath -->`), declared by its profile (`markers: {prefix: cx0}`); every engine parser of markers asks `engine/markers.py`.
+_Avoid_: hardcoding a namespace outside the profile that owns it
+
+**Edition** (2026-10-03, map C1):
+One audience version of a work, selected from one source by the edition markers in the profile's namespace; the profile declares its editions, the manifest or source picks one. A region may guard editions that must never fall back to the archival text.
+_Avoid_: variant (that is the marked region, not the version)
+
+**Divider kind** *(proposed, 2026-10-03)*:
+A profile-defined page sequence with named slots (Codex 0's part ritual: cut leaf, reveal plate, poem verso), which a manifest divider picks by name and fills.
+_Avoid_: ritual (the Codex 0 instance, not the general term)
+
 **Spine** (retired 2026-10-02, ruling `01a0fe8b-e963`):
 Codex 0's hand-authored ordering of parts, chapters and passages, and the tool that compiled it into manifests. Retired: works are manifest native, and their order lives in the manifest (or the selection that emits it).
 _Avoid_: the word, for any work; say manifest or selection
