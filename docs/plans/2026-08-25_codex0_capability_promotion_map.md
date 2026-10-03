@@ -155,9 +155,9 @@ The band that makes "compose a book out of arbitrary Atrium files" possible at a
 
 - [x] **A3 ★ — Frontmatter-driven epigraph harvest + layered attribution grammar.** *Now:* split — harvest in `spine_to_bundle_manifest.py::_read_divider_epigraph`, lowering in `engine/manifest_compiler.py` (`_inline_chapter_opener_epigraph_lines`), typography in `codex0.tex` (`\CodexOpenerEpigraph`, ratified 2026-07-28), with a generic `\OFChapterOpenerEpigraph` fallback already present. *Generalization:* any Atrium file may carry `epigraph_*` fields; the engine harvests them; the profile decides how they set. The layered model — dramatic line (speaker/context) over bibliographic line (author/source/translator/date), with `epigraph_register` inverting upright/italic — is already general, and its hardest-won rule (**`epigraph_date` means when the work was authored, which is why the translator slot exists**) is a corpus rule, not a book rule. *Blast radius:* low; the fallback macro already exists. **Closest to ready of anything in this survey.** *PROMOTE, ruled 2026-09-28 (`RULINGS.md` 01a0e9ab-077c); done the same day — §8.*
 
-- [ ] **A4 ○ — Deterministic source UIDs and provenance comment.** `_source_uid`, `_provenance_comment`. Stable identity for a composed source, derived from its position; the manifest carries a comment naming spine, edition, parts, delivery mode. Generic. *Second consumer:* every composed document.
+- [x] **A4 ○ —  *Built 2026-10-02 (`engine/selection.py`) — §13.*A4 ○ — Deterministic source UIDs and provenance comment.** `_source_uid`, `_provenance_comment`. Stable identity for a composed source, derived from its position; the manifest carries a comment naming spine, edition, parts, delivery mode. Generic. *Second consumer:* every composed document.
 
-- [ ] **A5 ○ — Extent measurement.** `_measure_sources_words`, `_round_words`, `words_to_english`. Word extent of a source set, and its rendering as English prose for a colophon. Generic and small.
+- [x] **A5 ○ —  *Built 2026-10-02 (`engine/extent.py`) — §13.*A5 ○ — Extent measurement.** `_measure_sources_words`, `_round_words`, `words_to_english`. Word extent of a source set, and its rendering as English prose for a colophon. Generic and small.
 
 ### Band B — Multi-volume and cross-reference machinery
 
@@ -165,9 +165,9 @@ The band that makes "compose a book out of arbitrary Atrium files" possible at a
 
 - [x] **B2 ★ — Linked contents via PDF page-label harvest.** *Built 2026-10-01 as step 3, the contents of the whole work (`render.work_contents`) — §11.* *Now:* `_pdf_part_pages`, `_page_footer_folios`, `_volume_locator_rows`, `_reading_volume_locator_rows`. *The doctrine, and it is the reusable part:* **folio authority is PDF page labels, not printed footers.** Printed-folio scraping undercounts every time a volume ends on suppressed leaves — plates and trailing blanks own a folio and print none. Build 56 seated Vol II at a duplicate folio because of exactly this. Label arithmetic on both sides agrees by construction. *Second consumer:* any multi-file bound corpus wants a real contents.
 
-- [ ] **B3 ★ — Multi-pass render orchestration with fixed-point proofs.** *Now:* `build/run_full_build.sh`, 511 lines, passes A · B · C · D1..D1d · G1..G3 · D2 · E · F. **This is the item Luis named directly** ("the multiple passes to do a linked table of contents across volumes"). *Generalization, and the thing worth promoting is the contract more than the code:* **a pass that consumes a prior render's labels must prove the prior render did not move.** C3, D1c and G3 are three instances of one gate. So is the rule attached to G3 — *if it fails, do not add a retry; past a body-folio move the fixed point is not guaranteed to exist.* The script also carries two lessons that are pure engine material: pick the **newest** bundle by mtime, not the lexically-first (a press build straddling midnight silently re-rendered a volume with no folio seat), and the CC14 **one-stamp-per-build** gate. *Blast radius:* medium — it becomes a pass planner, and the gates become engine assertions. *Note:* Luis has said this is optional-by-default. Correct — it should be a declared capability of a bundle, not a mandatory pipeline.
+- [x] **B3 ★ —  *Built 2026-10-02 (`engine/volumes.py, render.passes`) — §13.*B3 ★ — Multi-pass render orchestration with fixed-point proofs.** *Now:* `build/run_full_build.sh`, 511 lines, passes A · B · C · D1..D1d · G1..G3 · D2 · E · F. **This is the item Luis named directly** ("the multiple passes to do a linked table of contents across volumes"). *Generalization, and the thing worth promoting is the contract more than the code:* **a pass that consumes a prior render's labels must prove the prior render did not move.** C3, D1c and G3 are three instances of one gate. So is the rule attached to G3 — *if it fails, do not add a retry; past a body-folio move the fixed point is not guaranteed to exist.* The script also carries two lessons that are pure engine material: pick the **newest** bundle by mtime, not the lexically-first (a press build straddling midnight silently re-rendered a volume with no folio seat), and the CC14 **one-stamp-per-build** gate. *Blast radius:* medium — it becomes a pass planner, and the gates become engine assertions. *Note:* Luis has said this is optional-by-default. Correct — it should be a declared capability of a bundle, not a mandatory pipeline.
 
-- [ ] **B4 ○ — Cross-volume endnote sink.** `_harvest_volume_endnotes`, `_generate_vol3_notes_source`. Inline `[^id]` across N files collecting into one apparatus volume. Directly useful for a capture corpus with citations.
+- [x] **B4 ○ —  *Built 2026-10-02 (`engine/endnotes.py`) — §13.*B4 ○ — Cross-volume endnote sink.** `_harvest_volume_endnotes`, `_generate_vol3_notes_source`. Inline `[^id]` across N files collecting into one apparatus volume. Directly useful for a capture corpus with citations.
 
 ### Band C — Register and edition gating
 
@@ -181,21 +181,21 @@ The band that makes "compose a book out of arbitrary Atrium files" possible at a
 
 - [x] **D2 ★ — Ornament page-position law.** *Built 2026-10-01 as step 4 — §12.* *Now:* `e0bc6fd`, `144de1d` — LuaLaTeX `pre_output_filter` enforcement at render time, with structural classes exempt at page top. *Generalization:* an ornament class may declare where on a page it is legal, and the law is enforced against the shipped page rather than predicted from the source. Generic to any decorated document; the enforcement-at-output-time posture is the valuable half.
 
-- [ ] **D3 ○ — Floating plate placement and containment.** *Now:* `b7baf9b` (pre_output_filter injector, whatsit anchors, ship-flag chip folio), `c050cb3`, `cea2861`, plus the build-time gate `tooling/check_plate_containment.py` (372 lines). *Generalization:* a full-page figure seats itself under legality rules, and **containment is re-proved every render because it is not a source defect** — a correctly-seated plate is pushed onto the wrong spread by any edit upstream of it. Build 64 proved that. *Second consumer:* any illustrated long document.
+- [x] **D3 ○ —  *Built 2026-10-02 (`engine/plates.py`) — §13.*D3 ○ — Floating plate placement and containment.** *Now:* `b7baf9b` (pre_output_filter injector, whatsit anchors, ship-flag chip folio), `c050cb3`, `cea2861`, plus the build-time gate `tooling/check_plate_containment.py` (372 lines). *Generalization:* a full-page figure seats itself under legality rules, and **containment is re-proved every render because it is not a source defect** — a correctly-seated plate is pushed onto the wrong spread by any edit upstream of it. Build 64 proved that. *Second consumer:* any illustrated long document.
 
-- [ ] **D4 ○ — Chapter-opener contract.** `contracts/CHAPTER_OPENERS_CONTRACT.md` (160 lines), raised capitals replacing drop caps (`5e71dd2`, which fixed 32 chapters with no cap), keep-with-next (`c67bba5`), always-start-a-new-page (`cea2861`). Already a contract; needs to become profile-parameterized rather than codex0-shaped.
+- [x] **D4 ○ —  *Built 2026-10-02 (`engine/openers.py`) — §13.*D4 ○ — Chapter-opener contract.** `contracts/CHAPTER_OPENERS_CONTRACT.md` (160 lines), raised capitals replacing drop caps (`5e71dd2`, which fixed 32 chapters with no cap), keep-with-next (`c67bba5`), always-start-a-new-page (`cea2861`). Already a contract; needs to become profile-parameterized rather than codex0-shaped.
 
-- [ ] **D5 ○ — Page-number-keyed head and folio suppression.** `c050cb3` — suppression keyed to the page number, not to a flag reset race. A generic `pagestyle` mechanism (`codexPlateFolioChip`, `6466133`) wearing a profile's name.
+- [x] **D5 ○ —  *Built 2026-10-02 (`engine/latex/of_pages.lua`) — §13.*D5 ○ — Page-number-keyed head and folio suppression.** `c050cb3` — suppression keyed to the page number, not to a flag reset race. A generic `pagestyle` mechanism (`codexPlateFolioChip`, `6466133`) wearing a profile's name.
 
 ### Band E — Physical object
 
 - [x] **E1 ★ — Signature padding to bind shape.** *Now:* `run_full_build.sh` PASS E. *Generalization:* pad a rendered PDF to a whole signature, emit a `_bind.pdf` beside the reading artifact, and hard-error on an **odd** rendered page count (a final leaf with no verso cannot be folded — do not let the pad absorb it). *Also generic:* pad leaves carry the ruled blank-leaf mark, because a bound-in blank with a mark reads as deliberate at collation and a bare blank reads as a printing error. The *choice* of mark is tenant data; the rule is not. *PROMOTE, ruled 2026-09-28 (`RULINGS.md` 01a0e9ab-077c); done the same day — §8.*
 
-- [ ] **E2 ○ — Fold the codex0-learned gates into `bindery_preflight.py` / `imposition.py`.** Both already live in `engine/`. The book taught them creep, trim, duplex parity and collation lessons that are still expressed as book-side scripts (`build_punching_guide.py`, `build_press_sheet_map.py`, `check_vol3_folio_run.py`).
+- [x] **E2 ○ —  *Built 2026-10-02 (`engine/bindery.py`) — §13.*E2 ○ — Fold the codex0-learned gates into `bindery_preflight.py` / `imposition.py`.** Both already live in `engine/`. The book taught them creep, trim, duplex parity and collation lessons that are still expressed as book-side scripts (`build_punching_guide.py`, `build_press_sheet_map.py`, `check_vol3_folio_run.py`).
 
-- [ ] **E3 ○ — Non-uniform label/spine-label geometry.** Direction doc **Q4**, still open: `sticker_sheet_manifest_v1` is a uniform grid (single `grid: [rows, cols]`, one `cell_size`), and the Codex 0 label contract needs a cover label plus three spine labels at different sizes with one rotated title. `tooling/build_cover_label_print_sheet.py` is the workaround.
+- [x] **E3 ○ —  *Built 2026-10-02 (`engine/print_sheet.py`) — §13.*E3 ○ — Non-uniform label/spine-label geometry.** Direction doc **Q4**, still open: `sticker_sheet_manifest_v1` is a uniform grid (single `grid: [rows, cols]`, one `cell_size`), and the Codex 0 label contract needs a cover label plus three spine labels at different sizes with one rotated title. `tooling/build_cover_label_print_sheet.py` is the workaround.
 
-- [ ] **E4 ○ — Duplex registration instrument.** `tooling/duplex_registration_instrument.tex` and the measured **+1.801 mm, sd 0.008 over 17 patches** calibration. A printer-calibration instrument is engine-general and has nothing to do with any book.
+- [x] **E4 ○ —  *Built 2026-10-02 (`engine/duplex_registration.py`) — §13.*E4 ○ — Duplex registration instrument.** `tooling/duplex_registration_instrument.tex` and the measured **+1.801 mm, sd 0.008 over 17 patches** calibration. A printer-calibration instrument is engine-general and has nothing to do with any book.
 
 ### Band F — Build identity and provenance
 
@@ -282,11 +282,11 @@ For each candidate, Luis rules one of:
 | Band | Candidates | Ruled |
 |---|---|---|
 | Custody | C-A, C-B, C-C, C-D | all four ruled and done (2026-09-01/02) |
-| A — composition | A1★ A2★ A3★ A4 A5 | A3 PROMOTE, done (2026-09-28); A2 built (2026-09-30, §10); rest — |
-| B — multi-volume | B1★ B2★ B3★ B4 | B1, B2 built (2026-10-01, §11); B3 PROMOTE (2026-09-28): assertion half done — draft renders + `renders-agree` in the engine; the pass order stays in the book (one consumer = contract, not code). `2026-09-28_codex0_build_performance_plan.md` §5; rest — |
+| A — composition | A1★ A2★ A3★ A4 A5 | A3 PROMOTE, done (2026-09-28); A2 built (2026-09-30, §10); A4, A5 built (2026-10-02, §13); A1 residue — |
+| B — multi-volume | B1★ B2★ B3★ B4 | B1, B2 built (2026-10-01, §11); B3 PROMOTE (2026-09-28): assertion half done — draft renders + `renders-agree` in the engine; the pass order stays in the book (one consumer = contract, not code). `2026-09-28_codex0_build_performance_plan.md` §5; planned passes for volumed works built (2026-10-02, §13, optional); B4 built (2026-10-02, §13) |
 | C — edition gating | C1 C2 | — |
-| D — furniture | D1★ D2★ D3 D4 D5 | D1, D2 built (2026-10-01, §12); rest — |
-| E — physical | E1★ E2 E3 E4 | E1 PROMOTE, done (2026-09-28); rest — |
+| D — furniture | D1★ D2★ D3 D4 D5 | D1, D2 built (2026-10-01, §12); D3, D4, D5 built (2026-10-02, §13) |
+| E — physical | E1★ E2 E3 E4 | E1 PROMOTE, done (2026-09-28); E2, E3, E4 built (2026-10-02, §13) |
 | F — build identity | F1★ F2 | F1 PROMOTE, done (2026-09-28); F2 done (2026-09-30, §9) |
 | G — tenant split | G1★ G2 G3 | G1 PROMOTE, done (2026-09-28); G2, G3 — |
 
@@ -698,3 +698,60 @@ the 2026-10-01 work: every contact sheet identical, all three volumes, read and 
 286/288, 126/128 pages). The listed differences are the manifests' file dates and generation
 times, and the four body lines that defined the divider-marker commands, which the template
 contract now supplies. Against the template-contract check run: CLEAN.
+
+## 13. 2026-10-02 — the smaller items (A4, A5, B3, B4, D3, D4, D5, E2, E3, E4)
+
+Ruling `01a0fe8b-e963` (Luis: "lets do the smaller items now please. spine should be retired
+because we are going manifest native. the manifest should be able to manage everything about
+codex 0 builds no? Work is decent general term. tenant I need to think about."). Branch
+`dev/arch-review-20261001`, one commit per item.
+
+- **A4** (`638b56d`): the selector names a source by its own frontmatter uid, else its path
+  under its root, so adding or reordering sources renames nothing (`sources.uid: position`
+  keeps the old numbering); the emitted manifest's header names what composed it.
+- **A5** (`638b56d`): `engine/extent.py`; `presentation.extent` measures the work's prose
+  words into `colophon_words` (in English by default); a volumed work is measured whole.
+- **B4** (`d663ab6`): `render.endnotes {sink}`; the other volumes keep raised numbers, the
+  sink volume prints every volume's notes grouped by volume. Edition gating follows C1.
+- **D3, D5** (`7f63960`): `render.plates`; `\OFFloatingPlate` seated by the injector promoted
+  from Codex 0 (`codex0_plate_float.lua` is now an alias of `engine/latex/of_plate_float.lua`);
+  plate pages keyed to the page number take a head-less page style; every render records a
+  page ledger (carried out of pandoc's temporary directory in the PDF Info dictionary, saved as
+  `<render_id>.pages.json`, stripped from the published PDF) and the containment law is
+  re-proved from it. `engine/latex` is on `TEXINPUTS` and `LUAINPUTS` for every render.
+- **D4** (`1a0b68a`): `openers:` in a profile package; Codex 0's placement rules and raised
+  capital geometry, every number a setting. Codex 0 keeps its own until G2.
+- **B3** (`a767123`): `render.passes {final_parallel, prove_final}`, optional: draft measuring
+  passes, a fixed-point gate on the contents pass (no retry), one final wave in parallel,
+  each final proved against its draft.
+- **E2** (`d17773b`): `cli bindery folio-run | sheet-map | punch-guide`.
+- **E3** (`24cbe62`): `kind: print_sheet`, `cli print-sheet`: exact physical placements,
+  rotation, cut marks; no stretching, dpi floor.
+- **E4** (`678f238`): `cli duplex instrument | readings`.
+- Tests found on the way: the three imposition render tests only ran on macOS (`0fa78ff`);
+  the own-voice heartword assertion broke on pandoc's line wrap (`43591ec`).
+
+**Checks.** Full suite: 736 pass; 6 fail, all `client_report` (the client profile's template
+and style are not in this checkout, by design: direction doc §5). Codex 0 whole-book build
+from `678f238`, run `of-small-items-678f238-2026-10-02`, against
+`of-arch-final-b5ed5ac-2026-10-01`: every contact sheet identical, all three volumes, read and
+bound (224, 286/288, 126/128 pages); the only differences are the manifests' build date and
+generation time. Its plate-containment gate passed on the plates the engine's injector placed.
+
+**Can the manifest manage everything about a Codex 0 build?** Not yet. What still lives
+outside it:
+
+1. The spine tool's ritual page generators (part-divider rectos, half-plate versos, the ask
+   pages, the movement index, Volume III's Contents in Detail, the eleven-movement grouped
+   contents). Each writes a Markdown source a manifest names; they are the work's (§4).
+2. The book's own pass order (`run_full_build.sh`): Volume III's contents cites the reading
+   volumes and the reading volumes cite Volume III. `render.passes` covers one direction
+   (contents of the work), not the two-way loop.
+3. Edition gating (C1, C2): one source, several audiences, with `cx0:` markers.
+4. Codex 0's profile, template, composition filter and art inside the engine (G2).
+5. Codex 0 still uses its own copies where the engine now has a general one: plates through
+   `\CodexFloatingPlate` and `check_plate_containment.py` rather than `render.plates`; its
+   colophon count and Volume III notes through the spine tool rather than
+   `presentation.extent` and `render.endnotes`; its press map, punching guide and labels
+   through book scripts rather than `cli bindery` and `cli print-sheet`. Switching each is a
+   change to Codex 0's output path, so each wants its own whole-book check.
