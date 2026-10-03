@@ -21,6 +21,12 @@ from engine.imposition import (  # noqa: E402
 )
 
 
+
+def _xelatex() -> str | None:
+    """xelatex on PATH (Sol), else the MacTeX path these tests were written on."""
+    mac = Path("/Library/TeX/texbin/xelatex")
+    return shutil.which("xelatex") or (str(mac) if mac.exists() else None)
+
 def test_booklet_signature_plan_maps_eight_pages_to_two_duplex_sheets():
     plan = build_booklet_signature_plan(total_pages=8, signature_size=8)
 
@@ -72,7 +78,7 @@ def test_pdf_page_size_validation_rejects_nonmatching_later_pages():
 
 
 def test_impose_pdf_generates_letter_landscape_sides_and_mapping(tmp_path):
-    if not shutil.which("pdfinfo") or not Path("/Library/TeX/texbin/xelatex").exists():
+    if not shutil.which("pdfinfo") or not _xelatex():
         pytest.skip("pdfinfo/xelatex unavailable")
 
     source_pdf = _make_half_letter_source_pdf(tmp_path, pages=8)
@@ -108,7 +114,7 @@ def test_impose_pdf_generates_letter_landscape_sides_and_mapping(tmp_path):
 
 
 def test_cli_impose_accepts_requested_print_parameters(tmp_path):
-    if not shutil.which("pdfinfo") or not Path("/Library/TeX/texbin/xelatex").exists():
+    if not shutil.which("pdfinfo") or not _xelatex():
         pytest.skip("pdfinfo/xelatex unavailable")
 
     source_pdf = _make_half_letter_source_pdf(tmp_path, pages=4)
@@ -149,7 +155,7 @@ def test_cli_impose_accepts_requested_print_parameters(tmp_path):
 
 
 def test_manifest_render_runs_requested_imposition(tmp_path):
-    if not shutil.which("pdfinfo") or not Path("/Library/TeX/texbin/xelatex").exists() or not shutil.which("pandoc"):
+    if not shutil.which("pdfinfo") or not _xelatex() or not shutil.which("pandoc"):
         pytest.skip("pandoc/pdfinfo/xelatex unavailable")
 
     source = tmp_path / "source.md"
@@ -230,7 +236,7 @@ def _make_half_letter_source_pdf(tmp_path: Path, *, pages: int) -> Path:
         + "\n" + r"\end{document}" + "\n"
     )
     subprocess.run(
-        ["/Library/TeX/texbin/xelatex", "-interaction=nonstopmode", "-halt-on-error", tex.name],
+        [_xelatex(), "-interaction=nonstopmode", "-halt-on-error", tex.name],
         cwd=tmp_path,
         check=True,
         text=True,
