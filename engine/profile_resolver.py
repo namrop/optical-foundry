@@ -66,6 +66,8 @@ class ResolvedProfile:
     # directory, and the ornament slots it fills (engine/ornaments.py).
     package_dir: Path | None = None
     ornaments: dict[str, Any] | None = None
+    # The chapter-opener contract it declares (engine/openers.py, map D4).
+    openers: dict[str, Any] | None = None
 
 
 ALIASES: dict[str, str] = {
@@ -290,6 +292,7 @@ def resolve_profile(profile_id: str) -> ResolvedProfile:
         source_preparation=source_preparation,
         package_dir=package.directory if package is not None else None,
         ornaments=(package.spec.get("ornaments") or None) if package is not None else None,
+        openers=(package.spec.get("openers") or None) if package is not None else None,
     )
 
 

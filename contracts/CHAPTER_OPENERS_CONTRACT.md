@@ -2,7 +2,7 @@
 uid: 019fc640-8576-72e2-9f70-950b1e51d6d9
 title: Chapter Opener Typography Contract — Optical Foundry
 status: current
-updated: 2026-08-03
+updated: 2026-10-02
 ---
 
 # Chapter Opener Typography Contract — Optical Foundry
@@ -158,3 +158,18 @@ trusting a change.
 between two anchors that turned out to be **741 lines apart**, deleting `\CodexOpenerEpigraph`,
 `\CodexHeartword` and the layered attribution grammar. Caught by the compile and 7 failing
 tests, restored with `git checkout HEAD --`. Match on exact content instead.
+
+## In the engine, for any profile (map D4, 2026-10-02)
+
+Ruling `01a0fe8b-e963` pulled D4 forward. The placement rules above (first prose paragraph;
+step over leading raw markers; skip an epigraph quote; no capital on verse or a heading;
+colour inherited inside an opening colour macro; fail-open on anything but an ASCII letter)
+are now an engine mechanism a profile package declares under `openers:` in its
+`profile.yaml` (`engine/openers.py`, `engine/filters/of_openers.lua`,
+`engine/latex/of_openers.tex`). What was font-specific becomes a setting: `scale`,
+`font_command`, `color`, `small_caps`, `nudge`, `depth`, per-letter `spill`, and
+`epigraph_gap`. A chapter opening always starts a new page; the bundle compiler enforces that
+for every source with a `chapter_opener`, so it is not a setting.
+
+Codex 0 keeps its own implementation (`codex0_composition.lua`, `\CodexLettrine` in
+`codex0.tex`) until G2 moves its profile out of the engine; its output is unchanged.

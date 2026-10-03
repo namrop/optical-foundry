@@ -27,6 +27,7 @@ wins: a package cannot shadow an engine profile silently.
     defaults: [defaults.yaml]    # paths in the package, appended to the extended stack
     source_preparation: null     # ruling 01a0f930-407c
     ornaments: {...}             # engine/ornaments.py
+    openers: {...}               # engine/openers.py (map D4)
 """
 from __future__ import annotations
 
@@ -39,7 +40,7 @@ import yaml
 
 SCHEMA = "profile_package_v1"
 _KEYS = {"schema_version", "id", "title", "description", "extends", "template", "defaults",
-         "source_preparation", "ornaments"}
+         "source_preparation", "ornaments", "openers"}
 
 
 class ProfilePackageError(ValueError):

@@ -1,0 +1,34 @@
+% of_openers.tex — the raised chapter capital (map D4), loaded by engine/openers.py when a
+% profile declares `openers:`. Codex 0's \CodexLettrine geometry, generalized: the
+% capital sits on the first line's baseline and rises above it (no drop); it is kerned
+% right by its letter's left spill (ink left of the origin would land in the margin);
+% it is not smashed, and declares extra depth so line 2 clears a descender.
+% Every setting is a hook engine/openers.py redefines from the profile.
+\makeatletter
+\providecommand{\OFOpenerCapitalScale}{2.4}
+\providecommand{\OFOpenerCapitalNudge}{0em}
+\providecommand{\OFOpenerCapitalDepth}{0.12em}
+\providecommand{\OFOpenerCapitalFont}{}
+\providecommand{\OFOpenerCapitalColor}[1]{#1}
+\providecommand{\OFOpenerRestShape}[1]{{\scshape #1}}
+\newcommand{\OFOpenerSpill}[2]{\expandafter\def\csname OF@OpenerSpill@#1\endcsname{#2}}
+\newcommand{\OF@OpenerSpillFor}[1]{%
+  \ifcsname OF@OpenerSpill@#1\endcsname\csname OF@OpenerSpill@#1\endcsname\else 0em\fi}
+\newcommand{\OF@OpenerCapitalBox}[2]{%
+  \leavevmode
+  \begingroup
+    \@tempdima=\f@size pt\relax
+    \@tempdima=\OFOpenerCapitalScale\@tempdima
+    \fontsize{\@tempdima}{\@tempdima}\selectfont
+    \kern\OF@OpenerSpillFor{#1}%
+    \raisebox{0pt}[\height][\dimexpr\depth+\OFOpenerCapitalDepth\relax]{#2}%
+  \endgroup}
+% {letter}{rest of the first word}
+\newcommand{\OFOpenerCapital}[2]{%
+  \OF@OpenerCapitalBox{#1}{\OFOpenerCapitalColor{{\OFOpenerCapitalFont #1}}}%
+  \kern\OFOpenerCapitalNudge\OFOpenerRestShape{#2}}
+% Inside an opening colour macro: the ambient colour shows through.
+\newcommand{\OFOpenerCapitalInherit}[2]{%
+  \OF@OpenerCapitalBox{#1}{{\OFOpenerCapitalFont #1}}%
+  \kern\OFOpenerCapitalNudge\OFOpenerRestShape{#2}}
+\makeatother

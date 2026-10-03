@@ -36,6 +36,7 @@ ORIGINS: tuple[str, ...] = (
     "image_bake",      # the lossless image-bake callback
     "plates",          # floating plates and plate page style (engine/plates.py, render.plates)
     "ornaments",       # the profile's ornament slots and rails (engine/ornaments.py)
+    "openers",         # the profile's chapter-opener contract (engine/openers.py)
     "contract",        # engine/template_contract.py defaults, last so every other definition wins
 )
 

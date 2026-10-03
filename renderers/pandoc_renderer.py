@@ -242,6 +242,17 @@ class PandocRenderer(Renderer):
             preamble.add("ornaments", ornament_plan.preamble)
             cmd += ["--lua-filter", str(ornament_plan.filter_path),
                     "--metadata", f"of_ornaments={ornament_filter_metadata(ornament_plan)}"]
+        # D4: the chapter-opener contract the profile package declares.
+        from engine.openers import OpenerError, filter_metadata as opener_filter_metadata, plan_openers
+
+        try:
+            opener_plan = plan_openers(getattr(resolved_profile, "openers", None))
+        except OpenerError as exc:
+            return self._evidence_error(plan, output_pdf, evidence_file, time.monotonic() - start, str(exc), ["openers"])
+        if opener_plan is not None:
+            preamble.add("openers", opener_plan.preamble)
+            cmd += ["--lua-filter", str(opener_plan.filter_path),
+                    "--metadata", f"of_openers={opener_filter_metadata(opener_plan)}"]
         # D3/D5: floating plates the manifest asked for (engine/plates.py).
         plates_ledger = None
         if getattr(plan, "plates", None):
@@ -692,6 +703,7 @@ class PandocRenderer(Renderer):
                 "preamble": preamble.evidence(preamble_file),
                 "source_preparation": prepared.record,
                 **({"plates": plates_report} if plates_report is not None else {}),
+                **({"openers": opener_plan.record} if opener_plan is not None else {}),
                 **({"ornaments": ornament_plan.record} if ornament_plan is not None else {}),
                 "rendered_at": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
                 "success": success,
