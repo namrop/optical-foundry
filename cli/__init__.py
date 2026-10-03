@@ -570,6 +570,18 @@ def cmd_select(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_print_sheet(args: argparse.Namespace) -> int:
+    from engine.print_sheet import PrintSheetError, render as render_print_sheet
+
+    try:
+        ev = render_print_sheet(Path(args.input), Path(args.output) if args.output else None)
+    except PrintSheetError as exc:
+        print(f"ERROR: {exc}", file=sys.stderr)
+        return 1
+    print(json.dumps({k: ev[k] for k in ("status", "sheet_id", "output")}, indent=2))
+    return 0
+
+
 def cmd_bindery(args: argparse.Namespace) -> int:
     import json as _json
 
@@ -753,6 +765,12 @@ def main() -> int:
     pg.add_argument("--tape-width", required=True, type=float, help="Inches")
     pg.add_argument("--output", required=True, help="SVG path")
     pg.set_defaults(func=cmd_bindery)
+
+    # print-sheet (map E3)
+    ps_ap = sub.add_parser("print-sheet", help="Place labels/cards at exact physical sizes on one sheet (kind: print_sheet)")
+    ps_ap.add_argument("input", help="print_sheet_v1 manifest YAML")
+    ps_ap.add_argument("--output", help="PDF path or directory (default: beside the manifest)")
+    ps_ap.set_defaults(func=cmd_print_sheet)
 
     # stamps-agree
     sa_ap = sub.add_parser("stamps-agree", help="Fail unless every file carries one identical build-stamp line")
