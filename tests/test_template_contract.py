@@ -31,7 +31,14 @@ def test_no_template_copies_the_default_definitions():
     """A template defines a contract command only to restyle it (codex0 does, twice)."""
     defaults = {name: None for name in CONTRACT_COMMANDS}
     owners = {}
-    for template in TEMPLATES.glob("*.tex"):
+    templates = list(TEMPLATES.glob("*.tex"))
+    try:  # codex0.tex is in the codex0 profile package since 2026-10-03 (map G2)
+        from engine.profile_resolver import resolve_profile
+
+        templates.append(resolve_profile("codex0").template_path)
+    except Exception:  # noqa: BLE001 - a host without the profile-repository pointer
+        pass
+    for template in templates:
         for name in defaults:
             if re.search(r"\\(?:newcommand|providecommand|NewDocumentCommand)\{\\" + name + r"\}", template.read_text()):
                 owners.setdefault(name, []).append(template.name)
