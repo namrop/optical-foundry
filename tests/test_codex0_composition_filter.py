@@ -108,7 +108,8 @@ A plain heartword stays accent-colored: [still here]{.codex-heartword}.
 
     assert "\\CodexOwnVoice{I have done that a bunch}" in latex
     assert "\\CodexOwnVoiceHeartword{it keeps" in latex  # pandoc may wrap inside the braces
-    assert "\\CodexHeartword{still here}" in latex
+    # pandoc wraps at 72 columns, and here the wrap falls inside the braces
+    assert "\\CodexHeartword{still here}" in " ".join(latex.split())
 
 
 def test_codex_quote_block_lowers_quote_with_author_source_and_date(tmp_path):
