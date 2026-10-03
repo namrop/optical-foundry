@@ -570,6 +570,54 @@ def cmd_select(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_bindery(args: argparse.Namespace) -> int:
+    import json as _json
+
+    from engine.bindery import (BinderyError, folio_run_report, press_sheet_map, punch_guide_svg,
+                                sewing_stations)
+
+    if args.bindery_command == "folio-run":
+        failed = 0
+        for pdf in args.input:
+            rep = folio_run_report(Path(pdf))
+            if rep["ok"]:
+                print(f"  {Path(pdf).name}: {rep['numbered']} numbered pages, run {rep['run'][0]}..{rep['run'][1]}, parity matches")
+            else:
+                failed += 1
+                for line in rep["problems"]:
+                    print(f"ERROR {Path(pdf).name}: {line}", file=sys.stderr)
+        return 1 if failed else 0
+    if args.bindery_command == "sheet-map":
+        sets = {}
+        for item in args.set:
+            name, _, nums = item.partition("=")
+            sets[name.strip()] = [int(x) for x in nums.split(",") if x.strip()]
+        try:
+            data = press_sheet_map(Path(args.input), args.signature_size, duplex=args.duplex.replace("-", "_"),
+                                   sheet_sets=sets)
+        except BinderyError as exc:
+            print(f"ERROR: {exc}", file=sys.stderr)
+            return 1
+        for w in data["warnings"]:
+            print(f"WARNING: {w}", file=sys.stderr)
+        text = _json.dumps(data, indent=1)
+        if args.output:
+            Path(args.output).write_text(text + "\n", encoding="utf-8")
+            print(f"wrote {args.output}: {data['sheets']} sheets, {len(data['folio_to_sheet'])} folios indexed")
+        else:
+            print(text)
+        return 0
+    if args.bindery_command == "punch-guide":
+        stations = sewing_stations(fold_height_in=args.fold_height, kettle_offset_in=args.kettle_offset,
+                                   tapes=args.tapes, tape_width_in=args.tape_width)
+        Path(args.output).write_text(punch_guide_svg(stations, fold_height_in=args.fold_height), encoding="utf-8")
+        for st in stations:
+            print(f"  {st.number}  {st.from_head_in:.6f} in  {st.from_head_in * 25.4:8.3f} mm  {st.role}")
+        return 0
+    print("bindery: choose folio-run, sheet-map or punch-guide", file=sys.stderr)
+    return 2
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(prog="foundry", description="Optical Foundry CLI")
     sub = ap.add_subparsers(dest="command")
@@ -683,6 +731,28 @@ def main() -> int:
     bs_ap.add_argument("--blank-mark", help="Image placed centred on every pad leaf")
     bs_ap.add_argument("--mark-width", type=float, default=0.2, help="Mark width as a fraction of page width (default 0.2)")
     bs_ap.set_defaults(func=cmd_bind_shape)
+
+    # bindery (map E2)
+    bd_ap = sub.add_parser("bindery", help="Bindery checks and guides: folio runs, press sheet maps, punching guides")
+    bd_sub = bd_ap.add_subparsers(dest="bindery_command")
+    fr = bd_sub.add_parser("folio-run", help="Exit 1 unless each PDF's folios are one arabic run with matching parity")
+    fr.add_argument("input", nargs="+", help="Rendered volume PDF(s)")
+    fr.set_defaults(func=cmd_bindery)
+    sm = bd_sub.add_parser("sheet-map", help="Map a bind PDF onto press sheets (JSON)")
+    sm.add_argument("input", help="The _bind.pdf (cli bind-shape)")
+    sm.add_argument("--signature-size", required=True, type=int)
+    sm.add_argument("--duplex", default="short-edge", choices=["short-edge", "short_edge", "long-edge", "long_edge"])
+    sm.add_argument("--set", action="append", default=[], metavar="NAME=1,2,3",
+                    help="A ruled sheet set (e.g. cover=1,5,6); repeatable")
+    sm.add_argument("--output", help="JSON path (default: stdout)")
+    sm.set_defaults(func=cmd_bindery)
+    pg = bd_sub.add_parser("punch-guide", help="Exact-scale sewing-station punching strip (SVG)")
+    pg.add_argument("--fold-height", required=True, type=float, help="Inches")
+    pg.add_argument("--kettle-offset", required=True, type=float, help="Inches from head and tail")
+    pg.add_argument("--tapes", required=True, type=int)
+    pg.add_argument("--tape-width", required=True, type=float, help="Inches")
+    pg.add_argument("--output", required=True, help="SVG path")
+    pg.set_defaults(func=cmd_bindery)
 
     # stamps-agree
     sa_ap = sub.add_parser("stamps-agree", help="Fail unless every file carries one identical build-stamp line")
