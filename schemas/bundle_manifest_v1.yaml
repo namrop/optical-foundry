@@ -515,6 +515,17 @@ properties:
             properties:
               enabled: { type: boolean }
               title: { type: string }
+      plates:
+        type: object
+        description: >
+          Floating full-page plates (map D3): \OFFloatingPlate{asset} in a source is
+          seated during pagination on the first legal recto in its chapter, the page
+          prints no running head (D5), and containment is re-checked on every render
+          from the page ledger. Needs LuaLaTeX.
+        additionalProperties: false
+        properties:
+          floating: { type: boolean, default: true }
+          gate: { type: boolean, default: true, description: A containment violation fails the render. }
       endnotes:
         type: object
         description: >

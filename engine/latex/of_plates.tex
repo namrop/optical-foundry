@@ -1,0 +1,79 @@
+% of_plates.tex — floating plates (map D3) and page-number-keyed page marks (map D5).
+% Loaded by the engine (engine/plates.py) when a manifest asks for render.plates; needs
+% LuaLaTeX. Codex 0 keeps its own TeX wrappers (codex0.tex) over the same injector.
+%
+% Source surface (raw LaTeX in Markdown):
+%   \OFFloatingPlate{assets/plate.png}             owner: the chapter current here
+%   \OFFloatingPlate[Chapter title]{...}           owner named (the tagline text)
+%   \OFFloatingPlate[|allow-opener]{...}           may face its chapter's opening page
+%   \OFPlateRitualBegin ... \OFPlateRitualEnd      pages here are never displaced
+% A chapter is what \OFSetRunningTagline names; every call is marked for the injector.
+%
+% Page style: a page the injector built prints no running head; its foot carries
+% \OFPlateFolio{\thepage} (default: the plain folio). A profile restyles a plate page
+% by defining \OFPlateFolio, or \ps@ofplatepage itself, before \begin{document}.
+\makeatletter
+\directlua{require("of_pages")}
+\directlua{require("of_plate_float")}
+\directlua{of_plate_float.set_footins(\number\footins)}
+\newcount\OF@PlateId \OF@PlateId=0
+\providecommand{\OFPlateBleed}{0pt}
+\providecommand{\OFPlateFolio}[1]{#1}
+\NewDocumentCommand{\OFFloatingPlate}{O{} m}{%
+  \par
+  \global\advance\OF@PlateId by 1
+  \expandafter\newbox\csname OF@PlateBox\the\OF@PlateId\endcsname
+  \global\setbox\csname OF@PlateBox\the\OF@PlateId\endcsname
+    =\vbox to \textheight{%
+      \offinterlineskip
+      \kern\dimexpr .5\paperheight -1in -\topmargin -\headheight -\headsep\relax
+      \hbox to \textwidth{%
+        \kern\dimexpr .5\paperwidth -1in -\oddsidemargin\relax
+        \hbox to 0pt{\hss\vbox to 0pt{\vss
+          \hbox{\includegraphics[width=\dimexpr\paperwidth+2\dimexpr\OFPlateBleed\relax\relax,%
+                                 height=2\paperheight,keepaspectratio]{#2}}%
+          \vss}\hss}%
+        \hss}%
+      \vss}%
+  \directlua{of_plate_float.declare(\the\OF@PlateId,
+    "\luaescapestring{\detokenize{#2}}",
+    \number\csname OF@PlateBox\the\OF@PlateId\endcsname,
+    "\luaescapestring{\detokenize{#1}}")}%
+  \directlua{of_plate_float.mark_plate(\the\OF@PlateId)}%
+}
+\NewDocumentCommand{\OFPlateRitualBegin}{}{\directlua{of_plate_float.mark_ritual_begin()}}
+\NewDocumentCommand{\OFPlateRitualEnd}{}{\directlua{of_plate_float.mark_ritual_end()}}
+\NewDocumentCommand{\OFPlateFloatEnable}{}{\directlua{of_plate_float.enabled = true}}
+\NewDocumentCommand{\OFPlateFloatDisable}{}{\directlua{of_plate_float.enabled = false}}
+% D5: page-number-keyed tests, for any page style.
+\newcommand{\OFIfPageMarked}[3]{%
+  \ifnum\directlua{tex.sprint(of_pages.is("\luaescapestring{#1}", \number\count0))}=1 #2\else #3\fi}
+\newcommand{\OFUnlessPageMarked}[2]{\OFIfPageMarked{#1}{}{#2}}
+% The plate page style, chosen at \@outputpage for a page marked "plate". This is
+% \thispagestyle chosen by the page number, after the page was built.
+\@ifundefined{ps@ofplatepage}{%
+  \def\ps@ofplatepage{%
+    \let\@oddhead\@empty\let\@evenhead\@empty
+    \def\@oddfoot{\hfil\OFPlateFolio{\thepage}\hfil}%
+    \let\@evenfoot\@oddfoot}%
+}{}
+\def\OF@PlatePageCheck{%
+  \directlua{of_pages.record(\number\@outputbox, "\luaescapestring{\thepage}")}%
+  \ifnum\directlua{tex.sprint(of_pages.is("plate", \number\count0))}=1
+    \global\@specialpagetrue\gdef\@specialstyle{ofplatepage}%
+  \fi}
+\AtBeginDocument{%
+  % Every chapter tagline marks the flow for the injector (and the ledger).
+  \let\OF@TaglineBase\OFSetRunningTagline
+  \renewcommand{\OFSetRunningTagline}[1]{%
+    \OF@TaglineBase{#1}%
+    \directlua{of_plate_float.mark_chapter("\luaescapestring{#1}")}}%
+  \pretocmd{\@outputpage}{\OF@PlatePageCheck}{}{%
+    \PackageWarning{of_plates}{could not hook \string\@outputpage; plate pages keep their running head}}%
+}
+\AtEndDocument{\directlua{of_plate_float.finish()}}
+% The page ledger, into the PDF's Info dictionary (see of_pages.hex for why not a file).
+\AddToHook{enddocument/end}{%
+  \directlua{of_pages.write()}%
+  \pdfextension info{/OFPageLedger (\directlua{tex.sprint(of_pages.hex())})}}
+\makeatother

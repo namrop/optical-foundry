@@ -242,6 +242,21 @@ class PandocRenderer(Renderer):
             preamble.add("ornaments", ornament_plan.preamble)
             cmd += ["--lua-filter", str(ornament_plan.filter_path),
                     "--metadata", f"of_ornaments={ornament_filter_metadata(ornament_plan)}"]
+        # D3/D5: floating plates the manifest asked for (engine/plates.py).
+        plates_ledger = None
+        if getattr(plan, "plates", None):
+            if Path(pdf_engine).name != "lualatex":
+                return self._evidence_error(
+                    plan, output_pdf, evidence_file, time.monotonic() - start,
+                    f"render.plates needs lualatex (the plate injector runs in LuaTeX); "
+                    f"profile {resolved_profile.canonical_profile_id} chooses {pdf_engine}",
+                    ["plates"],
+                )
+            from engine.plates import ledger_path as _plate_ledger_path, preamble_lines as _plate_preamble
+
+            plates_ledger = _plate_ledger_path(out_dir, plan.render_id)
+            plates_ledger.unlink(missing_ok=True)
+            preamble.add("plates", _plate_preamble())
         cmd += [
             "--pdf-engine", str(xe),
             "--pdf-engine-opt=-interaction=nonstopmode",
@@ -372,6 +387,18 @@ class PandocRenderer(Renderer):
                 plan, compile_pdf, evidence_file, elapsed,
                 f"pandoc exit {result.returncode}: {result.stderr[-500:]}", cmd
             )
+
+        # D3: the page ledger rides out of pandoc's temporary compile directory in
+        # the PDF's Info dictionary; save it beside the render and strip it.
+        if plates_ledger is not None:
+            from engine.plates import PlateError, extract_ledger
+
+            try:
+                ledger = extract_ledger(compile_pdf)
+            except (PlateError, OSError, RuntimeError) as exc:
+                return self._evidence_error(plan, compile_pdf, evidence_file, elapsed, str(exc), cmd)
+            if ledger is not None:
+                plates_ledger.write_text(json.dumps(ledger, indent=1) + "\n", encoding="utf-8")
 
         # --- extract compile-stage text for missing-glyph validation ---
         try:
@@ -535,6 +562,24 @@ class PandocRenderer(Renderer):
             figure_inventory=plan.figure_inventory,
             warnings=warnings,
         )
+        # D3: containment re-proved from what shipped, on every render.
+        plates_report = None
+        if plates_ledger is not None:
+            from engine.plates import check_render as _check_plates
+
+            plates_report = _check_plates(out_dir, plan.render_id) or {
+                "ok": False, "error": "the render wrote no page ledger", "plates": [], "violations": [], "unplaced": []}
+            for v in plates_report.get("violations", []):
+                warnings.append(f"plate {v.get('asset')} (owner {v.get('owner')!r}) at folio {v.get('folio')}: {v.get('reason')}")
+            if plates_report.get("unplaced"):
+                warnings.append("plates never placed: " + ", ".join(plates_report["unplaced"]))
+            if plates_report.get("error"):
+                warnings.append(plates_report["error"])
+            if (plan.plates or {}).get("gate", True):
+                validation["checks"]["plate_containment"] = bool(plates_report.get("ok"))
+                if not plates_report.get("ok"):
+                    validation["status"] = "failed"
+            validation["warning_count"] = len(warnings)
         if validation["status"] != "passed":
             failed_checks = [
                 name
@@ -552,6 +597,7 @@ class PandocRenderer(Renderer):
                 "status": "error",
                 "error": message,
                 "validation": validation,
+                **({"plates": plates_report} if plates_report is not None else {}),
                 "output": {
                     "pdf_path": str(compile_pdf),
                     "publication_status": "withheld",
@@ -645,6 +691,7 @@ class PandocRenderer(Renderer):
                 **({"strikeout_support": True} if strikeout_support else {}),
                 "preamble": preamble.evidence(preamble_file),
                 "source_preparation": prepared.record,
+                **({"plates": plates_report} if plates_report is not None else {}),
                 **({"ornaments": ornament_plan.record} if ornament_plan is not None else {}),
                 "rendered_at": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
                 "success": success,

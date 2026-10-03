@@ -1398,6 +1398,12 @@ class CompositeBundleCompiler(ManifestCompiler):
         date = pres.get("date", "")
 
         render_cfg = manifest.get("render", {})
+        # D3: floating plates (engine/plates.py). With them on, each chapter opener
+        # also names its chapter for the injector (\OFSetRunningTagline), unless
+        # the source sets its own tagline.
+        from engine.plates import plates_config
+
+        plates_cfg = plates_config(render_cfg if isinstance(render_cfg, dict) else {})
         page_size, page_size_source = page_size_from_mapping(render_cfg if isinstance(render_cfg, dict) else {}, scope="manifest.render")
         if page_size_source == "default":
             page_size, page_size_source = _profile_default_page_size_for(profile)
@@ -1630,6 +1636,8 @@ class CompositeBundleCompiler(ManifestCompiler):
                     lines.append(f"<!-- cx0:{separator} -->")
                     lines.append("")
             lines.extend(_running_text_override_lines(src))
+            if plates_cfg and has_chapter_opener and "tagline" not in _normalized_running_text(src):
+                lines.append(f"\\OFSetRunningTagline{{{_latex_escape_text(str(_opener_cfg_early['title']).strip())}}}")
             opener_cfg = src.get("chapter_opener")
             if isinstance(opener_cfg, dict):
                 opener_cfg = _resolve_opener_epigraph(
@@ -1818,6 +1826,7 @@ class CompositeBundleCompiler(ManifestCompiler):
             page_size=page_size,
             page_margins=page_margins,
             delivery=_delivery_cfg,
+            plates=plates_cfg,
             assembly=assembly,
             source_inventory=[
                 {

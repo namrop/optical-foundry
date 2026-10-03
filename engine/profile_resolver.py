@@ -20,6 +20,9 @@ GF_ROOT = Path(__file__).resolve().parents[1]
 LOCAL_IMPORT = GF_ROOT / "profiles" / "40_latex_import"
 
 
+ENGINE_LATEX_DIR = Path(__file__).resolve().parent / "latex"
+
+
 @dataclass(frozen=True)
 class RenderEnvironment:
     """Render-time path/environment facts for one resolved profile."""
@@ -35,6 +38,10 @@ class RenderEnvironment:
             out["TEXMFHOME"] = str(self.texmfhome)
         if self.texinputs:
             out["TEXINPUTS"] = self.texinputs
+        # LuaTeX's require() searches LUAINPUTS, which on this TeX does not
+        # include TEXINPUTS: the engine's Lua modules (of_pages, of_plate_float)
+        # must be on it explicitly. The trailing ':' keeps the default path.
+        out["LUAINPUTS"] = f"{ENGINE_LATEX_DIR}:"
         return out
 
 
@@ -225,6 +232,10 @@ def resolve_profile(profile_id: str) -> ResolvedProfile:
     # resource roots include the local import root and its asset/template trees.
     resource_paths = [LOCAL_IMPORT, LOCAL_IMPORT / "templates", *asset_roots, GF_ROOT]
     texinputs_parts = [
+        # Engine TeX and Lua (of_ornaments.tex, of_plates.tex, of_plate_float.lua ...):
+        # on the search path for every render, so a profile's own files can require
+        # the engine's (codex0_plate_float.lua is an alias of of_plate_float.lua).
+        ENGINE_LATEX_DIR,
         LOCAL_IMPORT / "templates",
         LOCAL_IMPORT / "styles" / "texmf" / "tex" / "latex" / "generic",
         LOCAL_IMPORT / "styles" / "texmf" / "tex" / "latex" / "resume",

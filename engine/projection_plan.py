@@ -111,6 +111,10 @@ class ProjectionPlan:
     # for direct-document renders; None for manifest/legacy lanes.
     document_settings: "ReportSettings | None" = None
 
+    # D3: floating plates requested by the manifest (render.plates), normalized by
+    # engine.plates.plates_config; None when the render places no plates.
+    plates: dict[str, Any] | None = None
+
     # Optionally filled for multi-source renders.
     assembly: AssemblyView | None = None
 
