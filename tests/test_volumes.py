@@ -151,3 +151,28 @@ def test_volumes_render_with_continuous_folios_parity_and_contents(tmp_path):
     assert "Contents of the Work" in pages and "Part 1" in pages and "Part 2" in pages
     saved = yaml.safe_load(Path(report["report_path"]).read_text())
     assert saved["schema_version"] == "volume_run_v1"
+
+
+
+# --- B3: planned passes --------------------------------------------------------------
+
+
+def test_passes_config_is_optional_and_checked():
+    from engine.volumes import passes_config
+
+    assert passes_config({}) is None
+    assert passes_config({"passes": {"final_parallel": 2}}) == {"final_parallel": 2, "prove_final": True}
+    with pytest.raises(VolumeError):
+        passes_config({"passes": {"final_parallel": 0}})
+
+
+def test_planned_passes_draft_then_one_parallel_final_wave_proved_against_the_drafts(tmp_path):
+    manifest = _work(tmp_path, paragraphs=3)
+    manifest["render"]["passes"] = {"final_parallel": 2}
+    report = render_volumes(manifest, tmp_path / "out")
+    assert [p["pass"] for p in report["passes"]] == ["seat", "contents", "final", "prove"]
+    assert report["passes"][1]["fixed_point"] is True and report["passes"][3]["ok"] is True
+    assert all(p["same_shape"] for p in report["final_proofs"])
+    one, two = report["volumes"]
+    assert two["first_body_folio"] == one["last_body_folio"] + 1
+    assert all("/final/" in v["pdf"] for v in report["volumes"])

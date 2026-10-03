@@ -515,6 +515,17 @@ properties:
             properties:
               enabled: { type: boolean }
               title: { type: string }
+      passes:
+        type: object
+        description: >
+          With `volumes`, planned passes (map B3, optional): measuring passes in draft,
+          a fixed-point gate on every pass that reads a prior pass's labels, one final
+          wave rendered full (`final_parallel` at a time), and each final proved to
+          have its draft's shape. A failed proof stops the build; there is no retry.
+        additionalProperties: false
+        properties:
+          final_parallel: { type: integer, minimum: 1, default: 1 }
+          prove_final: { type: boolean, default: true }
       plates:
         type: object
         description: >
