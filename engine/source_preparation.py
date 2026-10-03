@@ -161,30 +161,37 @@ def pdf_latex_output(plan: ProjectionPlan, profile: ResolvedProfile) -> bool:
 
 
 def codex_edition(plan: ProjectionPlan, out_dir: Path, profile: ResolvedProfile) -> ProjectionPlan:
-    """Select source-visible Codex 0 edition variants before other preprocessors.
+    """Select one edition of a source with edition variants, before other preprocessors.
 
-    Fail-closed: if `cx0:` edition sentinels are present under a non-Codex
-    profile, rendering fails rather than leaking all editions into a reader
-    proof. Sources without sentinels are unchanged.
+    The profile declares editions (map C1) and its marker namespace (map C2). Fail
+    closed: a profile that declares no editions refuses a source carrying edition
+    markers in any namespace, or a requested edition, rather than leak every edition
+    into a proof. Sources without markers are unchanged.
     """
     if not plan.render_source.exists():
         return plan
-    has_markers = source_contains_codex_edition_markers(plan.render_source)
-    has_callouts = source_contains_codex_editorial_callouts(plan.render_source)
+    from engine.markers import ANY_EDITION_MARKER_RE, prefix_of
+
+    editions = getattr(profile, "editions", None)
+    prefix = prefix_of(getattr(profile, "markers", None))
     edition, strip_callouts = edition_from_source_frontmatter(plan.render_source)
-    has_codex_controls = has_markers or bool(edition) or strip_callouts
-    if has_codex_controls and profile.canonical_profile_id != "codex0":
-        raise CodexEditionRenderError(
-            f"Codex edition controls require profile codex0; got {profile.canonical_profile_id}"
-        )
-    if profile.canonical_profile_id != "codex0":
+    if editions is None:
+        text = plan.render_source.read_text(encoding="utf-8", errors="ignore")
+        if ANY_EDITION_MARKER_RE.search(text) or edition or strip_callouts:
+            raise CodexEditionRenderError(
+                f"edition controls need a profile that declares editions; "
+                f"{profile.canonical_profile_id} declares none"
+            )
         return plan
+    has_markers = source_contains_codex_edition_markers(plan.render_source, prefix)
+    has_callouts = source_contains_codex_editorial_callouts(plan.render_source)
     format_callouts = has_callouts and not strip_callouts
     if not has_markers and not strip_callouts and not format_callouts:
         return plan
     result = preprocess_codex_edition_blocks(
         plan.render_source, out_dir, plan.render_id, edition,
         strip_editorial_callouts=strip_callouts, format_editorial_callouts=format_callouts,
+        prefix=prefix, labels=editions.get("labels"),
     )
     if not result.changed:
         return plan

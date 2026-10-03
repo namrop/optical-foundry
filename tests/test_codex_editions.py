@@ -407,7 +407,7 @@ def test_pandoc_renderer_fails_closed_for_cx0_markers_under_non_codex_profile(tm
     )
     plan = ProjectionPlan(profile_id="keeper", render_id="wrong-profile", render_source=src)
 
-    with pytest.raises(CodexEditionRenderError, match="require profile codex0"):
+    with pytest.raises(CodexEditionRenderError, match="declares none"):
         source_preparation.codex_edition(plan, tmp_path, resolve_profile("keeper"))
 
 

@@ -28,6 +28,8 @@ wins: a package cannot shadow an engine profile silently.
     source_preparation: null     # ruling 01a0f930-407c
     ornaments: {...}             # engine/ornaments.py
     openers: {...}               # engine/openers.py (map D4)
+    markers: {prefix: cx0}       # engine/markers.py (map C2)
+    editions: {labels: [...]}    # engine/editions.py (map C1)
 """
 from __future__ import annotations
 
@@ -40,7 +42,7 @@ import yaml
 
 SCHEMA = "profile_package_v1"
 _KEYS = {"schema_version", "id", "title", "description", "extends", "template", "defaults",
-         "source_preparation", "ornaments", "openers"}
+         "source_preparation", "ornaments", "openers", "markers", "editions"}
 
 
 class ProfilePackageError(ValueError):

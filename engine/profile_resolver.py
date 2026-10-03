@@ -68,6 +68,9 @@ class ResolvedProfile:
     ornaments: dict[str, Any] | None = None
     # The chapter-opener contract it declares (engine/openers.py, map D4).
     openers: dict[str, Any] | None = None
+    # Its marker namespace (engine/markers.py) and editions (engine/editions.py), map C1/C2.
+    markers: dict[str, Any] | None = None
+    editions: dict[str, Any] | None = None
 
 
 ALIASES: dict[str, str] = {
@@ -130,6 +133,9 @@ PROFILE_SPECS: dict[str, dict[str, Any]] = {
         "family": "document_spine",
         "defaults": ["document_spine.yaml", "personal_letter.yaml", "mythic_letter_johannah.yaml", "codex0.yaml"],
         "template": "codex0.tex",
+        # Map C1/C2 (ruling 01a100da-3cde): its marker namespace and its editions.
+        "markers": {"prefix": "cx0"},
+        "editions": {"labels": ["archival", "johannah", "witness", "reader"]},
     },
     "codex0-a5": {
         "family": "document_spine",
@@ -206,7 +212,7 @@ def resolve_profile(profile_id: str) -> ResolvedProfile:
         if base_id not in PROFILE_SPECS:
             raise ValueError(f"profile package {canonical}: extends {base_id!r}, which is not an engine profile")
         spec = dict(PROFILE_SPECS[base_id])
-        for key in ("source_preparation",):
+        for key in ("source_preparation", "markers", "editions"):
             if package.spec.get(key) is not None:
                 spec[key] = package.spec[key]
     if spec is None:
@@ -293,7 +299,33 @@ def resolve_profile(profile_id: str) -> ResolvedProfile:
         package_dir=package.directory if package is not None else None,
         ornaments=(package.spec.get("ornaments") or None) if package is not None else None,
         openers=(package.spec.get("openers") or None) if package is not None else None,
+        markers=_markers_of(spec, canonical),
+        editions=_editions_of(spec, canonical),
     )
+
+
+def _markers_of(spec: dict[str, Any], canonical: str) -> dict[str, Any] | None:
+    markers = spec.get("markers")
+    if markers is None:
+        return None
+    from engine.markers import MarkerError, validate_prefix
+
+    try:
+        return {"prefix": validate_prefix((markers or {}).get("prefix", "cx0"))}
+    except MarkerError as exc:
+        raise ValueError(f"profile {canonical}: {exc}") from None
+
+
+def _editions_of(spec: dict[str, Any], canonical: str) -> dict[str, Any] | None:
+    editions = spec.get("editions")
+    if editions is None:
+        return None
+    if not isinstance(editions, dict):
+        raise ValueError(f"profile {canonical}: editions must be a mapping, e.g. {{labels: [a, b]}}")
+    labels = editions.get("labels")
+    if labels is not None and (not isinstance(labels, list) or not all(isinstance(x, str) and x for x in labels)):
+        raise ValueError(f"profile {canonical}: editions.labels must be a list of names")
+    return {"labels": tuple(labels) if labels is not None else None}
 
 
 def _fallback_spec(profile_id: str) -> dict[str, Any]:

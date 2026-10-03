@@ -204,7 +204,6 @@ def _demote_headings(body: str, levels: int = 2) -> str:
     return re.sub(r"^(#{1,6})( .*)$", _demote, body, flags=re.MULTILINE)
 
 
-_CX0_MARKER_RE = re.compile(r"^\s*<!--\s*cx0:([\w-]+).*?-->\s*$")
 
 # cx0 markers that render a visible passage-level separator. A body opening with
 # one of these already carries its own break, so the compiler must not stack an
@@ -229,7 +228,7 @@ _CX0_ORNAMENT_MARKERS = frozenset(
 )
 
 
-def _body_opens_with_cx0_marker(body: str) -> bool:
+def _body_opens_with_cx0_marker(body: str, prefix: str = "cx0") -> bool:
     """True if the first non-blank line of a source body is an authored cx0
     ornament separator (e.g. `<!-- cx0:breath -->`). Used to avoid stacking a
     compiler-inserted passage separator on top of an author's explicit one.
@@ -238,7 +237,9 @@ def _body_opens_with_cx0_marker(body: str) -> bool:
         stripped = line.strip()
         if not stripped:
             continue
-        m = _CX0_MARKER_RE.match(stripped)
+        from engine.markers import line_marker_re
+
+        m = line_marker_re(prefix).match(stripped)
         return bool(m and m.group(1) in _CX0_ORNAMENT_MARKERS)
     return False
 
@@ -352,6 +353,9 @@ DOCUMENT_VARIABLE_ALLOWLIST = {
     "chart_muted",
     "codex_edition",
     "codex_strip_editorial_callouts",
+    # Map C1: the edition of any profile that declares editions (engine/editions.py).
+    "edition",
+    "strip_editorial_callouts",
     # Per-volume designation for the Codex 0 three-volume split (OF issue 22).
     # A short label ("Volume I") the codex0 template lowers to \CodexVolume,
     # printed on the half-title and title page of each volume.
@@ -1404,6 +1408,13 @@ class CompositeBundleCompiler(ManifestCompiler):
         from engine.plates import plates_config
 
         plates_cfg = plates_config(render_cfg if isinstance(render_cfg, dict) else {})
+        # C2: the marker namespace the profile declares (passage separators).
+        from engine.markers import prefix_of
+
+        try:
+            marker_prefix = prefix_of(resolve_profile(str(manifest.get("profile") or "")).markers)
+        except ValueError:
+            marker_prefix = prefix_of(None)
         page_size, page_size_source = page_size_from_mapping(render_cfg if isinstance(render_cfg, dict) else {}, scope="manifest.render")
         if page_size_source == "default":
             page_size, page_size_source = _profile_default_page_size_for(profile)
@@ -1632,8 +1643,8 @@ class CompositeBundleCompiler(ManifestCompiler):
                 lines.append("\\newpage")
             else:
                 separator = src.get("passage_separator")
-                if separator and not _body_opens_with_cx0_marker(body):
-                    lines.append(f"<!-- cx0:{separator} -->")
+                if separator and not _body_opens_with_cx0_marker(body, marker_prefix):
+                    lines.append(f"<!-- {marker_prefix}:{separator} -->")
                     lines.append("")
             lines.extend(_running_text_override_lines(src))
             if plates_cfg and has_chapter_opener and "tagline" not in _normalized_running_text(src):
