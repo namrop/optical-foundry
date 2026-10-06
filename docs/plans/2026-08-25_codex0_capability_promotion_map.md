@@ -5,7 +5,7 @@ note_role: architecture_note
 validation_profile: standard
 status: draft
 created: 2026-08-25T12:05:00-04:00
-updated: 2026-10-01T19:10:00-04:00
+updated: 2026-10-06T02:52:00-04:00
 beam_home: 42_optical_foundry
 title: "Codex 0 → Optical Foundry — capability promotion map (post-delivery)"
 tags:
@@ -33,7 +33,7 @@ last_touched:
   model: claude-opus-5-5
   provider: custom:primary
   voyage: "t3-code:hermes-acp"
-  at: 2026-10-01T19:10:00-04:00
+  at: 2026-10-06T02:52:00-04:00
 ---
 
 # Codex 0 → Optical Foundry — capability promotion map
@@ -776,7 +776,7 @@ the ruling.
 | 1 | One marker module, namespace declared by the profile (C2) | Strong | built, `c037d72` |
 | 2 | Editions as an engine module any profile declares (C1) | Strong | built, `c037d72` |
 | 3 | Profile packages that carry a whole profile (G2) | Strong | built, `8a0cab0` |
-| 4 | The volume loop as one work-render module | Strong | step 6 below |
+| 4 | The volume loop as one work-render module | Strong | step 6 below; built, `3b081b9` (§15) |
 | 5 | Profile-defined divider kinds (the ritual) | Worth exploring | step 7 below |
 | 6 | Render features behind one seam in the renderer | Worth exploring | step 10 below |
 | 7 | Bundle assembly steps out of the 514-line compile() | Worth exploring | step 10 below |
@@ -843,3 +843,72 @@ still in the engine; the `codex_register` check keys on the profile id "codex0";
 template and filter name the book's art by absolute path (manifest-owned asset variables);
 whether `client_report`'s classification should become its editions needs the client profile,
 which this checkout does not carry.
+
+## 15. 2026-10-06 — step 6: the work render loop
+
+Luis: "yes start on step 6 please" (the plan in §14.3). Built in this session.
+
+### 15.1 What changed
+
+- **The loop** (`engine/work_render.py`, Foundry `3b081b9`), replacing `render_volumes` and
+  `_planned`. A work is an ordered list of volumes, each an ordinary bundle manifest. The seat
+  pass renders them in order, each body seated after the previous volume's last folio. After
+  each render the engine harvests that volume's labels: every outline entry and divider, with
+  the PDF page label it falls on. Then every volume whose printed references are not the labels
+  the work now has re-renders, in parallel, until none is (the fixed point). A re-render that
+  changes a volume's page count or body folios stops the build, with no retry: Codex 0's C3,
+  D1c and G3 as one rule. `render.refs.max_passes` (default 4) bounds the loop. With
+  `render.passes` every measuring render is a draft, and the finals render once, in parallel,
+  each proved against its last draft (B3, unchanged in meaning).
+- **References** (`engine/work_refs.py`): `\OFWorkRef{<volume>:<outline title>}`,
+  `\OFWorkRef{<volume>:divider:<uid>}`, an optional own placeholder `\OFWorkRef[00]{...}`, and
+  `\OFWorkSeat` for the volume's first body folio. Titles compare after folding case,
+  punctuation and spacing. The compiler resolves them in the assembled source, so they reach
+  pandoc as plain numbers; an unknown label prints the placeholder (default `000`, the width of
+  a three-digit folio). A reference the finished work cannot resolve (no such volume, title or
+  divider, or a title that occurs twice in its volume) fails the build by name.
+- **Work manifests** (`kind: work`, `schemas/work_manifest_v1.yaml`): one bundle manifest per
+  volume, for volumes that differ in more than their sources. Each volume names its output
+  `dir` (drafts go to `<dir>_draft`) and its `seat`: `auto` (the template or the engine seats
+  the body) or `source` (the volume's own sources do, through `\OFWorkSeat`, and the engine
+  only checks the folio). A bundle manifest with `volumes:` runs through the same loop.
+- **B2**: the contents of the work is now references in the same loop, so its first render
+  already has its final shape.
+- **Codex 0** (canon): `spine_to_bundle_manifest.py --volume all --work-manifest <path>` emits
+  the three bundles with a reference for every locator (14 in each reading volume's Contents,
+  96 in Volume III's Contents in Detail), Volume III's seat as `\OFWorkSeat`, and the work
+  manifest (I `seat: source`, II `seat: auto`, III `seat: source`; `passes: {final_parallel:
+  3}`; placeholder `000`). Volume III's Notes are harvested from Volumes I and II's
+  edition-resolved text, now compiled rather than rendered (byte-identical to the render's
+  file). `build/run_full_build.sh` passes A to H became `cli manifest <work>`, and a new PASS L
+  (`tooling/check_work_locators.py`) re-derives every locator from the final PDFs with the
+  book's own readers, which share no code with the engine's, and requires them to agree.
+  D1d, D2, E and F are unchanged.
+
+### 15.2 Verification
+
+- Before building, the outline harvest was checked against the book's own readers on the
+  previous run's PDFs: all 96 locators the same.
+- Foundry suite: 762 pass, 1 fails: `test_no_template_copies_the_default_definitions`, on
+  `client_report.tex`, the client-local, gitignored template, which defines a command the
+  template contract also defines. §13 and §14 recorded six `client_report` failures instead;
+  in this run the other five pass. Nothing in step 6 touches that template. New: `tests/test_work_render.py` (the grammar;
+  the loop with a fake renderer, including every volume citing every other, the shape gate,
+  unresolvable references and the pass bound; three volumes citing each other both ways, and a
+  work manifest with a source-seated volume, both rendered for real). Book tooling: 125 pass.
+- Codex 0 whole-book build from `3b081b9` (run `of-step6-work-loop-2026-10-06`) against
+  `of-step5-8a0cab0-2026-10-03`: every contact sheet identical, all three volumes, read and
+  bound (224, 286/288, 126/128 pages). The loop took two draft passes (the seat pass, then all
+  three again, since each cites itself or a later volume), then the final wave; 124
+  references; PASS L agreed on all 124. The edition-resolved sources of Volumes I and III are
+  byte-identical; Volume II's differs only in where `body_folio_start: 207` sits in its
+  front-matter block (the engine now writes it). The bundle manifests differ in their date, in
+  Volume II carrying no `body_folio_start` variable, and in the seat their provenance comments
+  name (the loop seats Volumes II and III); the run now also has a work manifest. Build time 865 s.
+
+### 15.3 Next
+
+Step 7, divider kinds (§14.3). Not done here: `_reading_volume_locator_rows` and the PDF-reading
+passes stay in the spine tool for PASS L and for anyone building without `--work-manifest`; they
+retire with the spine tool at step 9.
+

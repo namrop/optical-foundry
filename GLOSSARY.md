@@ -5,7 +5,7 @@ note_role: glossary
 validation_profile: standard
 status: draft
 created: 2026-10-01T13:55:00-04:00
-updated: 2026-10-01T16:32:00-04:00
+updated: 2026-10-06T02:52:00-04:00
 beam_home: 42_optical_foundry
 title: "Optical Foundry glossary — the domain language"
 summary: "The Foundry's domain language: one canonical word per concept, with the words to avoid. Started 2026-10-01 at the keeper's request ('we should make a GLOSSARY.md file as well') alongside the first improve-codebase-architecture review, in the format of the domain-modeling skill (mattpocock/skills v1.3): terms only, no implementation detail. Drawn from DESIGN.md, the plan notes and RULINGS.md; where those use two words for one thing, the pick is proposed and open to the keeper. Updated inline as terms are settled."
@@ -26,7 +26,7 @@ last_touched:
   model: claude-opus-5-5
   provider: custom:primary
   voyage: "t3-code:hermes-acp"
-  at: 2026-10-01T13:55:00-04:00
+  at: 2026-10-06T02:52:00-04:00
 principal: luis
 ---
 
@@ -201,6 +201,14 @@ _Avoid_: offset, restart numbering
 **Contents of the Work**:
 The list, in every volume, of the work's dividers with their volumes and folios.
 _Avoid_: master index, combined TOC
+
+**Work reference** *(proposed, 2026-10-06)*:
+A place in one volume's source that prints the folio of a heading or divider in any volume of the same work, its own included, filled in from the rendered volumes.
+_Avoid_: cross-reference (LaTeX's, which stays inside one document), locator (the book's word for the printed number) *(proposed)*
+
+**Fixed point** *(proposed, 2026-10-06)*:
+The state in which every volume of a work was rendered with exactly the folios the rendered work has; the render loop stops there, and refuses rather than retries when getting there would move a volume's folios.
+_Avoid_: convergence, stable pass
 
 ### Checking
 
