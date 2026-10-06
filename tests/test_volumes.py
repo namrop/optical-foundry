@@ -1,4 +1,4 @@
-"""B1 volumes and B2 contents of the work (engine/volumes.py; promotion map, step 3)."""
+"""B1 volumes and B2 contents of the work (engine/volumes.py, engine/work_render.py; map steps 3, 6)."""
 from __future__ import annotations
 
 import shutil
@@ -9,7 +9,8 @@ import yaml
 
 from engine.manifest_compiler import CompositeBundleCompiler
 from engine.selection import SelectionError, select
-from engine.volumes import VolumeError, body_folio_span, render_volumes, roman, split_manifest, volume_errors
+from engine.volumes import VolumeError, roman, split_manifest, volume_errors
+from engine.work_render import body_folio_span, render_split_work
 
 
 def _work(tmp_path: Path, n: int = 4, *, profile: str = "keeper", paragraphs: int = 1) -> dict:
@@ -134,7 +135,7 @@ needs_tex = pytest.mark.skipif(
 def test_volumes_render_with_continuous_folios_parity_and_contents(tmp_path):
     pytest.importorskip("fitz")
     manifest = _work(tmp_path, paragraphs=3)
-    report = render_volumes(manifest, tmp_path / "out")
+    report = render_split_work(manifest, tmp_path / "out")
     one, two = report["volumes"]
     assert one["first_body_folio"] == 1
     assert two["first_body_folio"] == one["last_body_folio"] + 1
@@ -150,7 +151,7 @@ def test_volumes_render_with_continuous_folios_parity_and_contents(tmp_path):
     pages = "\n".join(p.get_text() for p in fitz.open(two["pdf"]))
     assert "Contents of the Work" in pages and "Part 1" in pages and "Part 2" in pages
     saved = yaml.safe_load(Path(report["report_path"]).read_text())
-    assert saved["schema_version"] == "volume_run_v1"
+    assert saved["schema_version"] == "work_run_v1"
 
 
 
@@ -158,7 +159,7 @@ def test_volumes_render_with_continuous_folios_parity_and_contents(tmp_path):
 
 
 def test_passes_config_is_optional_and_checked():
-    from engine.volumes import passes_config
+    from engine.work_render import passes_config
 
     assert passes_config({}) is None
     assert passes_config({"passes": {"final_parallel": 2}}) == {"final_parallel": 2, "prove_final": True}
@@ -166,13 +167,15 @@ def test_passes_config_is_optional_and_checked():
         passes_config({"passes": {"final_parallel": 0}})
 
 
+@needs_tex
 def test_planned_passes_draft_then_one_parallel_final_wave_proved_against_the_drafts(tmp_path):
     manifest = _work(tmp_path, paragraphs=3)
     manifest["render"]["passes"] = {"final_parallel": 2}
-    report = render_volumes(manifest, tmp_path / "out")
-    assert [p["pass"] for p in report["passes"]] == ["seat", "contents", "final", "prove"]
-    assert report["passes"][1]["fixed_point"] is True and report["passes"][3]["ok"] is True
+    report = render_split_work(manifest, tmp_path / "out")
+    kinds = [p.get("kind", p["pass"]) for p in report["passes"]]
+    # Seat pass (drafts), the contents' references re-drafted, one final wave, the proofs.
+    assert kinds == ["seat", "refs", "final", "prove"] and report["passes"][-1]["ok"] is True
     assert all(p["same_shape"] for p in report["final_proofs"])
     one, two = report["volumes"]
     assert two["first_body_folio"] == one["last_body_folio"] + 1
-    assert all("/final/" in v["pdf"] for v in report["volumes"])
+    assert all("/vol-" in v["pdf"] and "_draft/" not in v["pdf"] for v in report["volumes"])

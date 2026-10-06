@@ -1,0 +1,90 @@
+# Work Manifest Schema — v1
+# One work in several volumes, each volume its own bundle manifest (map step 6).
+
+schema: work_manifest_v1
+description: >
+  A work whose volumes are separate bundle manifests, rendered together by the
+  work render loop (engine/work_render.py): seated folio after folio, re-rendered
+  until every volume cites the labels the others actually have, then rendered
+  final. Use it when the volumes differ in more than their sources (their own
+  front matter, variables, seat); a bundle manifest with `volumes:` covers the
+  case where they do not. Each volume manifest is an ordinary bundle manifest
+  without `volumes:` or `volume:`; the engine writes the `volume:` block.
+
+additionalProperties: false
+required: [kind, schema_version, work_id, volumes]
+
+properties:
+  kind:
+    type: string
+    const: work
+  schema_version:
+    type: string
+    const: work_manifest_v1
+  work_id:
+    type: string
+    pattern: "^[a-z][a-z0-9_-]+$"
+    description: Names the run report (<work_id>.work.json).
+  title:
+    type: string
+  generated:
+    type: object
+    description: Provenance from whatever wrote this manifest; not read by the engine.
+  volumes:
+    type: array
+    minItems: 2
+    items:
+      type: object
+      additionalProperties: false
+      required: [id, manifest]
+      properties:
+        id:
+          type: string
+          pattern: "^[a-z0-9][a-z0-9_-]*$"
+          description: The volume's id; references name it (\OFWorkRef{<id>:...}).
+        manifest:
+          type: string
+          description: The volume's bundle manifest, relative to this file.
+        title:
+          type: string
+          description: Defaults to "Volume <roman numeral>".
+        dir:
+          type: string
+          pattern: "^[A-Za-z0-9][A-Za-z0-9_.-]*$"
+          description: >
+            The volume's output directory under the run's output (default
+            vol-<id>). With `render.passes`, its drafts go to <dir>_draft.
+        seat:
+          type: string
+          enum: [auto, source]
+          default: auto
+          description: >
+            auto: the template (if it seats $body_folio_start$) or the engine seats
+            the body folio. source: the volume's sources seat it themselves through
+            \OFWorkSeat, and the engine only checks that the body starts there.
+  render:
+    type: object
+    additionalProperties: false
+    properties:
+      passes:
+        type: object
+        description: Draft measuring passes, then one final wave proved against the drafts (map B3).
+        additionalProperties: false
+        properties:
+          final_parallel: { type: integer, minimum: 1, default: 1 }
+          prove_final: { type: boolean, default: true }
+      refs:
+        type: object
+        additionalProperties: false
+        properties:
+          placeholder: { type: string, default: "000" }
+          max_passes: { type: integer, minimum: 1, default: 4 }
+      work_contents:
+        description: Give every volume a contents of the whole work's dividers (map B2).
+        oneOf:
+          - type: boolean
+          - type: object
+            additionalProperties: false
+            properties:
+              enabled: { type: boolean }
+              title: { type: string }

@@ -73,8 +73,8 @@ properties:
       The work in several physical volumes (promotion map B1). Each volume
       starts before a named source; the first starts at the first source.
       `cli manifest` splits the manifest into one bundle per volume and renders
-      them in order, each body continuing the folios of the volume before
-      (engine/volumes.py).
+      them with the work render loop, each body continuing the folios of the
+      volume before (engine/volumes.py, engine/work_render.py).
     items:
       type: object
       required: [id]
@@ -95,7 +95,8 @@ properties:
   volume:
     type: object
     description: >
-      Written by engine/volumes.py into each volume's bundle; not written by hand.
+      Written by engine/volumes.py and engine/work_render.py into each volume's
+      bundle; not written by hand.
     additionalProperties: false
     required: [id, number, count]
     properties:
@@ -108,6 +109,23 @@ properties:
         type: integer
         minimum: 1
         description: The folio the body starts at (seated on a recto when two-sided).
+      seat:
+        type: string
+        enum: [auto, source]
+        description: >
+          Who seats the body folio. auto (default): the template if it seats
+          $body_folio_start$, else the engine. source: the volume's own sources do,
+          reading the number through \OFWorkSeat (engine/work_refs.py).
+      work_labels:
+        type: object
+        additionalProperties: { type: string }
+        description: >
+          Written by engine/work_render.py: every label the work's rendered volumes
+          offer, keyed <volume id>:<normalized outline title | divider:uid>. The
+          compiler resolves \OFWorkRef{...} in the sources from it.
+      work_ref_placeholder:
+        type: string
+        description: What a reference prints before its label exists (default 000).
       endnotes:
         type: object
         description: Written by engine/volumes.py (B4); marks maps source uid to {note id -> number}.
@@ -133,13 +151,14 @@ properties:
             type: array
             items:
               type: object
-              required: [volume, volume_title, volume_label, title, folio]
+              required: [volume, volume_title, volume_label, title]
               properties:
                 volume: { type: string }
                 volume_title: { type: string }
                 volume_label: { type: string }
                 title: { type: string }
                 folio: { type: integer }
+                ref: { type: string, description: "The work reference the folio resolves from, when folio is not given." }
                 uid: { type: string }
 
   selection:
@@ -526,6 +545,16 @@ properties:
         properties:
           final_parallel: { type: integer, minimum: 1, default: 1 }
           prove_final: { type: boolean, default: true }
+      refs:
+        type: object
+        description: >
+          With `volumes`, references across the volumes (map step 6,
+          engine/work_refs.py): what an unresolved \OFWorkRef prints, and how many
+          passes the work render loop may take to reach its fixed point.
+        additionalProperties: false
+        properties:
+          placeholder: { type: string, default: "000" }
+          max_passes: { type: integer, minimum: 1, default: 4 }
       plates:
         type: object
         description: >

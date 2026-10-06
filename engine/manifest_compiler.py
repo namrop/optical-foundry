@@ -1461,7 +1461,10 @@ class CompositeBundleCompiler(ManifestCompiler):
         volume_seat: int | None = None
         generic_volume_seat = False
         endnote_marks_set: dict[str, int] = {}
-        if volume_cfg and volume_cfg.get("body_folio_start") is not None:
+        # A volume whose sources seat their own folios (`seat: source`, map step 6)
+        # gets neither seat; its sources read the number through \OFWorkSeat.
+        source_seat = bool(volume_cfg and volume_cfg.get("seat") == "source")
+        if volume_cfg and volume_cfg.get("body_folio_start") is not None and not source_seat:
             volume_seat = int(volume_cfg["body_folio_start"])
             if template_seats_body_folio(profile):
                 accepted_manifest_variables["body_folio_start"] = volume_seat
@@ -1798,6 +1801,22 @@ class CompositeBundleCompiler(ManifestCompiler):
                 assembled_content = assembled_content.replace(
                     f"<<{_key.upper()}>>", str(_value)
                 )
+        # Map step 6: references across the volumes of a work (engine/work_refs.py),
+        # resolved here so they reach pandoc as plain numbers. Outside a work, or
+        # before a label exists, a reference takes its placeholder.
+        from engine.work_refs import DEFAULT_PLACEHOLDER, WorkRefError, has_tokens, resolve as _resolve_refs
+
+        work_refs_used: dict[str, Any] | None = None
+        if has_tokens(assembled_content):
+            try:
+                assembled_content, work_refs_used = _resolve_refs(
+                    assembled_content,
+                    (volume_cfg or {}).get("work_labels") or {},
+                    placeholder=str((volume_cfg or {}).get("work_ref_placeholder", DEFAULT_PLACEHOLDER)),
+                    seat=(volume_cfg or {}).get("body_folio_start"),
+                )
+            except WorkRefError as exc:
+                raise ValueError(str(exc)) from None
         # Merge title-page variables and bundle-level manifest variables into a
         # single frontmatter block. Both surfaces write to top-level keys AND
         # under `variables:` so downstream readers (edition_from_source_frontmatter,
@@ -1878,13 +1897,16 @@ class CompositeBundleCompiler(ManifestCompiler):
                         "id": volume_cfg.get("id"),
                         "number": volume_cfg.get("number"),
                         "count": volume_cfg.get("count"),
-                        "body_folio_start": volume_seat,
-                        "seat": ("template" if volume_seat is not None and not volume_seat_emitted else
+                        "body_folio_start": volume_seat if not source_seat else volume_cfg.get("body_folio_start"),
+                        "seat": ("source" if source_seat else
+                                 "template" if volume_seat is not None and not volume_seat_emitted else
                                  "engine" if volume_seat_emitted else None),
                         "work_contents_rows": len((volume_cfg.get("work_contents") or {}).get("rows") or []),
+                        "work_refs": work_refs_used or {},
                     }
                     if volume_cfg else None
                 ),
+                "work_refs": work_refs_used,
                 "body_metadata_blocks_removed": body_metadata_blocks_removed,
                 "extent": extent_record or ((volume_cfg or {}).get("extent")),
                 "endnotes": (
