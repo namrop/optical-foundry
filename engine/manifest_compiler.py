@@ -737,11 +737,12 @@ def _section_divider_start_lines(divider: dict[str, Any]) -> list[str]:
     # Ritual no-inject zone (2026-08-12): the floating-plate injector must
     # never displace a divider page — build 71's Movement III quad landed on
     # the wrong parity when a plate took the cut leaf's recto. The Begin mark
-    # rides BEFORE the parity clearpage so the zone covers the quad's first
-    # page whichever side it lands on; End is emitted by
-    # _section_divider_end_lines after the closing clearpage.
-    lines = ["\\CodexPlateRitualBegin{}"]
-    lines.append("\\OFEnsureRightPage" if divider.get("force_right_page", True) is not False else "\\clearpage")
+    # begins AFTER the page break, so it covers the ritual, not the previous
+    # chapter's last page; End closes the zone after the ritual's final break.
+    # Flush and align before marking the ritual. A marker before the break
+    # tags the previous chapter's last page and blocks its pending plate.
+    lines = ["\\OFEnsureRightPage" if divider.get("force_right_page", True) is not False else "\\clearpage",
+             "```{=latex}", "\\CodexPlateRitualBegin{}", "```"]
     # Compile-stage furnish marker. engine/furnish.py extracts
     # `[[OFDIV:<uid>]]` from the unsanitized renderer intermediate to know which
     # PDF page each divider lands on; the renderer preserves that map as a
@@ -801,7 +802,7 @@ def _section_divider_end_lines(divider: dict[str, Any]) -> list[str]:
     if divider.get("blank_after", False) is True:
         lines.append("\\OFIntentionalBlankPage")
     # closes the ritual no-inject zone opened in _section_divider_start_lines
-    lines.append("\\CodexPlateRitualEnd{}")
+    lines.extend(["```{=latex}", "\\CodexPlateRitualEnd{}", "```"])
     return lines
 
 
@@ -886,7 +887,21 @@ def _render_generic_section_divider(divider: dict[str, Any], numbering_strategy:
     return lines
 
 
-def _render_section_divider(divider: dict[str, Any], numbering_strategy: str = "continuous") -> list[str]:
+def _divider_resource_roots(manifest: dict[str, Any], resolved: list[Path] | None = None) -> list[Path]:
+    roots = list(resolved or [])
+    roots.extend(Path(s['path']).resolve().parent for s in manifest.get('sources', []) if s.get('path'))
+    return roots
+
+
+def _render_section_divider(divider: dict[str, Any], numbering_strategy: str = "continuous", *, profile: str = '', roots: list[Path] | None = None) -> list[str]:
+    if divider.get('kind'):
+        from engine.divider_kinds import render_kind, resolve_kind
+        selected = divider.get('profile_id') or divider.get('profile') or profile
+        package, kind, values = resolve_kind(selected, divider, roots or [])
+        body, _evidence = render_kind(selected, divider, roots or [])
+        if kind.get('framed', True):
+            return [*_section_divider_start_lines(divider), *body, *_section_divider_end_lines(divider)]
+        return body
     source_cfg = divider.get("source")
     if isinstance(source_cfg, dict):
         return _render_source_divider(source_cfg, divider, numbering_strategy=numbering_strategy)
@@ -1488,7 +1503,12 @@ class CompositeBundleCompiler(ManifestCompiler):
             if not before_uid:
                 continue
             dividers_by_before_uid.setdefault(before_uid, []).append(divider)
-            section_divider_inventory.append(_section_divider_inventory_entry(divider, sources_by_uid, sources_by_order))
+            entry = _section_divider_inventory_entry(divider, sources_by_uid, sources_by_order)
+            if divider.get('kind'):
+                from engine.divider_kinds import render_kind
+                _, kind_evidence = render_kind(divider.get('profile_id') or divider.get('profile') or profile, divider, _divider_resource_roots(manifest, manifest_resource_roots))
+                entry.update(kind_evidence)
+            section_divider_inventory.append(entry)
         assembly_strategy = str(render_cfg.get("assembly_strategy", ""))
         faithful_stack = assembly_strategy == "faithful_stack"
         requested_numbering_strategy = str(render_cfg.get("numbering_strategy") or render_cfg.get("numbering") or "continuous")
@@ -1577,7 +1597,7 @@ class CompositeBundleCompiler(ManifestCompiler):
                 appendices_started = True
             source_has_divider = bool(dividers_by_before_uid.get(uid, []))
             for divider in dividers_by_before_uid.get(uid, []):
-                lines.extend(_render_section_divider(divider, numbering_strategy=section_divider_numbering))
+                lines.extend(_render_section_divider(divider, numbering_strategy=section_divider_numbering, profile=profile, roots=_divider_resource_roots(manifest, manifest_resource_roots)))
                 lines.append("")
                 assembly.generated_sections.append(f"section_divider:{divider.get('uid', '')}")
             src_path = Path(src["path"])
@@ -2071,6 +2091,20 @@ class CompositeBundleCompiler(ManifestCompiler):
                         errors.append(f"section_divider[{i}] before_source_order not found: {before_order}")
 
                 source_cfg = divider.get("source")
+                if divider.get('kind'):
+                    from engine.divider_kinds import resolve_kind
+                    if source_cfg is not None:
+                        errors.append(f'section_divider[{i}] kind and source are mutually exclusive')
+                    # Read slots here as well as in the kind renderer: the bundle
+                    # schema and compiler contract include this manifest surface.
+                    if not isinstance(divider.get('slots', {}), dict):
+                        errors.append(f'section_divider[{i}] slots must be a mapping')
+                    try:
+                        resolve_kind(divider.get('profile_id') or divider.get('profile') or manifest.get('profile', ''), divider, _divider_resource_roots(manifest))
+                    except ValueError as exc:
+                        errors.append(f'section_divider[{i}]: {exc}')
+                elif 'slots' in divider:
+                    errors.append(f'section_divider[{i}] slots require kind')
                 if source_cfg is not None:
                     if not isinstance(source_cfg, dict):
                         errors.append(f"section_divider[{i}] source must be a mapping")
@@ -2083,7 +2117,7 @@ class CompositeBundleCompiler(ManifestCompiler):
                         include_frontmatter = source_cfg.get("include_frontmatter", "none")
                         if include_frontmatter not in {"full", "summary", "none"}:
                             errors.append(f"section_divider[{i}] source include_frontmatter must be full, summary, or none")
-                elif not divider.get("title"):
+                elif not divider.get("title") and not divider.get('kind'):
                     errors.append(f"section_divider[{i}] missing title for generic divider")
 
                 for key in ("title", "subtitle", "body", "profile_id", "profile", "profile_family"):

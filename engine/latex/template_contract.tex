@@ -11,6 +11,10 @@
 % Definitions here need graphicx and eso-pic only when used.
 
 % ---- Divider pages ---------------------------------------------------------
+% Profiles may replace these with their page-injection boundary markers.
+% Keep defaults in the preamble, never in Pandoc's read-time macro table.
+\providecommand{\CodexPlateRitualBegin}{}
+\providecommand{\CodexPlateRitualEnd}{}
 % Intentional blank / recto-start helpers for title and divider pages.
 % Page 1 is treated as recto/right; if the next page number is even, insert a
 % labeled blank.

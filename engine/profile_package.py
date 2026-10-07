@@ -48,7 +48,7 @@ import yaml
 SCHEMA = "profile_package_v1"
 _KEYS = {"schema_version", "id", "title", "description", "extends", "template", "defaults",
          "source_preparation", "ornaments", "openers", "markers", "editions",
-         "family", "base_defaults", "tex"}
+         "family", "base_defaults", "tex", "divider_kinds"}
 
 
 class ProfilePackageError(ValueError):
@@ -101,4 +101,10 @@ def load_package(path: Path) -> ProfilePackage:
         raise ProfilePackageError(f"{path}: id {data.get('id')!r} must match its directory {path.parent.name!r}")
     if not data.get("extends"):
         raise ProfilePackageError(f"{path}: extends must name an engine profile")
+    if 'divider_kinds' in data:
+        from engine.divider_kinds import validate_kinds
+        try:
+            validate_kinds(data['divider_kinds'], path.parent)
+        except ValueError as exc:
+            raise ProfilePackageError(f'{path}: {exc}') from exc
     return ProfilePackage(id=data["id"], directory=path.parent.resolve(), spec=data)

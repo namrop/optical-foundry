@@ -234,9 +234,11 @@ def _divider_folios(out_dir: Path, render_id: str, pdf: Path, manifest: dict[str
     rows = []
     for uid, page in sorted(page_map.items(), key=lambda kv: kv[1]):
         label = labels[int(page) - 1] if 0 < int(page) <= len(labels) else ""
-        if not label.isdigit():
-            raise VolumeError(f"{render_id}: divider {uid} is on page {page}, whose label {label!r} is not a body folio")
-        rows.append({"uid": uid, "title": titles.get(uid, uid), "folio": int(label), "page": int(page)})
+        if not label:
+            raise VolumeError(f"{render_id}: divider {uid} is on page {page}, which has no page label")
+        # Divider kinds may own frontmatter pages too. Preserve their PDF label
+        # exactly, just as harvest already does for outline entries.
+        rows.append({"uid": uid, "title": titles.get(uid, uid), "folio": int(label) if label.isdigit() else label, "page": int(page)})
     return rows
 
 

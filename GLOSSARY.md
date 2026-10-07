@@ -83,7 +83,7 @@ One audience version of a work, selected from one source by the edition markers 
 _Avoid_: variant (that is the marked region, not the version)
 
 **Divider kind** *(proposed, 2026-10-03)*:
-A profile-defined page sequence with named slots (Codex 0's part ritual: cut leaf, reveal plate, poem verso), which a manifest divider picks by name and fills.
+A profile-defined page sequence with named, typed slots. The package's `divider_kinds` supplies its LaTeX; a manifest divider selects `kind` and fills `slots`. Text is escaped, asset and Markdown paths are relative resources, and page counts follow the kind's declared bounds. Codex 0 uses kinds for its cut leaf, half-plate verso, reveal plate, poem verso, and handwritten asks.
 _Avoid_: ritual (the Codex 0 instance, not the general term)
 
 **Spine** (retired 2026-10-02, ruling `01a0fe8b-e963`):

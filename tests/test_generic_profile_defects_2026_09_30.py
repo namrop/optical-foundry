@@ -60,8 +60,11 @@ def test_divider_without_openers_emits_the_ritual_fallbacks(tmp_path):
     plan = CompositeBundleCompiler().compile(_bundle(tmp_path, "keeper", "Text."))
     text = Path(plan.render_source).read_text(encoding="utf-8")
     assert "\\CodexPlateRitualBegin{}" in text
-    assert "\\providecommand{\\CodexPlateRitualBegin}{}" in text
-    assert text.index("\\providecommand{\\CodexPlateRitualBegin}{}") < text.index("\\CodexPlateRitualBegin{}\n")
+    # The fallback belongs to the preamble contract, so Pandoc cannot expand
+    # the body's marker to nothing before a profile sees it.
+    from engine.template_contract import contract_text
+    assert "\\providecommand{\\CodexPlateRitualBegin}{}" not in text
+    assert "\\providecommand{\\CodexPlateRitualBegin}{}" in contract_text()
 
 
 def test_bundle_without_dividers_or_openers_stays_free_of_fallbacks(tmp_path):

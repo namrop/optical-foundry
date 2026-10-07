@@ -18,10 +18,8 @@ because pandoc treats them differently:
   Moving them into the preamble would hand those calls to the templates and
   change how Codex 0 sets; that is a separate decision.
 
-  Known consequence (found 2026-10-01): pandoc also expands the divider calls
-  ``\\CodexPlateRitualBegin{}`` / ``\\CodexPlateRitualEnd{}`` to nothing, so
-  codex0's Lua-backed ritual no-inject zone never receives them in a bundle.
-  Recorded, not changed here.
+  Divider ritual markers are raw LaTeX blocks. Their defaults live only in the
+  preamble contract, so a profile's boundary implementation receives the calls.
 """
 from __future__ import annotations
 
@@ -37,9 +35,8 @@ def contract_text() -> str:
 
 
 READ_TIME_DEFINITIONS: list[str] = [
-    # Ritual no-inject zone marks (codex0 defines the Lua-backed versions).
-    "\\providecommand{\\CodexPlateRitualBegin}{}",
-    "\\providecommand{\\CodexPlateRitualEnd}{}",
+    # Ritual markers are emitted as raw LaTeX blocks, not read-time macros.
+    # Their defaults live in the template contract; profiles may define them.
     "\\providecommand{\\OFChapterOpener}[1]{{\\par\\bigskip\\begingroup\\centering\\Large #1\\par\\endgroup\\medskip}}",
     "\\providecommand{\\OFChapterOpenerEpigraph}[2]{{\\par\\bigskip\\begingroup\\centering\\Large #1\\par\\smallskip\\small\\itshape #2\\par\\endgroup\\medskip}}",
     # Fallbacks so a non-codex0 profile can still render a codex-quote epigraph

@@ -386,6 +386,12 @@ properties:
         uid:
           type: string
           description: Unique divider identifier for evidence.
+        kind:
+          type: string
+          description: Name of a divider kind declared by the selected profile package.
+        slots:
+          type: object
+          description: Typed values for the selected divider kind; its package declares allowed names.
         before_source_uid:
           type: string
           description: Insert the divider immediately before this source UID.

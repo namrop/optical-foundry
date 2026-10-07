@@ -777,7 +777,7 @@ the ruling.
 | 2 | Editions as an engine module any profile declares (C1) | Strong | built, `c037d72` |
 | 3 | Profile packages that carry a whole profile (G2) | Strong | built, `8a0cab0` |
 | 4 | The volume loop as one work-render module | Strong | step 6 below; built, `3b081b9` (§15) |
-| 5 | Profile-defined divider kinds (the ritual) | Worth exploring | step 7 below |
+| 5 | Profile-defined divider kinds (the ritual) | Worth exploring | step 7 below; built (§16) |
 | 6 | Render features behind one seam in the renderer | Worth exploring | step 10 below |
 | 7 | Bundle assembly steps out of the 514-line compile() | Worth exploring | step 10 below |
 
@@ -912,3 +912,86 @@ Step 7, divider kinds (§14.3). Not done here: `_reading_volume_locator_rows` an
 passes stay in the spine tool for PASS L and for anyone building without `--work-manifest`; they
 retire with the spine tool at step 9.
 
+## 16. 2026-10-07 — step 7: divider kinds
+
+### 16.1 What changed
+
+A profile package may declare `divider_kinds`. Each kind declares its typed slots and an
+ordered sequence of package LaTeX files or authored Markdown sources. A manifest divider
+selects `kind` and supplies `slots`. The compiler rejects unknown or missing slots, unsafe
+resource paths, out-of-range integers, and LaTeX commands in text slots. It escapes accepted
+text and records the kind, resolved slots, package, and sequence in evidence. Dividers without
+`kind` keep their existing rendering route.
+
+```yaml
+# In codex0/profile.yaml
+divider_kinds:
+  cut-leaf:
+    slots:
+      movement_index: {type: integer, minimum: 0}
+      display_title: {type: text}
+    pages:
+      - latex: dividers/cut-leaf.tex
+```
+
+```yaml
+# In a bundle manifest
+section_dividers:
+  - uid: part-five
+    before_source_uid: first-passage-of-part-five
+    kind: cut-leaf
+    slots:
+      movement_index: 4
+      display_title: The Door Reopened
+```
+
+The `codex0` package declares six kinds: `cut-leaf`, `half-plate-verso`, `reveal-plate`,
+`poem-verso`, `front-ask`, and `closing-ask`. The book supplies its titles, movement indices,
+artwork, authored poem sources, epigraph, and ask-page counts. The cut geometry, ghost
+registration, half-plate placement, and ask-page LaTeX now live in the package. The optional
+verso calibration guide remains available, but is off in production.
+
+The spine tool no longer has `_generate_part_divider_recto_source`,
+`_generate_half_plate_verso_source`, or `_generate_ask_pages_source`. Asks retain empty,
+content-addressed data anchors to preserve source order and front/body roles. Those anchors
+contain no page LaTeX. The other source generators remain for their existing uses.
+
+The ritual markers are raw LaTeX blocks, with fallback definitions only in the preamble.
+Pandoc no longer expands them away. The begin marker follows the page-break guard: placing
+it before that guard incorrectly marked the previous chapter's last page and blocked its
+pending plate. That first attempt failed on Volume II's lamp plate. After the boundary was
+corrected, a 286-page Volume II draft matched every baseline page except its still-unresolved
+Contents references. No plate or ritual seat changed in that probe.
+
+A sequence may own its numbering and page breaks with `framed: false`. Its setup item uses
+`mark: true` to place the invisible divider marker at shipout, without adding a line to the
+page. This preserves ask page positions; the proof below found a separate attribution defect.
+Work-reference harvesting now preserves
+a frontmatter divider's Roman PDF label as well as body folios; unlabeled dividers still fail.
+
+### 16.2 Verification
+
+- Engine: `python3 -m pytest -q` — 790 passed, 1 failed. The failure is the known client-local
+  `client_report.tex` case, `tests/test_template_contract.py::test_no_template_copies_the_default_definitions`.
+- Book: `python3 -m pytest -q tests` in `codex0_v5/tooling` — 125 passed.
+- A made-up garden-notebook profile tests the same kind and slot surface, with real PDF renders
+  with and without the standard divider frame. The marker test proves both ritual boundary calls
+  reach LaTeX and that the begin call comes after the page break.
+- The first whole-book run (`of-step7-divider-kinds-2026-10-07`) found one visible difference:
+  on Volume I's first handwritten ask (physical page 9, folio i) the attribution lost
+  "Percival Everett". The ask template wrote `\else[[slot:author]]`, which filled to
+  `\elsePercival`, a different command, so TeX skipped the author. Fixed in the template
+  (`\else [[slot:author]]`, and the same for the date), and the package loader now refuses any
+  slot written straight after a control word (`tests/test_divider_kinds.py`, `glued-token`).
+- Whole-book check after the fix, run `of-step7-divider-kinds-b-2026-10-07` against
+  `of-step6-work-loop-2026-10-06`: every contact sheet identical, all three volumes, read and
+  bound (224, 286/288, 126/128 pages). All 124 references agree with the book's readers. Plate
+  containment has no violations; the lamp plate is at folio 419 as before. The remaining
+  differences are not visible: the edition-resolved sources of Volumes I and II (the ritual now
+  comes from the package's LaTeX instead of generated Markdown), the dated manifest file names,
+  and the work manifest, which differs only in its date and those names. Build time 592 s.
+
+### 16.3 Next
+
+Step 8 (§14.3): Codex 0 onto the general versions, one swap per commit, each with its own
+whole-book check.
