@@ -5,8 +5,8 @@ note_role: architecture_note
 validation_profile: standard
 status: draft
 created: 2026-08-25T12:05:00-04:00
-updated: 2026-10-06T02:52:00-04:00
-beam_home: 42_optical_foundry
+updated: 2026-10-07T14:20:06-04:00
+beam_home: docs/plans
 title: "Codex 0 → Optical Foundry — capability promotion map (post-delivery)"
 tags:
   - optical-foundry
@@ -995,3 +995,104 @@ a frontmatter divider's Roman PDF label as well as body folios; unlabeled divide
 
 Step 8 (§14.3): Codex 0 onto the general versions, one swap per commit, each with its own
 whole-book check.
+
+## 17. 2026-10-07 — step 8: two swaps proved; four remain
+
+Every comparison below uses `of-step7-divider-kinds-b-2026-10-07` as its baseline.
+All commits are local. Nothing was pushed. No generated PDF or image was committed.
+
+### 17.1 Openers onto D4 — committed
+
+The package declares Codex 0's raised capitals in `openers:`. The template and profile filter
+no longer implement capital lowering. The profile retains its breath and indentation metrics.
+The old capital pass hid the first word from `stringify`; D4 runs later. Preserving that
+metric fixed the first retry's page drift without moving capital lowering back into the profile.
+
+Run `of-step8-openers-c-2026-10-07` completes the three volumes, read and bound.
+All six contact sheets are identical. The comparison reports no differences.
+Engine: 792 passed, one known `client_report.tex` contract failure. Book tools: 125 passed.
+The focused opener suite: 14 passed.
+
+- Profiles: `841c957076f70871fb817d3774755a6c928622b3`.
+- Engine: `5f4bed168f0d84b8a2b9ab20071573d01bd259db`.
+- Canon pointer: `fc0f02f0187eabb24ed55bfab108ba885363ddfc`.
+
+### 17.2 Colophon extent — unchanged, needs a counting decision
+
+On the same edition-resolved Volumes I and II, the private counter gives 126,085 words.
+The general counter, with `CodexOpenerEpigraph` visible, gives 114,697.
+The printed rounded figure would change from “one hundred twenty-six thousand” to
+“one hundred fifteen thousand”. No extent swap or commit was made.
+
+Keeper question: adopt the general counting rules and new printed figure, or add a
+compatibility counting mode to preserve the current figure?
+
+### 17.3 Volume III notes onto render.endnotes — committed
+
+Work-wide endnotes harvest runs on assembled, edition-resolved text. A declared source UID
+selects the authored sink frame. The engine fills that frame, not a book-private harvested
+source. Native mark mode preserves Codex 0's existing raised-number typography. General engine
+marks lower in source preparation after edition resolution. The private notes generator stays
+only for the old non-work entrypoint; it can retire with the spine tool at step 9.
+
+Run `of-step8-endnotes-b-2026-10-07` completes the three volumes, read and bound.
+All six contact sheets are identical: I 224/224, II 286/288, III 126/128 pages.
+The comparison reports two non-visual differences: Volume III's bundle points to the authored
+sink frame, and the work manifest declares `render.endnotes`. The other two bundles and all
+three edition-resolved sources are identical. Comparison exit 1 reports those manifest changes,
+not a contact-sheet difference. Engine: 797 passed, the same known contract failure.
+Book tools: 125 passed. The focused work-endnotes tests: five passed.
+
+- Engine: `a18157cd5a86b7e302fd925e0ea2aaaf678c45c1`.
+- Canon adapter, authored frame and engine pointer: `a486d3a527d7f98a3631b79212f500bc3e6e3507`.
+
+### 17.4 Rails and ornament law — unchanged, needs an art-seat decision
+
+The general ornament validator was tried against all 56 declared rung members.
+It rejects `CL05` in rung 6 and `PR05` in rung 8. Their ink aspect ratios cannot fill those
+slots under the general containment rule. No art was replaced, no law was loosened, and no
+rail swap or commit was made.
+
+Keeper question: which replacement or reassignment should those two rung seats use?
+
+### 17.5 Plates — unproven trial, reverted
+
+Runs `of-step8-plates-2026-10-07` and `of-step8-plates-b-2026-10-07` stop during the work's
+draft seat pass. The general gate rejects Volume II's Her Garden plate at draft physical page
+57, folio 257, facing page 56. The ledger calls that facing page
+“Building the Atrium -> The Gardener”; the draft PDF shows The Gardener opening there.
+Restoring the original plate/ornament callback order did not resolve the rejection.
+
+This is not a completed whole-book comparison. Draft shipped-page attribution needs debugging
+before the private checker can retire. Do not assume the plate needs reseating from this ledger
+alone. The prototype engine suite had 793 passes and five failures: the known contract failure,
+three divider-hygiene cases and the old private-Lua template contract. All plate prototype
+changes were reverted, including deletion of the private checker and Lua alias.
+No plate swap was committed. The restored engine suite has 797 passes and the known failure.
+
+### 17.6 Press map, punch guide and labels — trial left uncommitted
+
+The three book adapters call `cli bindery` or `cli print-sheet`. Book-authored stock rulings,
+station labels, instructional captions, printer-safe ticks and the scale check remain book data.
+The press-map JSON is identical on the same bind PDFs: 56, 72 and 32 sheets.
+Both punching-guide pages are pixel-identical at 180 dpi. The CLI returned all six stations.
+
+The label sheet does not pass the same raster check. Its artwork region differs in 1,123,785
+RGB channel values at 180 dpi; 282,243 pixels differ by more than 10 in a channel.
+The old rsvg output embeds padded 1506 x 2807 image objects; the general placement embeds the
+native 1500 x 2800 image. Image placement and rasterization differ. The captions, scale check,
+cut ticks and artwork content remain present. No physical print was submitted.
+
+Keeper question: accept the general engine's label appearance, or require matching the old
+rasterization before committing the group? Review PDFs and 180-dpi page images are temporary
+under `/tmp/of-step8-bindery-proof/{baseline,candidate}/`.
+
+The book trial is `of-step8-bindery-2026-10-07`: 451 seconds, all six contact sheets identical.
+Its two non-visual manifest differences are the endnotes changes from §17.3; there is no
+additional whole-book difference from the bindery adapters. Engine: 797 passed, the same known
+failure. Book tools: 125 passed. The adapter group is not committed. Its pending files are
+`tooling/build_press_sheet_map.py`, `tooling/build_punching_guide.py`,
+`tooling/build_cover_label_print_sheet.py`, and new `tooling/foundry_cli.py`.
+
+Step 8 remains incomplete. Extent, rails, plates and the bindery/label group still need the
+work above. Step 9 has not started.
