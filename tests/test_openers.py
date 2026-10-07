@@ -12,6 +12,37 @@ import yaml
 from engine.openers import FILTER, OpenerError, plan_openers
 
 
+def test_codex0_package_uses_general_opener_geometry_and_filter(tmp_path):
+    from engine.profile_resolver import resolve_profile
+    resolved = resolve_profile("codex0")
+    plan = plan_openers(resolved.openers)
+    assert plan is not None
+    assert resolved.openers["spill"]["B"] == "0.323em"
+    composition = resolved.package_dir / "filters" / "codex0_composition.lua"
+    md = _op("One") + "Before the room opens, a long enough first paragraph to need its ordinary space.\n\nSecond paragraph.\n"
+    tex = subprocess.run(
+        ["pandoc", "-f", "markdown", "-t", "latex", "--lua-filter", str(composition),
+         "--lua-filter", str(FILTER)], input=md, capture_output=True, text=True, check=True).stdout
+    assert "\\OFOpenerCapital{B}{efore}" in tex
+    assert "CodexLettrine" not in tex
+    assert "CodexRaisedCapBox" not in resolved.template_path.read_text()
+
+
+def test_codex0_opener_breath_keeps_pre_capital_stringify_metric():
+    from engine.profile_resolver import resolve_profile
+    composition = resolve_profile("codex0").package_dir / "filters" / "codex0_composition.lua"
+    # Full paragraph > 62 bytes; without its first word <= 62. The former
+    # private capital pass removed that word from stringify before this policy.
+    para = "The road does not erase the weather that was always gathering."
+    md = _op("One") + "```{=latex}\n\\OFSetRunningTagline{One}\n```\n\n" + para + "\n\nFollowing paragraph.\n"
+    tex = subprocess.run(
+        ["pandoc", "-f", "markdown", "-t", "latex", "--lua-filter", str(composition),
+         "--lua-filter", str(FILTER)], input=md, capture_output=True, text=True, check=True).stdout
+    assert "\\OFOpenerCapital{T}{he}" in tex
+    assert "\\CodexBreakOrnament" in tex
+    assert "\\noindent \\OFOpenerCapital" not in tex
+
+
 def test_no_declaration_no_plan():
     assert plan_openers(None) is None and plan_openers({}) is None
 
