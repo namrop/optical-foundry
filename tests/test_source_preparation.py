@@ -23,7 +23,7 @@ def _plan(tmp_path: Path, body: str, profile: str = "keeper") -> ProjectionPlan:
 
 def test_the_steps_and_their_order():
     assert source_preparation.STEPS == (
-        "codex_edition", "layout_images", "mermaid", "vega", "d2", "graphviz", "emoji",
+        "codex_edition", "endnotes", "layout_images", "mermaid", "vega", "d2", "graphviz", "emoji",
         "stationery_opening", "titlepage_background_guard", "resource_pinning",
     )
 

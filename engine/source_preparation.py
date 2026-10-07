@@ -30,6 +30,7 @@ render's output directory. PDF output only (web is out of scope, per the ruling)
 """
 from __future__ import annotations
 
+import copy
 import re
 from dataclasses import dataclass, field, replace
 from pathlib import Path
@@ -61,7 +62,7 @@ from engine.resource_roots import (
 )
 from engine.vega import VegaRenderError, preprocess_vega_blocks
 
-PLAN_STEPS = ("codex_edition", "layout_images", "mermaid", "vega", "d2", "graphviz", "emoji")
+PLAN_STEPS = ("codex_edition", "endnotes", "layout_images", "mermaid", "vega", "d2", "graphviz", "emoji")
 RENDER_COPY_STEPS = ("stationery_opening", "titlepage_background_guard", "resource_pinning")
 STEPS = PLAN_STEPS + RENDER_COPY_STEPS
 
@@ -215,6 +216,20 @@ def codex_edition(plan: ProjectionPlan, out_dir: Path, profile: ResolvedProfile)
     if warnings:
         boundary["warnings"] = warnings
     return replace(plan, render_source=result.rewritten_source, boundary_assertions=boundary)
+
+
+def endnotes(plan: ProjectionPlan, out_dir: Path, profile: ResolvedProfile) -> ProjectionPlan:
+    """Lower work-wide IDs only after edition selection has removed hidden prose."""
+    from engine.endnotes import rewrite_markers
+    combined = (plan.boundary_assertions.get("endnotes") or {}).get("combined_marks")
+    if not combined:
+        return plan
+    body, count = rewrite_markers(plan.render_source.read_text(encoding="utf-8"), combined)
+    path = out_dir / f"{plan.render_id}.endnotes.md"
+    path.write_text(body, encoding="utf-8")
+    boundary = copy.deepcopy(plan.boundary_assertions)
+    boundary["endnotes"]["marks_set"] = {"assembled": count}
+    return replace(plan, render_source=path, boundary_assertions=boundary)
 
 
 def layout_images(plan: ProjectionPlan, out_dir: Path, profile: ResolvedProfile) -> ProjectionPlan:
@@ -403,6 +418,7 @@ def emoji(plan: ProjectionPlan, out_dir: Path, profile: ResolvedProfile) -> Proj
 
 PLAN_STEP_FUNCTIONS: dict[str, Callable[[ProjectionPlan, Path, ResolvedProfile], ProjectionPlan]] = {
     "codex_edition": codex_edition,
+    "endnotes": endnotes,
     "layout_images": layout_images,
     "mermaid": mermaid,
     "vega": vega,

@@ -249,6 +249,66 @@ def _compiler_for(manifest: dict[str, Any]):
             "codex_bundle": CodexBundleCompiler}[manifest["kind"]]
 
 
+def _prepare_work_endnotes(volumes: list[WorkVolume], cfg: dict[str, Any], output_dir: Path) -> None:
+    """Harvest assembled, edition-resolved volumes before seating any PDF.
+
+    A replacement source may own its page frame and intro, with <<ENDNOTES>>
+    marking the generated groups. Native marks are opt-in for profiles that
+    already collect footnotes as endnotes; otherwise the engine lowers marks.
+    """
+    from engine.endnotes import EndnoteError, harvest_volume, notes_source
+    from engine.profile_resolver import resolve_profile
+    from engine.source_preparation import codex_edition
+
+    sink = next((v for v in volumes if v.id == cfg.get("sink")), None)
+    if sink is None:
+        raise EndnoteError(f"render.endnotes.sink {cfg.get('sink')!r} is not a volume id")
+    mode = cfg.get("mark_mode", "engine")
+    if mode not in ("engine", "native"):
+        raise EndnoteError("render.endnotes.mark_mode must be engine or native")
+    groups = []
+    for vol in volumes:
+        if vol is sink:
+            continue
+        out = output_dir / "endnotes" / vol.id
+        out.mkdir(parents=True, exist_ok=True)
+        plan = _compiler_for(vol.manifest)().compile(vol.manifest, manifest_path=vol.manifest_path)
+        plan = codex_edition(plan, out, resolve_profile(vol.manifest["profile"]))
+        marks, notes = harvest_volume([{"uid": "assembled", "path": str(plan.render_source)}])
+        title = cfg.get("group_title", "Notes to {title}").format(
+            title=vol.title, id=vol.id, number=vol.number, roman=roman(vol.number))
+        groups.append((title, notes))
+        vol.manifest.setdefault("volume", {})["endnotes"] = {
+            "sink": sink.id, "count": len(notes), "mark_mode": mode,
+            **({"combined_marks": marks.get("assembled", {})} if mode == "engine" else {}),
+        }
+    uid = cfg.get("replace_source_uid") or f"{sink.manifest['bundle_id']}-endnotes"
+    text = notes_source(groups, title=cfg.get("title", "Notes"), intro=cfg.get("intro"), uid=uid)
+    path = output_dir / "endnotes" / "sink.md"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    target = next((s for s in sink.manifest["sources"] if s["uid"] == uid), None)
+    if cfg.get("replace_source_uid"):
+        if target is None:
+            raise EndnoteError(f"render.endnotes.replace_source_uid {uid!r} is not a source of {sink.id}")
+        frame = Path(target["path"])
+        if not frame.is_absolute() and sink.manifest_path:
+            frame = sink.manifest_path.parent / frame
+        frame_text = frame.read_text(encoding="utf-8")
+        if frame_text.count("<<ENDNOTES>>") != 1:
+            raise EndnoteError("the endnote sink source must carry exactly one <<ENDNOTES>>")
+        # The frame owns title and intro. The engine owns every generated group.
+        body = text[text.index("\n## ") + 1:] if "\n## " in text else ""
+        path.write_text(frame_text.replace("<<ENDNOTES>>", body.rstrip()), encoding="utf-8")
+        target["path"] = str(path.resolve())
+    else:
+        path.write_text(text, encoding="utf-8")
+        sink.manifest["sources"].append({"uid": uid, "path": str(path.resolve()),
+                                        "order": max((s.get("order", 0) for s in sink.manifest["sources"]), default=0) + 1,
+                                        "include_frontmatter": "none", "role": "appendix"})
+    sink.manifest.setdefault("volume", {})["endnotes"] = {
+        "sink": sink.id, "notes_source_uid": uid, "count": sum(len(n) for _, n in groups)}
+
+
 def _render_one(manifest: dict[str, Any], manifest_path: Path | None, out_dir: Path, **render_kwargs: Any):
     from renderers.pandoc_renderer import PandocRenderer
 
@@ -291,6 +351,9 @@ def render_work(
     rows = _contents_rows(volumes) if contents else None
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
+    volumes = copy.deepcopy(volumes)
+    if render_cfg.get("endnotes"):
+        _prepare_work_endnotes(volumes, render_cfg["endnotes"], output_dir)
     ids = {v.id for v in volumes}
 
     table: dict[str, str] = {}

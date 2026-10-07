@@ -66,6 +66,17 @@ properties:
     type: object
     additionalProperties: false
     properties:
+      endnotes:
+        type: object
+        additionalProperties: false
+        required: [sink]
+        properties:
+          sink: { type: string }
+          title: { type: string }
+          intro: { type: string }
+          group_title: { type: string }
+          replace_source_uid: { type: string }
+          mark_mode: { type: string, enum: [engine, native], default: engine }
       passes:
         type: object
         description: Draft measuring passes, then one final wave proved against the drafts (map B3).
