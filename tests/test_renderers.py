@@ -609,7 +609,9 @@ def test_pandoc_renderer_page_size_defaults_preserve_source_header_includes(tmp_
 
 def test_read_defaults_metadata_detects_placeholder_assets():
     r = PandocRenderer()
-    meta = r._read_defaults_metadata(GF / "profiles" / "40_latex_import" / "defaults" / "elian_packet.yaml")
+    from tests.profile_packages import profile_package
+
+    meta = r._read_defaults_metadata(profile_package("elian-packet") / "defaults" / "elian_packet.yaml")
     assert meta["boundary"]["placeholder_assets"] is True
     assert any("placeholder" in w.lower() for w in meta["warnings"])
 

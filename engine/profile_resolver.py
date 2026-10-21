@@ -133,6 +133,8 @@ PROFILE_SPECS: dict[str, dict[str, Any]] = {
     "mythic": {"family": "document_spine", "defaults": ["document_spine.yaml", "yugenbase.yaml", "mythic.yaml"], "template": "mythic.tex"},
     # "codex0" left the engine on 2026-10-03 (map G2, ruling 01a100da-3cde): it is the
     # codex0 package in the profiles repository (optical-foundry-profiles/codex0).
+    # SIL-32 (2026-10-21; rulings 01a0f99a-b2db, 01a14634-bff0): household-paper, daily-review,
+    # resume, elian-packet, elian-poster, prometheus-packet and mythic-letter are packages there too.
     "codex0-a5": {
         "family": "document_spine",
         "defaults": ["document_spine.yaml", "yugenbase.yaml", "codex0_a5.yaml"],
@@ -140,9 +142,7 @@ PROFILE_SPECS: dict[str, dict[str, Any]] = {
     },
     "convergence": {"family": "document_spine", "defaults": ["document_spine.yaml", "yugenbase.yaml", "convergence.yaml"], "template": "convergence.tex"},
     "keeper": {"family": "document_spine", "defaults": ["document_spine.yaml", "yugenbase.yaml", "keeper.yaml"], "template": "keeper.tex"},
-    "prometheus-packet": {"family": "document_spine", "defaults": ["prometheus_packet.yaml"], "template": "generic_report.tex"},
     "letter": {"family": "stationery_art", "defaults": ["letter.yaml"], "template": "personal_letter.tex"},
-    "mythic-letter": {"family": "stationery_art", "defaults": ["mythic_letter.yaml"], "template": "personal_letter.tex"},
     "mythic-letter-johannah": {
         "family": "stationery_art",
         "defaults": ["yugenbase.yaml", "personal_letter.yaml", "mythic_letter_johannah.yaml"],
@@ -161,9 +161,6 @@ PROFILE_SPECS: dict[str, dict[str, Any]] = {
         ],
         "template": "mythic_letter_johannah_halfletter.tex",
     },
-    "resume": {"family": "resume", "defaults": ["resume_resume.yaml"], "template": "resume.tex"},
-    "elian-packet": {"family": "campaign_art", "defaults": ["elian_packet.yaml"], "template": "elian_packet.tex"},
-    "elian-poster": {"family": "campaign_art", "defaults": ["elian_poster.yaml"], "template": "elian_poster.tex"},
     "labels-avery-5164": {"family": "physical_sheet_profile", "defaults": ["labels_avery_5164.yaml"], "template": "label_sheet.tex"},
     "labels-avery-15264": {"family": "physical_sheet_profile", "defaults": ["labels_base.yaml"], "template": "label_sheet.tex"},
     "sticker-sheet": {"family": "physical_sheet_profile", "defaults": ["sticker_sheet.yaml"], "template": "label_sheet.tex"},
@@ -174,13 +171,6 @@ PROFILE_SPECS: dict[str, dict[str, Any]] = {
     },
     "yugen-brand": {"family": "document_spine", "defaults": ["document_spine.yaml", "yugenbase.yaml"], "template": "generic_report.tex"},
     "yugen-brand-elevated": {"family": "document_spine", "defaults": ["document_spine.yaml", "yugenbase.yaml"], "template": "generic_report.tex"},
-    # Household newspaper (descriptive handle; masthead unminted). Letter pages,
-    # page-class grammar lowered by filters/household_paper.lua, greyscale only.
-    "household-paper": {
-        "family": "periodical",
-        "defaults": ["household_paper.yaml"],
-        "template": "household_paper.tex",
-    },
     # One piece of short fiction at Codex 0's half-letter trim: Iowan, book
     # paragraphs, title block on page one, scene breaks and the opening drop cap
     # lowered by filters/short_story.lua. Opened 2026-09-29 for the horror
