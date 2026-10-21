@@ -95,7 +95,7 @@ def _package(repo: Path, pid: str = "kc-test", **extra) -> Path:
     d = repo / pid
     d.mkdir(parents=True)
     (d / "defaults.yaml").write_text("pdf-engine: lualatex\n")
-    spec = {"schema_version": "profile_package_v1", "id": pid, "extends": "keeper", "defaults": ["defaults.yaml"], **extra}
+    spec = {"schema_version": "profile_package_v1", "id": pid, "extends": "document-spine", "defaults": ["defaults.yaml"], **extra}
     (d / "profile.yaml").write_text(yaml.safe_dump(spec, sort_keys=False))
     return d
 
@@ -114,16 +114,16 @@ def test_a_package_extends_an_engine_profile(tmp_path, monkeypatch):
     monkeypatch.setenv("OF_PROFILE_PATH", str(tmp_path))
     profile = resolve_profile("kc-test")
     assert profile.package_dir == d.resolve()
-    assert profile.template_path.name == "keeper.tex"
+    assert profile.template_path.name == "base.tex"  # document-spine's (keeper left the engine, SIL-32)
     assert profile.defaults_stack[-1] == (d / "defaults.yaml").resolve()
     assert profile.ornaments == {"slots": {"breath": {}}}
     assert profile.boundary["profile_package"] == str(d.resolve())
 
 
 def test_an_engine_profile_is_never_shadowed(tmp_path, monkeypatch):
-    _package(tmp_path, pid="keeper")
+    _package(tmp_path, pid="document-spine")
     monkeypatch.setenv("OF_PROFILE_PATH", str(tmp_path))
-    assert resolve_profile("keeper").package_dir is None
+    assert resolve_profile("document-spine").package_dir is None
 
 
 def test_package_shape_is_checked(tmp_path):
@@ -153,7 +153,7 @@ def test_rails_and_the_law_on_a_rendered_page(tmp_path, monkeypatch):
     _piece(d / "orn" / "breath.png", 600, 200)
     (d / "defaults.yaml").write_text("pdf-engine: lualatex\n")
     (d / "profile.yaml").write_text(yaml.safe_dump({
-        "schema_version": "profile_package_v1", "id": "kc-test", "extends": "keeper", "defaults": ["defaults.yaml"],
+        "schema_version": "profile_package_v1", "id": "kc-test", "extends": "document-spine", "defaults": ["defaults.yaml"],
         "ornaments": {"rails": {"class": "literal-voice", "art": art},
                       "slots": {"breath": {"art": ["orn/breath.png"]}, "hinge": {}}},
     }, sort_keys=False))

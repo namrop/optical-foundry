@@ -75,7 +75,7 @@ def test_yugen_civic_is_bundle_ok():
     assert cap.defaults_found.endswith("/civic.yaml")
     assert cap.template_found is not None
     assert cap.template_found.endswith("/base.tex")
-    assert cap.defaults_source == "local"
+    assert cap.defaults_source == "local+package"  # a profile package since SIL-32
     assert cap.template_source == "local"
     assert cap.warnings == []
 
@@ -88,8 +88,9 @@ def test_mythic_letter_johannah_is_bundle_ok():
     assert cap.has_longtable is True
     assert cap.defaults_found is not None
     assert cap.template_found is not None
-    assert cap.defaults_source == "local"
-    assert cap.template_source == "local"
+    # A profile package since SIL-32: engine personal_letter.yaml + package defaults and template.
+    assert cap.defaults_source == "local+package"
+    assert cap.template_source == "package"
 
 
 def test_codex0_is_bundle_ok():
@@ -119,13 +120,15 @@ def test_letter_is_bundle_ok():
 
 
 def test_mythic_letter_is_bundle_ok():
+    # mythic-letter is a profile package since SIL-32: its defaults come from the package,
+    # its template is the engine's personal_letter.tex (the letter demo's).
     cap = check_profile("mythic-letter")
     assert cap.bundle_compatibility == "ok"
     assert cap.supports_toc is True
     assert cap.has_tightlist is True
     assert cap.has_longtable is True
     assert cap.template_found is not None
-    assert cap.defaults_source == "local"
+    assert cap.defaults_source == "package"
     assert cap.template_source == "local"
 
 
@@ -246,7 +249,7 @@ def test_all_bundle_ok_profiles_have_local_sources():
     caps = check_all_profiles()
     for pid in BUNDLE_OK:
         cap = caps[pid]
-        assert cap.defaults_source in ("local", "local+package"), (
+        assert cap.defaults_source in ("local", "local+package", "package"), (
             f"{pid}: expected defaults_source='local', got '{cap.defaults_source}'"
         )
         assert cap.template_source in ("local", "package"), (

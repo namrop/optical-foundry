@@ -551,7 +551,8 @@ def _manifest_template_resource_plan(tmp_path: Path) -> tuple[ProjectionPlan, Pa
     source_root.mkdir()
     manifest_root.mkdir()
     references = ["assets/work-titlepage.png", "assets/work-logo.png"]
-    fallback = Path("profiles/40_latex_import/assets/logo_oasis_cam.png").resolve()
+    # Any real PNG serves; a synthetic fixture image (the Oasis CAM logo left the engine, SIL-32).
+    fallback = Path("fixtures/sources/household_paper_placeholder_grey.png").resolve()
     for reference in references:
         target = manifest_root / reference
         target.parent.mkdir(parents=True, exist_ok=True)

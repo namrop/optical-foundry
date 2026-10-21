@@ -106,7 +106,7 @@ def test_a_package_profile_declaring_openers_renders_a_raised_capital(tmp_path, 
     pkg = repo / "openers-probe"
     pkg.mkdir(parents=True)
     (pkg / "profile.yaml").write_text(yaml.safe_dump({
-        "schema_version": "profile_package_v1", "id": "openers-probe", "extends": "keeper",
+        "schema_version": "profile_package_v1", "id": "openers-probe", "extends": "document-spine",
         "openers": {"scale": 2.4, "spill": {"B": "0.3em"}, "epigraph_gap": "2.2em"},
     }), encoding="utf-8")
     monkeypatch.setenv("OF_PROFILE_PATH", str(repo))

@@ -57,7 +57,7 @@ def test_a_package_profile_declares_editions_and_its_namespace(tmp_path, monkeyp
     repo = tmp_path / "profiles"
     (repo / "report-ed").mkdir(parents=True)
     (repo / "report-ed" / "profile.yaml").write_text(yaml.safe_dump({
-        "schema_version": "profile_package_v1", "id": "report-ed", "extends": "keeper",
+        "schema_version": "profile_package_v1", "id": "report-ed", "extends": "document-spine",
         "markers": {"prefix": "rp"}, "editions": {"labels": ["internal", "client", "public"]},
     }), encoding="utf-8")
     monkeypatch.setenv("OF_PROFILE_PATH", str(repo))
@@ -72,8 +72,8 @@ def test_a_package_profile_declares_editions_and_its_namespace(tmp_path, monkeyp
     assert out.boundary_assertions["codex_edition"] == "client"
     # The same source under a profile without editions is refused, whatever the namespace.
     with pytest.raises(CodexEditionRenderError, match="declares none"):
-        source_preparation.codex_edition(ProjectionPlan(profile_id="keeper", render_id="r", render_source=src),
-                                         tmp_path, resolve_profile("keeper"))
+        source_preparation.codex_edition(ProjectionPlan(profile_id="document-spine", render_id="r", render_source=src),
+                                         tmp_path, resolve_profile("document-spine"))
 
 
 def test_codex0_declares_its_namespace_and_editions():
@@ -88,7 +88,7 @@ def test_a_bundle_manifest_picks_the_edition(tmp_path):
     src = tmp_path / "s.md"
     src.write_text(DOC.split("---", 2)[2], encoding="utf-8")
     manifest = {"kind": "composite_bundle", "schema_version": "bundle_manifest_v1", "bundle_id": "ed-probe",
-                "profile": "keeper", "presentation": {"title": "E"}, "variables": {"edition": "public"},
+                "profile": "document-spine", "presentation": {"title": "E"}, "variables": {"edition": "public"},
                 "sources": [{"uid": "s", "path": str(src), "role": "primary_anchor", "order": 1}]}
     plan = CompositeBundleCompiler().compile(manifest)
     assert "edition" in plan.boundary_assertions["accepted_manifest_variables"]

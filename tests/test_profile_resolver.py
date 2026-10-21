@@ -23,7 +23,8 @@ def test_tech_resolves_document_spine_yugen_overlay_and_technology_defaults():
     assert [p.name for p in resolved.defaults_stack] == ["document_spine.yaml", "yugenbase.yaml", "technology.yaml"]
     assert resolved.template_path.name == "base.tex"
     assert resolved.boundary["target_legacy_profile_tree_mutated"] is False
-    assert resolved.boundary["defaults_source"] == "local"
+    # A profile package since SIL-32: engine document_spine.yaml + package defaults, engine base.tex.
+    assert resolved.boundary["defaults_source"] == "local+package"
     assert resolved.boundary["template_source"] == "local"
 
 
@@ -42,7 +43,7 @@ def test_civic_alias_resolves_to_yugen_civic_profile():
     assert resolved.profile_family == "document_spine"
     assert [p.name for p in resolved.defaults_stack] == ["document_spine.yaml", "yugenbase.yaml", "civic.yaml"]
     assert resolved.template_path.name == "base.tex"
-    assert resolved.boundary["defaults_source"] == "local"
+    assert resolved.boundary["defaults_source"] == "local+package"  # a profile package since SIL-32
     assert resolved.boundary["template_source"] == "local"
 
 

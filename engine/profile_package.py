@@ -34,6 +34,11 @@ wins: a package cannot shadow an engine profile silently.
     tex: [tex]                   # G2: package directories on TEXINPUTS and LUAINPUTS
   A defaults file in a package names its own files as ${.}/... (pandoc's defaults-file
   directory), e.g. ``filters: [${.}/../filters/x.lua]``.
+  Paths in profile.yaml are relative to the package and may name a sibling package in the same
+  repository, e.g. ``defaults: ["../yugen-brand/defaults/yugenbase.yaml", defaults/keeper.yaml]``
+  and ``tex: ["../yugen-brand/tex", "../yugen-brand"]`` (SIL-32): that is how a package builds on
+  another package, since ``extends`` must name an engine profile. A package directory itself on
+  ``tex`` puts its ``assets/...`` on TEXINPUTS, where raw LaTeX image paths resolve.
     editions: {labels: [...]}    # engine/editions.py (map C1)
 """
 from __future__ import annotations

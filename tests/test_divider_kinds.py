@@ -16,7 +16,7 @@ def probe(tmp_path, monkeypatch):
     package = repo / 'garden-notebook'
     package.mkdir(parents=True)
     (package / 'card.tex').write_text(r'\thispagestyle{empty}' + '\n' + r'\begin{center}[[slot:heading]]\end{center}' + '\n' + r'\clearpage' + '\n')
-    spec = {'schema_version': 'profile_package_v1', 'id': 'garden-notebook', 'extends': 'keeper',
+    spec = {'schema_version': 'profile_package_v1', 'id': 'garden-notebook', 'extends': 'document-spine',
             'divider_kinds': {'seed-card': {'slots': {'heading': {'type': 'text'},
                                                    'count': {'type': 'integer', 'minimum': 1, 'maximum': 3, 'default': 1},
                                                    'picture': {'type': 'asset', 'default': ''}},

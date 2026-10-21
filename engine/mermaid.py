@@ -312,10 +312,12 @@ def _profile_style_colors(
 
 
 def _candidate_style_paths(resolved: ResolvedProfile, variables: dict[str, Any]) -> list[Path]:
+    # Look where TeX looks: the profile's TEXINPUTS (a profile package's tex directories come
+    # first there, SIL-32), then the engine's style roots.
+    roots = [Path(p) for p in resolved.render_environment.texinputs.split(":") if p]
     texmf = resolved.render_environment.texmfhome
-    if texmf is None:
-        return []
-    roots = [texmf / "tex" / "latex" / "yugen", texmf / "tex" / "latex" / "generic", texmf / "tex" / "latex" / "resume"]
+    if texmf is not None:
+        roots += [texmf / "tex" / "latex" / "yugen", texmf / "tex" / "latex" / "generic", texmf / "tex" / "latex" / "resume"]
     packages: list[str] = []
     for key in ("genericstyle", "yugenstyle", "elianstyle"):
         value = variables.get(key)

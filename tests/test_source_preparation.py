@@ -14,7 +14,7 @@ from renderers.document_renderer import DocumentRenderer
 from renderers.pandoc_renderer import PandocRenderer
 
 
-def _plan(tmp_path: Path, body: str, profile: str = "keeper") -> ProjectionPlan:
+def _plan(tmp_path: Path, body: str, profile: str = "document-spine") -> ProjectionPlan:
     src = tmp_path / "doc.md"
     src.write_text(f"---\ntitle: Doc\ntitlepage_background_image: ../escape.png\n---\n\n{body}\n", encoding="utf-8")
     return ProjectionPlan(profile_id=profile, render_id="doc", render_source=src,
@@ -31,7 +31,7 @@ def test_the_steps_and_their_order():
 def test_a_profile_that_declares_nothing_gets_every_step(tmp_path):
     out = tmp_path / "out"
     out.mkdir()
-    prepared = source_preparation.prepare(_plan(tmp_path, "A candle 🕯 here."), resolve_profile("keeper"), out)
+    prepared = source_preparation.prepare(_plan(tmp_path, "A candle 🕯 here."), resolve_profile("document-spine"), out)
     assert prepared.record["declared_by"] == "default"
     ran = {s["step"]: s for s in prepared.record["steps"]}
     assert [s["step"] for s in prepared.record["steps"]] == list(source_preparation.STEPS)
@@ -45,7 +45,7 @@ def test_a_profile_that_declares_nothing_gets_every_step(tmp_path):
 def test_a_profile_runs_only_the_steps_it_declares(tmp_path):
     out = tmp_path / "out"
     out.mkdir()
-    profile = dataclasses.replace(resolve_profile("keeper"), source_preparation=("titlepage_background_guard",))
+    profile = dataclasses.replace(resolve_profile("document-spine"), source_preparation=("titlepage_background_guard",))
     plan = _plan(tmp_path, "A candle 🕯 here.")
     prepared = source_preparation.prepare(plan, profile, out)
     assert prepared.record["declared_by"] == "profile"
@@ -60,12 +60,12 @@ def test_a_profile_runs_only_the_steps_it_declares(tmp_path):
 def test_declarations_are_validated_when_the_profile_resolves(monkeypatch):
     assert source_preparation.validate_declaration(["emoji"]) == []
     assert "unknown step" in source_preparation.validate_declaration(["emojis"])[0]
-    spec = dict(profile_resolver.PROFILE_SPECS["keeper"], source_preparation=["emojis"])
-    monkeypatch.setitem(profile_resolver.PROFILE_SPECS, "keeper", spec)
+    spec = dict(profile_resolver.PROFILE_SPECS["document-spine"], source_preparation=["emojis"])
+    monkeypatch.setitem(profile_resolver.PROFILE_SPECS, "document-spine", spec)
     with pytest.raises(ValueError, match="unknown step"):
-        resolve_profile("keeper")
-    monkeypatch.setitem(profile_resolver.PROFILE_SPECS, "keeper", dict(spec, source_preparation=["emoji", "codex_edition"]))
-    assert resolve_profile("keeper").source_preparation == ("emoji", "codex_edition")
+        resolve_profile("document-spine")
+    monkeypatch.setitem(profile_resolver.PROFILE_SPECS, "document-spine", dict(spec, source_preparation=["emoji", "codex_edition"]))
+    assert resolve_profile("document-spine").source_preparation == ("emoji", "codex_edition")
 
 
 def test_no_profile_declares_steps_yet():

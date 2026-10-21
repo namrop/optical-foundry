@@ -52,7 +52,9 @@ def test_explicit_source_toc_still_overrides_letter_profile_default(tmp_path):
 
 
 def test_johannah_letter_template_keeps_body_clear_of_header_rule():
-    template = Path("profiles/40_latex_import/templates/mythic_letter_johannah.tex").read_text()
+    from tests.profile_packages import profile_package
+
+    template = (profile_package("mythic-letter-johannah") / "templates" / "mythic_letter_johannah.tex").read_text()
 
     assert "\\vspace*{-" not in template
     assert "$if(body_top_vspace)$" in template

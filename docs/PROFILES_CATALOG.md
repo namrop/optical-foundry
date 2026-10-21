@@ -9,6 +9,15 @@ what will it look like?"**
 and the resolver disagree, the resolver wins — update this doc. `python -m cli profiles`
 lists every profile with live bundle-compatibility status.
 
+**Where profiles live (SIL-32, 2026-10-21; rulings `01a0f99a-b2db`, `01a14634-bff0`).** The engine
+keeps only the base and the demo profiles Luis chose: `document-spine`, `generic-report`, `letter`,
+`short-story`, `labels-avery-5164`, `labels-avery-15264`, `sticker-sheet` (and, until SIL-31 moves
+it, `codex0-a5`). Every other profile below is a profile package in the `optical-foundry-profiles`
+repository, under the same id, found through `OF_PROFILE_PATH` or
+`~/.config/optical-foundry/profile_repos` (`engine/profile_package.py`). A host without that pointer
+renders only the engine's profiles. The Yugen, Oasis, Keeper and life packages share the
+`yugen-brand` package's `yugenbase.yaml`, `yugencommon.sty` and logo by relative path.
+
 ---
 
 ## Mental model: a profile is a stack, not a single file

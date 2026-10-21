@@ -92,6 +92,8 @@ ALIASES: dict[str, str] = {
     "household_paper": "household-paper",
     "household-newspaper": "household-paper",
     "short_story": "short-story",
+    # Packages are found by directory name; the underscore spelling the engine once found by file name.
+    "daily_review": "daily-review",
 }
 
 # Explicit current mapping. Later this can be data-driven from profile YAML.
@@ -109,68 +111,25 @@ PROFILE_SPECS: dict[str, dict[str, Any]] = {
         "defaults": ["generic_report.yaml"],
         "template": "generic_report.tex",
     },
-    "yugen_tech": {
-        "family": "document_spine",
-        "defaults": ["document_spine.yaml", "yugenbase.yaml", "technology.yaml"],
-        "template": "base.tex",
-    },
-    "yugen_risk": {
-        "family": "document_spine",
-        "defaults": ["document_spine.yaml", "yugenbase.yaml", "risk.yaml"],
-        "template": "base.tex",
-    },
-    "yugen_creative": {
-        "family": "document_spine",
-        "defaults": ["document_spine.yaml", "yugenbase.yaml", "creative.yaml"],
-        "template": "base.tex",
-    },
-    "yugen_civic": {
-        "family": "document_spine",
-        "defaults": ["document_spine.yaml", "yugenbase.yaml", "civic.yaml"],
-        "template": "base.tex",
-    },
-    "cam": {"family": "document_spine", "defaults": ["document_spine.yaml", "yugenbase.yaml", "cam.yaml"], "template": "cam.tex"},
-    "mythic": {"family": "document_spine", "defaults": ["document_spine.yaml", "yugenbase.yaml", "mythic.yaml"], "template": "mythic.tex"},
     # "codex0" left the engine on 2026-10-03 (map G2, ruling 01a100da-3cde): it is the
     # codex0 package in the profiles repository (optical-foundry-profiles/codex0).
     # SIL-32 (2026-10-21; rulings 01a0f99a-b2db, 01a14634-bff0): household-paper, daily-review,
     # resume, elian-packet, elian-poster, prometheus-packet and mythic-letter are packages there too.
+    # So are the Yugen-base group: yugen-brand (the shared base: yugenbase.yaml, yugencommon.sty,
+    # the navy logo), yugen-brand-elevated, yugen_tech, yugen_risk, yugen_creative, yugen_civic, life,
+    # cam, mythic, convergence and keeper. codex0-a5 below still stacks the engine's yugenbase.yaml,
+    # yugencommon.sty and yugenmythic.sty, which stay until it leaves (SIL-31).
+    # mythic-letter-johannah and mythic-letter-johannah-halfletter are packages too; personal_letter.yaml
+    # (neutral letter defaults) stays here with the letter demo.
     "codex0-a5": {
         "family": "document_spine",
         "defaults": ["document_spine.yaml", "yugenbase.yaml", "codex0_a5.yaml"],
         "template": "codex0_a5.tex",
     },
-    "convergence": {"family": "document_spine", "defaults": ["document_spine.yaml", "yugenbase.yaml", "convergence.yaml"], "template": "convergence.tex"},
-    "keeper": {"family": "document_spine", "defaults": ["document_spine.yaml", "yugenbase.yaml", "keeper.yaml"], "template": "keeper.tex"},
     "letter": {"family": "stationery_art", "defaults": ["letter.yaml"], "template": "personal_letter.tex"},
-    "mythic-letter-johannah": {
-        "family": "stationery_art",
-        "defaults": ["yugenbase.yaml", "personal_letter.yaml", "mythic_letter_johannah.yaml"],
-        "template": "mythic_letter_johannah.tex",
-    },
-    # Bound-object lane: same stationery identity at Codex 0's trim and measure.
-    # Additive fork — the letterpaper parent above is load-bearing for Codex 0
-    # Vol III witness plate 28 and must not be parameterized in place.
-    "mythic-letter-johannah-halfletter": {
-        "family": "stationery_art",
-        "defaults": [
-            "yugenbase.yaml",
-            "personal_letter.yaml",
-            "mythic_letter_johannah.yaml",
-            "mythic_letter_johannah_halfletter.yaml",
-        ],
-        "template": "mythic_letter_johannah_halfletter.tex",
-    },
     "labels-avery-5164": {"family": "physical_sheet_profile", "defaults": ["labels_avery_5164.yaml"], "template": "label_sheet.tex"},
     "labels-avery-15264": {"family": "physical_sheet_profile", "defaults": ["labels_base.yaml"], "template": "label_sheet.tex"},
     "sticker-sheet": {"family": "physical_sheet_profile", "defaults": ["sticker_sheet.yaml"], "template": "label_sheet.tex"},
-    "life": {
-        "family": "document_spine",
-        "defaults": ["document_spine.yaml", "yugenbase.yaml", "life.yaml"],
-        "template": "base.tex",
-    },
-    "yugen-brand": {"family": "document_spine", "defaults": ["document_spine.yaml", "yugenbase.yaml"], "template": "generic_report.tex"},
-    "yugen-brand-elevated": {"family": "document_spine", "defaults": ["document_spine.yaml", "yugenbase.yaml"], "template": "generic_report.tex"},
     # One piece of short fiction at Codex 0's half-letter trim: Iowan, book
     # paragraphs, title block on page one, scene breaks and the opening drop cap
     # lowered by filters/short_story.lua. Opened 2026-09-29 for the horror

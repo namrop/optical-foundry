@@ -323,7 +323,9 @@ def test_codex0_profile_wires_filter_and_defaults_only_to_codex0():
     assert codex_defaults["variables"]["ownvoice_color"] == "7F0227"
 
     spine_defaults = yaml.safe_load((PROFILE_ROOT / "defaults" / "document_spine.yaml").read_text())
-    johannah_defaults = yaml.safe_load((PROFILE_ROOT / "defaults" / "mythic_letter_johannah.yaml").read_text())
+    johannah_defaults = yaml.safe_load(
+        (CODEX0.parent / "mythic-letter-johannah" / "defaults" / "mythic_letter_johannah.yaml").read_text()
+    )  # SIL-32: the Johannah defaults live in their package, beside codex0's
     assert "filters" not in spine_defaults
     assert "filters" not in johannah_defaults
 
