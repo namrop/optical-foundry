@@ -306,7 +306,7 @@ properties:
           description: Ornament marker emitted between flowing sources when page_break_before is false.
         codex_register:
           type: string
-          description: Source-level register; codex_bundle manifests on the codex0 profile only.
+          description: Source-level register; codex_bundle manifests only, on a profile that declares it (profile package registers, SIL-31).
         strip_leading_heading:
           type: boolean
           default: false

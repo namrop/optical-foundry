@@ -244,15 +244,27 @@ def _body_opens_with_cx0_marker(body: str, prefix: str = "cx0") -> bool:
     return False
 
 
-_SUPPORTED_CODEX_SOURCE_REGISTERS = frozenset({"pataphorical"})
+_SOURCE_REGISTER_RE = re.compile(r"^[a-z][a-z0-9_-]*$")
+
+
+def _declared_source_registers(profile_id: Any) -> tuple[str, ...]:
+    """The source registers the manifest's profile declares (SIL-31); none if it cannot resolve."""
+
+    try:
+        return resolve_profile(str(profile_id or "")).registers or ()
+    except Exception:  # noqa: BLE001 - an unresolvable profile is reported elsewhere
+        return ()
 
 
 def _wrap_codex_source_register(body: str, register: str) -> str:
-    """Wrap one assembled source body in its validated Codex semantic register."""
+    """Wrap one assembled source body in its validated semantic register.
+
+    validate() has checked the register against the profile's declared registers.
+    """
 
     normalized = str(register or "").strip().lower()
-    if normalized not in _SUPPORTED_CODEX_SOURCE_REGISTERS:
-        raise ValueError(f"unsupported codex source register: {register!r}")
+    if not _SOURCE_REGISTER_RE.match(normalized):
+        raise ValueError(f"unsupported source register: {register!r}")
     return (
         f'::: {{.codex-{normalized} register="{normalized}"}}\n'
         f"{body.rstrip()}\n"
@@ -2038,14 +2050,19 @@ class CompositeBundleCompiler(ManifestCompiler):
                 register = src.get("codex_register")
                 if register is not None:
                     scope = f"sources[{i}].codex_register"
+                    # SIL-31: the profile declares the registers its filter lowers
+                    # (profile package `registers:`); the gate used to compare the
+                    # profile id with "codex0".
+                    declared = _declared_source_registers(manifest.get("profile"))
                     if self.kind != "codex_bundle":
                         errors.append(f"{scope} is supported only by codex_bundle manifests")
-                    elif manifest.get("profile") != "codex0":
-                        errors.append(f"{scope} requires profile codex0")
-                    elif not isinstance(register, str) or register.strip().lower() not in _SUPPORTED_CODEX_SOURCE_REGISTERS:
+                    elif not declared:
                         errors.append(
-                            f"{scope} must be one of {sorted(_SUPPORTED_CODEX_SOURCE_REGISTERS)}"
+                            f"{scope} requires a profile that declares registers; "
+                            f"profile {manifest.get('profile')!r} declares none"
                         )
+                    elif not isinstance(register, str) or register.strip().lower() not in declared:
+                        errors.append(f"{scope} must be one of {sorted(declared)}")
                 errors.extend(_validate_running_text(src, f"source[{i}]"))
 
         # figures

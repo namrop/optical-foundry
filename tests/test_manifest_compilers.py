@@ -1522,9 +1522,33 @@ def test_codex_bundle_source_register_rejects_unknown_or_wrong_profile(tmp_path)
     assert any("sources[1].codex_register" in error for error in errors)
 
     manifest["sources"][1]["codex_register"] = "pataphorical"
-    manifest["profile"] = "mythic"
+    manifest["profile"] = "document-spine"
     errors = CodexBundleCompiler().validate(manifest)
-    assert any("requires profile codex0" in error for error in errors)
+    assert any("requires a profile that declares registers" in error for error in errors)
+
+
+def test_codex_bundle_source_register_follows_the_profile_declaration(tmp_path, monkeypatch):
+    # SIL-31: the gate is the profile's declared registers, not the profile id "codex0".
+    import engine.manifest_compiler as mc
+
+    manifest = _codex_bundle_two_passages(tmp_path, second_extra={"codex_register": "liturgical"})
+    manifest["profile"] = "garden-notebook"
+    declared = {"garden-notebook": ("liturgical",), "codex0": ("pataphorical",)}
+    monkeypatch.setattr(mc, "_declared_source_registers", lambda pid: declared.get(pid, ()))
+    assert not [e for e in CodexBundleCompiler().validate(manifest) if "codex_register" in e]
+
+    manifest["profile"] = "codex0"
+    errors = CodexBundleCompiler().validate(manifest)
+    assert any("must be one of ['pataphorical']" in error for error in errors)
+
+
+def test_codex0_package_declares_the_pataphorical_register():
+    from engine.profile_resolver import resolve_profile
+    from tests.profile_packages import profile_package
+
+    profile_package("codex0")
+    assert resolve_profile("codex0").registers == ("pataphorical",)
+    assert resolve_profile("document-spine").registers is None
 
 
 def test_codex_bundle_passage_break_before_false_emits_hinge_separator(tmp_path):

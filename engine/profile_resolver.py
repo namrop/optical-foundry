@@ -10,6 +10,7 @@ and render planning.
 """
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -73,6 +74,8 @@ class ResolvedProfile:
     # Its marker namespace (engine/markers.py) and editions (engine/editions.py), map C1/C2.
     markers: dict[str, Any] | None = None
     editions: dict[str, Any] | None = None
+    # The source registers it declares (a bundle's sources[].codex_register), SIL-31.
+    registers: tuple[str, ...] | None = None
 
 
 ALIASES: dict[str, str] = {
@@ -154,7 +157,7 @@ def resolve_profile(profile_id: str) -> ResolvedProfile:
         if base_id not in PROFILE_SPECS:
             raise ValueError(f"profile package {canonical}: extends {base_id!r}, which is not an engine profile")
         spec = dict(PROFILE_SPECS[base_id])
-        for key in ("source_preparation", "markers", "editions", "family"):
+        for key in ("source_preparation", "markers", "editions", "registers", "family"):
             if package.spec.get(key) is not None:
                 spec[key] = package.spec[key]
         # G2: a package that carries a whole profile names the engine defaults it
@@ -257,7 +260,20 @@ def resolve_profile(profile_id: str) -> ResolvedProfile:
         openers=(package.spec.get("openers") or None) if package is not None else None,
         markers=_markers_of(spec, canonical),
         editions=_editions_of(spec, canonical),
+        registers=_registers_of(spec, canonical),
     )
+
+
+_REGISTER_RE = re.compile(r"^[a-z][a-z0-9_-]*$")
+
+
+def _registers_of(spec: dict[str, Any], canonical: str) -> tuple[str, ...] | None:
+    registers = spec.get("registers")
+    if registers is None:
+        return None
+    if not isinstance(registers, list) or not all(isinstance(x, str) and _REGISTER_RE.match(x) for x in registers):
+        raise ValueError(f"profile {canonical}: registers must be a list of lowercase names, e.g. [pataphorical]")
+    return tuple(registers)
 
 
 def _markers_of(spec: dict[str, Any], canonical: str) -> dict[str, Any] | None:

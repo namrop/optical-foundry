@@ -40,6 +40,8 @@ wins: a package cannot shadow an engine profile silently.
   another package, since ``extends`` must name an engine profile. A package directory itself on
   ``tex`` puts its ``assets/...`` on TEXINPUTS, where raw LaTeX image paths resolve.
     editions: {labels: [...]}    # engine/editions.py (map C1)
+    registers: [pataphorical]    # source registers its filter lowers: a bundle's
+                                 # sources[].codex_register must name one (SIL-31)
 """
 from __future__ import annotations
 
@@ -53,7 +55,7 @@ import yaml
 SCHEMA = "profile_package_v1"
 _KEYS = {"schema_version", "id", "title", "description", "extends", "template", "defaults",
          "source_preparation", "ornaments", "openers", "markers", "editions",
-         "family", "base_defaults", "tex", "divider_kinds"}
+         "family", "base_defaults", "tex", "divider_kinds", "registers"}
 
 
 class ProfilePackageError(ValueError):
