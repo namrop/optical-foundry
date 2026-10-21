@@ -117,15 +117,12 @@ PROFILE_SPECS: dict[str, dict[str, Any]] = {
     # resume, elian-packet, elian-poster, prometheus-packet and mythic-letter are packages there too.
     # So are the Yugen-base group: yugen-brand (the shared base: yugenbase.yaml, yugencommon.sty,
     # the navy logo), yugen-brand-elevated, yugen_tech, yugen_risk, yugen_creative, yugen_civic, life,
-    # cam, mythic, convergence and keeper. codex0-a5 below still stacks the engine's yugenbase.yaml,
-    # yugencommon.sty and yugenmythic.sty, which stay until it leaves (SIL-31).
+    # cam, mythic, convergence and keeper.
     # mythic-letter-johannah and mythic-letter-johannah-halfletter are packages too; personal_letter.yaml
     # (neutral letter defaults) stays here with the letter demo.
-    "codex0-a5": {
-        "family": "document_spine",
-        "defaults": ["document_spine.yaml", "yugenbase.yaml", "codex0_a5.yaml"],
-        "template": "codex0_a5.tex",
-    },
+    # codex0-a5, the older A5 variant of Codex 0, is a package too since SIL-31 (2026-10-21), with the
+    # Codex 0 image initial; the engine's copies of yugenbase.yaml, yugencommon.sty, yugenmythic.sty and
+    # the two logos it used left with it (they are in the yugen-brand and mythic packages).
     "letter": {"family": "stationery_art", "defaults": ["letter.yaml"], "template": "personal_letter.tex"},
     "labels-avery-5164": {"family": "physical_sheet_profile", "defaults": ["labels_avery_5164.yaml"], "template": "label_sheet.tex"},
     "labels-avery-15264": {"family": "physical_sheet_profile", "defaults": ["labels_base.yaml"], "template": "label_sheet.tex"},

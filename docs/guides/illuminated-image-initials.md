@@ -170,7 +170,7 @@ When text looks too far from the image but `gap` is already around `.06in`, insp
 The Foundry CLI can report alpha bounds and a crop box for transparent PNG drop caps:
 
 ```bash
-python3.14 -m cli initial inspect profiles/40_latex_import/assets/dropcaps/codex0/I.png
+python3.14 -m cli initial inspect profiles/40_latex_import/assets/dropcaps/oasis/T.png
 ```
 
 The report includes:
@@ -209,8 +209,10 @@ For a new profile:
 Use profile-owned stable paths under the local Foundry import:
 
 - `profiles/40_latex_import/assets/dropcaps/oasis/T.png`
-- `profiles/40_latex_import/assets/dropcaps/codex0/I.png`
 - `profiles/40_latex_import/assets/dropcaps/<profile-or-style>/<letter>.png`
+- in a profile package, `<package>/assets/dropcaps/<style>/<letter>.png` with the package directory on its
+  `tex:` list; the Codex 0 `I.png` is `codex0-a5/assets/dropcaps/codex0/I.png` in
+  `optical-foundry-profiles` (SIL-31, 2026-10-21)
 
 Source references should use relative render-resource paths:
 

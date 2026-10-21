@@ -73,11 +73,18 @@ def test_codex0_resolves_as_half_letter_johannah_mythic_book_profile():
 
 
 def test_codex0_a5_variant_preserves_compact_a5_profile():
-    resolved = resolve_profile("codex0-a5")
-    assert resolved.profile_id == "codex0-a5"
+    # A profile package since SIL-31 (2026-10-21); its stack is unchanged.
+    from tests.profile_packages import profile_package
+
+    package = profile_package("codex0-a5")
+    resolved = resolve_profile("codex0_a5")
+    assert resolved.profile_id == "codex0_a5"
     assert resolved.canonical_profile_id == "codex0-a5"
     assert [p.name for p in resolved.defaults_stack] == ["document_spine.yaml", "yugenbase.yaml", "codex0_a5.yaml"]
-    assert resolved.template_path.name == "codex0_a5.tex"
+    assert resolved.template_path == package / "templates" / "codex0_a5.tex"
+    assert resolved.boundary["defaults_source"] == "local+package"
+    assert resolved.boundary["template_source"] == "package"
+    assert (package / "assets" / "dropcaps" / "codex0" / "I.png").is_file()
 
 
 def test_packet_review_is_not_a_profile_family():

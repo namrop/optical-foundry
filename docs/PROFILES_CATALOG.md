@@ -11,8 +11,8 @@ lists every profile with live bundle-compatibility status.
 
 **Where profiles live (SIL-32, 2026-10-21; rulings `01a0f99a-b2db`, `01a14634-bff0`).** The engine
 keeps only the base and the demo profiles Luis chose: `document-spine`, `generic-report`, `letter`,
-`short-story`, `labels-avery-5164`, `labels-avery-15264`, `sticker-sheet` (and, until SIL-31 moves
-it, `codex0-a5`). Every other profile below is a profile package in the `optical-foundry-profiles`
+`short-story`, `labels-avery-5164`, `labels-avery-15264`, `sticker-sheet`. (`codex0-a5` left with
+SIL-31, 2026-10-21.) Every other profile below is a profile package in the `optical-foundry-profiles`
 repository, under the same id, found through `OF_PROFILE_PATH` or
 `~/.config/optical-foundry/profile_repos` (`engine/profile_package.py`). A host without that pointer
 renders only the engine's profiles. The Yugen, Oasis, Keeper and life packages share the
@@ -81,7 +81,7 @@ per-profile template). This is the biggest family.
 | `cam` | `cam.tex` | CAM (civic-abundance) documents. |
 | `mythic` | `mythic.tex` | mythic-register documents (non-letter). |
 | **`codex0`** | `codex0.tex` | **Codex 0 (the book), letter-size.** Inherits the Johannah-letter defaults then overrides with `codex0.yaml`. This is the profile for Codex 0 v5 renders (frontmatter fragments, part dividers, whole-book bundles). |
-| `codex0-a5` | `codex0_a5.tex` | Codex 0 in **A5** trim. |
+| `codex0-a5` (`codex0_a5`) | `codex0_a5.tex` | the older Codex 0 variant in **A5** trim; carries the Codex 0 image initial `assets/dropcaps/codex0/I.png`. |
 | `convergence` | `convergence.tex` | psychohistory convergence documents. |
 | `keeper` | `keeper.tex` | Keeper-Order documents. |
 | `life` | `base.tex` | life & logistics documents. |
