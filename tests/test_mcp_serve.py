@@ -223,6 +223,8 @@ def test_http_main_honors_requested_bind_and_exposes_inline_rendering(
     assert "192.0.2.10:8768" in security.allowed_hosts
     assert "foundry.example.org" in security.allowed_hosts
     assert "https://foundry.example.org" in security.allowed_origins
+    assert str(server.settings.auth.issuer_url) == "https://foundry.example.org/"
+    assert str(server.settings.auth.resource_server_url) == "https://foundry.example.org/mcp"
 
 
 def test_http_main_refuses_to_start_without_bearer_token(

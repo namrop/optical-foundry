@@ -16,9 +16,11 @@ Run locally over stdio:
 
 Run over Streamable HTTP:
     python3 mcp_serve.py --transport streamable-http \
-      --host 192.0.2.10 --port 8768 \
+      --host 127.0.0.1 --port 8768 \
       --public-host foundry.example.org
 
+--public-host (default: OPTICAL_FOUNDRY_MCP_PUBLIC_HOST, else localhost) is the
+hostname the reverse proxy serves; the auth issuer and resource URLs derive from it.
 The HTTP mode requires OPTICAL_FOUNDRY_MCP_BEARER_TOKEN (minimum 32 characters)
 and exposes only inline Markdown rendering; path-reading and server-persisting
 tools are removed from its advertised remote tool surface.
@@ -52,10 +54,22 @@ from engine.profile_checker import check_all_profiles_json
 from engine.visual_proof import build_visual_proof
 
 
+DEFAULT_PUBLIC_HOST = os.environ.get("OPTICAL_FOUNDRY_MCP_PUBLIC_HOST", "localhost")
+
+
+def _auth_settings(public_host: str) -> AuthSettings:
+    return AuthSettings(
+        issuer_url=f"https://{public_host}/",
+        resource_server_url=f"https://{public_host}/mcp",
+        required_scopes=["render"],
+    )
+
+
 class EnvironmentBearerTokenVerifier:
     """Verify one bearer token supplied through the service environment."""
 
     env_var = "OPTICAL_FOUNDRY_MCP_BEARER_TOKEN"
+    resource = f"https://{DEFAULT_PUBLIC_HOST}/mcp"
 
     def configured_token(self) -> str | None:
         token = os.environ.get(self.env_var)
@@ -69,7 +83,7 @@ class EnvironmentBearerTokenVerifier:
             token=token,
             client_id="client-agent",
             scopes=["render"],
-            resource="https://foundry.example.org/mcp",
+            resource=self.resource,
         )
 
 
@@ -77,11 +91,7 @@ _bearer_verifier = EnvironmentBearerTokenVerifier()
 mcp = FastMCP(
     "optical-foundry",
     token_verifier=_bearer_verifier,
-    auth=AuthSettings(
-        issuer_url="https://foundry.example.org/",
-        resource_server_url="https://foundry.example.org/mcp",
-        required_scopes=["render"],
-    ),
+    auth=_auth_settings(DEFAULT_PUBLIC_HOST),
 )
 
 
@@ -242,8 +252,9 @@ def _argument_parser() -> argparse.ArgumentParser:
     parser.add_argument("--http-path", default="/mcp", help="Streamable HTTP MCP path")
     parser.add_argument(
         "--public-host",
-        default="foundry.example.org",
-        help="Caddy-facing hostname allowed by MCP DNS-rebinding protection",
+        default=DEFAULT_PUBLIC_HOST,
+        help="Caddy-facing hostname allowed by MCP DNS-rebinding protection and named in the "
+        "auth URLs (default: OPTICAL_FOUNDRY_MCP_PUBLIC_HOST, else localhost)",
     )
     return parser
 
@@ -263,6 +274,8 @@ def _configure_streamable_http(server: FastMCP, args: argparse.Namespace) -> Non
     server.settings.host = args.host
     server.settings.port = args.port
     server.settings.streamable_http_path = args.http_path
+    server.settings.auth = _auth_settings(args.public_host)
+    _bearer_verifier.resource = f"https://{args.public_host}/mcp"
     server.settings.transport_security = TransportSecuritySettings(
         enable_dns_rebinding_protection=True,
         allowed_hosts=[
