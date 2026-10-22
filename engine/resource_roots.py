@@ -162,13 +162,32 @@ _RAW_DIRECT_RESOURCE_RE = re.compile(
 _TEMPLATE_RESOURCE_KEYS = (
     "titlepage_background_image",
     "logo_path",
-    # codex0 apparatus images, supplied by the work (2026-09-30); see
-    # RESOURCE_PATH_VARIABLES in engine/manifest_compiler.py.
-    "codex_blank_leaf_ornament",
-    "codex_compass_field_icon",
-    "codex_folio_chip_asset",
 )
+# The engine's own template path variables. A profile's are its package's
+# `asset_variables` (SIL-31; the codex0 apparatus images were named here from
+# 2026-09-30 until then): see template_resource_kinds.
 TEMPLATE_RESOURCE_KEYS: tuple[str, ...] = _TEMPLATE_RESOURCE_KEYS
+
+
+def template_resource_kinds(asset_variables: dict[str, str] | None = None) -> dict[str, str]:
+    """Template path variables -> "file" | "directory": the engine's, then the profile's."""
+
+    kinds = {key: "file" for key in _TEMPLATE_RESOURCE_KEYS}
+    for key, kind in (asset_variables or {}).items():
+        kinds.setdefault(key, kind)
+    return kinds
+
+
+def _relative_directory_reference(value: Any) -> str | None:
+    if not isinstance(value, str):
+        return None
+    value = value.strip().rstrip("/")
+    if not value or "://" in value or "\x00" in value:
+        return None
+    path = Path(value)
+    if path.is_absolute() or ".." in path.parts:
+        return None
+    return path.as_posix()
 
 
 def _relative_image_reference(value: Any) -> str | None:
@@ -217,10 +236,14 @@ def _raw_latex_resource_references(source: Path) -> list[str]:
     return references
 
 
-def _frontmatter_template_resource_references(source: Path) -> list[str]:
-    """Return image paths consumed directly by supported Foundry templates."""
+def _frontmatter_template_resource_references(
+    source: Path, kinds: dict[str, str] | None = None, *, kind: str = "file"
+) -> list[str]:
+    """Return the ``kind`` paths (image files, or directories) templates consume directly."""
 
-    if not source.is_file():
+    keys = [key for key, k in (kinds or template_resource_kinds()).items() if k == kind]
+    relative = _relative_image_reference if kind == "file" else _relative_directory_reference
+    if not keys or not source.is_file():
         return []
     text = source.read_text(encoding="utf-8", errors="ignore")
     if not text.startswith("---\n"):
@@ -240,20 +263,14 @@ def _frontmatter_template_resource_references(source: Path) -> list[str]:
     mappings = [frontmatter, nested] if isinstance(nested, dict) else [frontmatter]
     references: list[str] = []
     for mapping in mappings:
-        for key in _TEMPLATE_RESOURCE_KEYS:
-            reference = _relative_image_reference(mapping.get(key))
+        for key in keys:
+            reference = relative(mapping.get(key))
             if reference:
                 references.append(reference)
     return references
 
 
-def typed_resource_references(plan: ProjectionPlan) -> list[str]:
-    """Return distinct engine-visible and raw-LaTeX image references."""
-
-    references = _collect_typed_references(plan.figure_inventory, figure_context=True)
-    references.extend(_collect_typed_references(plan.boundary_assertions))
-    references.extend(_frontmatter_template_resource_references(plan.render_source))
-    references.extend(_raw_latex_resource_references(plan.render_source))
+def _unique(references: Iterable[str]) -> list[str]:
     unique: list[str] = []
     seen: set[str] = set()
     for reference in references:
@@ -263,21 +280,51 @@ def typed_resource_references(plan: ProjectionPlan) -> list[str]:
     return unique
 
 
+def typed_resource_references(
+    plan: ProjectionPlan, asset_variables: dict[str, str] | None = None
+) -> list[str]:
+    """Return distinct engine-visible and raw-LaTeX image references."""
+
+    references = _collect_typed_references(plan.figure_inventory, figure_context=True)
+    references.extend(_collect_typed_references(plan.boundary_assertions))
+    references.extend(
+        _frontmatter_template_resource_references(
+            plan.render_source, template_resource_kinds(asset_variables)
+        )
+    )
+    references.extend(_raw_latex_resource_references(plan.render_source))
+    return _unique(references)
+
+
 def resource_resolution_evidence(
     plan: ProjectionPlan,
     roots: list[ResolvedResourceRoot],
+    asset_variables: dict[str, str] | None = None,
 ) -> dict[str, Any]:
-    """Resolve typed resources and record winners, shadows, and warnings."""
+    """Resolve typed resources and record winners, shadows, and warnings.
+
+    A directory a profile's ``asset_variables`` name (SIL-31) is resolved the same
+    way, against directories, and its entry carries ``"kind": "directory"``.
+    """
 
     resolved_resources: list[dict[str, Any]] = []
     warnings: list[str] = []
-    for reference in typed_resource_references(plan):
+    directories = _unique(
+        _frontmatter_template_resource_references(
+            plan.render_source, template_resource_kinds(asset_variables), kind="directory"
+        )
+    )
+    typed = [("file", ref) for ref in typed_resource_references(plan, asset_variables)]
+    typed += [("directory", ref) for ref in directories]
+    for kind, reference in typed:
         matches: list[tuple[ResolvedResourceRoot, Path]] = []
         for root in roots:
             canonical_root = root.path.resolve()
             candidate = (canonical_root / reference).resolve()
-            if candidate.is_relative_to(canonical_root) and candidate.is_file():
+            exists = candidate.is_file() if kind == "file" else candidate.is_dir()
+            if candidate.is_relative_to(canonical_root) and exists:
                 matches.append((root, candidate))
+        extra = {} if kind == "file" else {"kind": kind}
         if not matches:
             resolved_resources.append(
                 {
@@ -285,6 +332,7 @@ def resource_resolution_evidence(
                     "winner": None,
                     "winner_origin": None,
                     "shadowed": [],
+                    **extra,
                 }
             )
             warnings.append(f"resource reference did not resolve in the effective root chain: {reference}")
@@ -297,6 +345,7 @@ def resource_resolution_evidence(
                 "winner": str(winner_path),
                 "winner_origin": winner_root.origin,
                 "shadowed": shadowed,
+                **extra,
             }
         )
         if shadowed:
@@ -355,24 +404,28 @@ _PIN_DECORATIVE_RE = re.compile(
 _PIN_UNSAFE_CHARS = set("\\{}$`%#&^~") | {" ", "\t"}
 
 
-def _pin_winner(reference: str, roots: list[ResolvedResourceRoot]) -> tuple[ResolvedResourceRoot, Path, list[str]] | None:
+def _pin_winner(
+    reference: str, roots: list[ResolvedResourceRoot], kind: str = "file"
+) -> tuple[ResolvedResourceRoot, Path, list[str]] | None:
     matches: list[tuple[ResolvedResourceRoot, Path]] = []
     for root in roots:
         canonical_root = root.path.resolve()
         candidate = (canonical_root / reference).resolve()
-        if candidate.is_relative_to(canonical_root) and candidate.is_file():
+        exists = candidate.is_file() if kind == "file" else candidate.is_dir()
+        if candidate.is_relative_to(canonical_root) and exists:
             matches.append((root, candidate))
     if not matches:
         return None
     return matches[0][0], matches[0][1], [str(path) for _root, path in matches[1:]]
 
 
-def _latex_lookup_fallback(reference: str, latex_cwd: Path | None) -> str | None:
-    """The file LaTeX would open for an unpinned relative reference, if any."""
+def _latex_lookup_fallback(reference: str, latex_cwd: Path | None, kind: str = "file") -> str | None:
+    """The file (or directory) LaTeX would open for an unpinned relative reference, if any."""
     if latex_cwd is None:
         return None
     candidate = (Path(latex_cwd) / reference)
-    return str(candidate.resolve()) if candidate.is_file() else None
+    exists = candidate.is_file() if kind == "file" else candidate.is_dir()
+    return str(candidate.resolve()) if exists else None
 
 
 def pin_render_resources(
@@ -380,9 +433,15 @@ def pin_render_resources(
     roots: list[ResolvedResourceRoot],
     *,
     latex_cwd: Path | None = None,
-    template_keys: Iterable[str] = (),
+    template_keys: Iterable[str] | dict[str, str] = (),
 ) -> tuple[str, dict[str, Any]]:
     """Rewrite relative image references in render-only ``text`` to their winners.
+
+    ``template_keys`` names the frontmatter variables a template reads as paths:
+    an iterable of names (each an image file), or a mapping name -> "file" |
+    "directory" (template_resource_kinds). A directory is pinned to the first
+    root that holds a directory of that name, and its entries carry
+    ``"kind": "directory"``.
 
     Returns the rewritten text and an evidence block::
 
@@ -396,23 +455,33 @@ def pin_render_resources(
     precedence inversion this pass removes.
     """
 
-    pinned: dict[str, dict[str, Any]] = {}
-    unpinned: dict[str, dict[str, Any]] = {}
+    pinned: dict[tuple[str, str], dict[str, Any]] = {}
+    unpinned: dict[tuple[str, str], dict[str, Any]] = {}
     warnings: list[str] = []
+    key_kinds = (
+        dict(template_keys) if isinstance(template_keys, dict)
+        else {key: "file" for key in template_keys}
+    )
 
-    def resolve(reference: str, macro: str) -> str | None:
+    def resolve(reference: str, macro: str, kind: str = "file") -> str | None:
         reference = reference.strip()
-        relative = _relative_image_reference(reference)
+        relative = (
+            _relative_image_reference(reference) if kind == "file"
+            else _relative_directory_reference(reference)
+        )
         if relative is None:
             return None  # absolute, URL, macro argument like #2, or not an image
-        if relative in pinned:
-            pinned[relative]["occurrences"] += 1
-            return pinned[relative]["pinned_to"]
-        found = _pin_winner(relative, roots)
+        slot = (kind, relative)
+        extra = {} if kind == "file" else {"kind": kind}
+        if slot in pinned:
+            pinned[slot]["occurrences"] += 1
+            return pinned[slot]["pinned_to"]
+        found = _pin_winner(relative, roots, kind)
         if found is None:
-            if relative not in unpinned:
-                fallback = _latex_lookup_fallback(relative, latex_cwd)
-                unpinned[relative] = {
+            if slot not in unpinned:
+                fallback = _latex_lookup_fallback(relative, latex_cwd, kind)
+                unpinned[slot] = {
+                    **extra,
                     "reference": relative,
                     "macro": macro,
                     "reason": "no winner in the effective root chain",
@@ -426,19 +495,21 @@ def pin_render_resources(
         root, winner, shadowed = found
         winner_text = winner.as_posix()
         if any(ch in _PIN_UNSAFE_CHARS or ord(ch) < 32 for ch in winner_text):
-            if relative not in unpinned:
-                unpinned[relative] = {
+            if slot not in unpinned:
+                unpinned[slot] = {
+                    **extra,
                     "reference": relative,
                     "macro": macro,
                     "reason": "winner path is not TeX-safe",
-                    "latex_would_open": _latex_lookup_fallback(relative, latex_cwd),
+                    "latex_would_open": _latex_lookup_fallback(relative, latex_cwd, kind),
                 }
                 warnings.append(
                     f"raw resource {relative} not pinned: winner path {winner_text} is not TeX-safe"
                 )
             return None
-        cwd_candidate = _latex_lookup_fallback(relative, latex_cwd)
+        cwd_candidate = _latex_lookup_fallback(relative, latex_cwd, kind)
         entry = {
+            **extra,
             "reference": relative,
             "macro": macro,
             "pinned_to": winner_text,
@@ -447,7 +518,7 @@ def pin_render_resources(
             "latex_cwd_candidate": cwd_candidate if cwd_candidate and cwd_candidate != winner_text else None,
             "occurrences": 1,
         }
-        pinned[relative] = entry
+        pinned[slot] = entry
         if entry["latex_cwd_candidate"]:
             warnings.append(
                 f"raw resource {relative}: pinned to {root.origin} winner; unpinned, LaTeX "
@@ -475,7 +546,7 @@ def pin_render_resources(
 
     body_start = 0
     front = ""
-    keys = tuple(template_keys)
+    keys = tuple(key_kinds)
     if keys and text.startswith("---\n"):
         end = text.find("\n---", 4)
         if end != -1:
@@ -489,7 +560,8 @@ def pin_render_resources(
         )
 
         def replace_front(match: re.Match[str]) -> str:
-            new = resolve(match.group("ref"), f"template:{match.group('key')}")
+            key = match.group("key")
+            new = resolve(match.group("ref"), f"template:{key}", key_kinds[key])
             if new is None:
                 return match.group(0)
             q = match.group("q")

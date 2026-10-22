@@ -111,23 +111,66 @@ def test_strikeout_detection_ignores_code_and_unparsed_tildes(tmp_path):
     assert PandocRenderer._source_contains_strikeout(source, defaults) is False
 
 
-APPARATUS_KEYS = ("codex_blank_leaf_ornament", "codex_compass_field_icon", "codex_folio_chip_asset")
+# SIL-31: the held mark and the vow frame joined them, and the ornament pool is a
+# directory variable the composition filter reads. All six are the codex0 package's
+# asset_variables, not engine allowlist entries.
+APPARATUS_KEYS = (
+    "codex_blank_leaf_ornament",
+    "codex_compass_field_icon",
+    "codex_folio_chip_asset",
+    "codex_held_mark_asset",
+    "codex_vow_frame_asset",
+)
+POOL_KEY = "codex_ornament_pool"
 
 
-def test_codex0_template_names_no_book_paths():
+def _codex0_asset_variables() -> dict[str, str]:
+    from tests.codex0_package import codex0_package
+
+    codex0_package()
+    return resolve_profile("codex0").asset_variables or {}
+
+
+def test_codex0_template_and_filter_name_no_book_paths():
+    from tests.codex0_package import codex0_package
+
+    package = codex0_package()
     template = resolve_profile("codex0").template_path.read_text(encoding="utf-8")
+    composition = (package / "filters" / "codex0_composition.lua").read_text(encoding="utf-8")
     assert "assets/codex0/v5/apparatus" not in template
+    assert "/srv/" not in template and "/srv/" not in composition
     for key in APPARATUS_KEYS:
         assert f"$if({key})$${key}$$endif$" in template
 
 
+def test_codex0_package_declares_its_asset_variables():
+    declared = _codex0_asset_variables()
+    assert declared == {**{key: "file" for key in APPARATUS_KEYS}, POOL_KEY: "directory"}
+    assert resolve_profile("document-spine").asset_variables is None
+
+
 @pytest.mark.parametrize("key", APPARATUS_KEYS)
-def test_apparatus_variables_are_allowlisted_and_path_guarded(key):
-    accepted, rejected = _guard_manifest_variables({key: "assets/apparatus/knot.png"})
+def test_apparatus_variables_are_declared_and_path_guarded(key):
+    declared = _codex0_asset_variables()
+    accepted, rejected = _guard_manifest_variables({key: "assets/apparatus/knot.png"}, declared)
     assert accepted == {key: "assets/apparatus/knot.png"} and rejected == {}
     for unsafe in ("/abs/knot.png", "../knot.png", "assets/knot.png}\\input{x}", "https://x/knot.png", "assets/knot.txt"):
-        accepted, rejected = _guard_manifest_variables({key: unsafe})
+        accepted, rejected = _guard_manifest_variables({key: unsafe}, declared)
         assert accepted == {} and key in rejected, unsafe
+    # A profile that does not declare it does not take it.
+    accepted, rejected = _guard_manifest_variables({key: "assets/apparatus/knot.png"})
+    assert accepted == {} and "not allowlisted" in rejected[key]
+
+
+def test_ornament_pool_is_a_guarded_directory_variable():
+    declared = _codex0_asset_variables()
+    accepted, rejected = _guard_manifest_variables(
+        {POOL_KEY: "assets/generated_media/ornament_pool"}, declared
+    )
+    assert accepted == {POOL_KEY: "assets/generated_media/ornament_pool"} and rejected == {}
+    for unsafe in ("/srv/pool", "../pool", "assets/{pool}", "https://x/pool", "", "assets/pool\\input{x}"):
+        accepted, rejected = _guard_manifest_variables({POOL_KEY: unsafe}, declared)
+        assert accepted == {} and POOL_KEY in rejected, unsafe
 
 
 def test_bindery_preflight_compile_timeout_is_reported_not_raised(tmp_path, monkeypatch):

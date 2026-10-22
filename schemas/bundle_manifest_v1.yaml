@@ -63,8 +63,11 @@ properties:
     type: object
     description: >
       Bundle-level template variables. Keys are checked against the engine's
-      allowlist (engine/manifest_compiler.py DOCUMENT_VARIABLE_ALLOWLIST); a key
-      outside it is recorded in evidence as rejected and not passed on.
+      allowlist (engine/manifest_compiler.py DOCUMENT_VARIABLE_ALLOWLIST) and the
+      path variables the profile package declares (asset_variables, SIL-31: a
+      relative file or directory inside the resource roots, pinned to its
+      winner); a key outside both is recorded in evidence as rejected and not
+      passed on.
 
   volumes:
     type: array

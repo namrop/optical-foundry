@@ -256,6 +256,15 @@ def _declared_source_registers(profile_id: Any) -> tuple[str, ...]:
         return ()
 
 
+def _declared_asset_variables(profile_id: Any) -> dict[str, str]:
+    """The template path variables the manifest's profile declares (SIL-31); none if it cannot resolve."""
+
+    try:
+        return dict(resolve_profile(str(profile_id or "")).asset_variables or {})
+    except Exception:  # noqa: BLE001 - an unresolvable profile is reported elsewhere
+        return {}
+
+
 def _wrap_codex_source_register(body: str, register: str) -> str:
     """Wrap one assembled source body in its validated semantic register.
 
@@ -383,12 +392,11 @@ DOCUMENT_VARIABLE_ALLOWLIST = {
     # Bind shape, carried from the same constant the build pads to, so the
     # printed colophon and the imposition can never describe different books.
     "colophon_signature_size",
-    # codex0 apparatus images, supplied by the work (2026-09-30). The codex0
-    # template used to default all three to paths inside the Codex 0 book's own
-    # folder; now the book names them and the template draws nothing without them.
-    "codex_blank_leaf_ornament",
-    "codex_compass_field_icon",
-    "codex_folio_chip_asset",
+    # A profile's own path variables (the codex0 apparatus images, its ornament
+    # pool) are not named here: the profile package declares them as
+    # asset_variables and _guard_manifest_variables accepts them for that
+    # profile only (SIL-31; from 2026-09-30 until then the three codex0
+    # apparatus images were listed here and in RESOURCE_PATH_VARIABLES).
 }
 
 RUNNING_TEXT_KEY_ALIASES = {
@@ -406,9 +414,6 @@ RUNNING_TEXT_CANONICAL_ORDER = ("division", "tagline", "footeremail")
 RESOURCE_PATH_VARIABLES = {
     "logo_path",
     "titlepage_background_image",
-    "codex_blank_leaf_ornament",
-    "codex_compass_field_icon",
-    "codex_folio_chip_asset",
 }
 RESOURCE_IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".pdf"}
 
@@ -436,6 +441,16 @@ def _safe_render_resource_path(value: Any) -> bool:
     if ".." in path.parts:
         return False
     return path.suffix.lower() in RESOURCE_IMAGE_EXTENSIONS
+
+
+def _safe_render_resource_directory(value: Any) -> bool:
+    """A relative directory inside the render resource roots (a profile's directory asset variable)."""
+    if not isinstance(value, str) or not value.strip() or "\x00" in value or "://" in value:
+        return False
+    if any(ch in value for ch in ("{", "}", "$", "`")):
+        return False
+    path = Path(value.strip())
+    return not path.is_absolute() and ".." not in path.parts
 
 
 def _safe_logo_path(value: Any) -> bool:
@@ -489,10 +504,37 @@ def _strip_reserved_document_variables(mapping: dict[str, Any]) -> dict[str, Any
     return cleaned
 
 
-def _guard_manifest_variables(variables: dict[str, Any]) -> tuple[dict[str, Any], dict[str, str]]:
+def _guard_manifest_variables(
+    variables: dict[str, Any], asset_variables: dict[str, str] | None = None
+) -> tuple[dict[str, Any], dict[str, str]]:
+    """Accept allowlisted variables, and the path variables the profile declares.
+
+    ``asset_variables`` is the profile package's declaration (SIL-31), name ->
+    "file" | "directory": a file must be a relative image/PDF path, a directory a
+    relative directory path, both inside the render resource roots.
+    """
+    asset_variables = asset_variables or {}
     accepted: dict[str, Any] = {}
     rejected: dict[str, str] = {}
     for key, value in variables.items():
+        asset_kind = asset_variables.get(key)
+        if asset_kind is not None:
+            ok = (
+                _safe_render_resource_directory(value) if asset_kind == "directory"
+                else _safe_render_resource_path(value)
+            )
+            if not ok:
+                rejected[key] = (
+                    f"{key} must be a relative directory path inside the render resource roots"
+                    if asset_kind == "directory"
+                    else f"{key} must be a relative image/PDF path inside the render resource roots"
+                )
+                continue
+            if not _safe_template_string(value):
+                rejected[key] = "variable value contains disallowed LaTeX control tokens"
+                continue
+            accepted[key] = value.strip() if asset_kind == "directory" else value
+            continue
         if key not in DOCUMENT_VARIABLE_ALLOWLIST:
             rejected[key] = "variable key is not allowlisted for document manifests"
             continue
@@ -1156,7 +1198,9 @@ class MarkdownDocumentCompiler(ManifestCompiler):
         if merge_policy != "source_then_manifest_override":
             raise ValueError(f"unsupported metadata_merge_policy: {merge_policy}")
 
-        accepted_variables, rejected_variables = _guard_manifest_variables(variables)
+        accepted_variables, rejected_variables = _guard_manifest_variables(
+            variables, _declared_asset_variables(profile)
+        )
         merged_fm: dict[str, Any] = dict(source_fm) if preserve_source_metadata else {}
         merged_fm.update(metadata)
         # `body_folio_start` is directly lowered into a TeX integer context. Its
@@ -1479,7 +1523,9 @@ class CompositeBundleCompiler(ManifestCompiler):
             manifest, base=Path(_manifest_path).resolve().parent if _manifest_path else None
         )
         raw_manifest_variables = manifest.get("variables", {}) if isinstance(manifest.get("variables", {}), dict) else {}
-        accepted_manifest_variables, rejected_manifest_variables = _guard_manifest_variables(raw_manifest_variables)
+        accepted_manifest_variables, rejected_manifest_variables = _guard_manifest_variables(
+            raw_manifest_variables, _declared_asset_variables(manifest.get("profile"))
+        )
 
         # B1: one volume of a work. Its body starts at volume.body_folio_start.
         # A template that seats $body_folio_start$ itself (codex0) gets the

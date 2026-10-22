@@ -5,7 +5,7 @@ note_role: architecture_note
 validation_profile: standard
 status: draft
 created: 2026-08-25T12:05:00-04:00
-updated: 2026-10-07T14:20:06-04:00
+updated: 2026-10-21T21:15:00-04:00
 beam_home: docs/plans
 title: "Codex 0 → Optical Foundry — capability promotion map (post-delivery)"
 tags:
@@ -28,12 +28,12 @@ ruling_refs:
   - uid: 01a0f458-a0ce-7a10-a6b9-927a52a976cb
     relation: step-1-defects-and-f2
 last_touched:
-  name: Claude Opus 5.5
+  name: Lux
   harness: hermes-agent
   model: claude-opus-5-5
-  provider: custom:primary
-  voyage: "t3-code:hermes-acp"
-  at: 2026-10-06T02:52:00-04:00
+  provider: custom:secondary
+  voyage: "paperclip:SIL-31"
+  at: 2026-10-21T21:15:00-04:00
 ---
 
 # Codex 0 → Optical Foundry — capability promotion map
@@ -1096,3 +1096,36 @@ failure. Book tools: 125 passed. The adapter group is not committed. Its pending
 
 Step 8 remains incomplete. Extent, rails, plates and the bindery/label group still need the
 work above. Step 9 has not started.
+
+## 18. 2026-10-21 — SIL-31: the last Codex 0 pieces leave the engine
+
+The three engine items under "Also outstanding, smaller" (§14.3), worked on Paperclip SIL-31.
+Luis approved the third, the art paths, on the issue: "yeah proceed with step 3 please".
+
+- **`codex0-a5`** and `assets/dropcaps/codex0/I.png` are a package in `optical-foundry-profiles`
+  (`codex0-a5/`), stack unchanged. With it went the engine's `yugenbase.yaml`, `yugencommon.sty`,
+  `yugenmythic.sty` and the two logos SIL-32 had kept for it; the `yugen-brand` and `mythic`
+  packages hold identical copies. Foundry `2fc5bee`.
+- **`sources[].codex_register`** is gated on the registers the profile declares (`registers:` in
+  its package; codex0 declares `[pataphorical]`), not on the profile id. Foundry `4bf1aa6`.
+- **The art paths.** A package declares `asset_variables`: template variables the work fills with a
+  path, each `file` or `directory`. The compiler accepts them for that profile only, guarded as
+  relative paths, and source preparation pins each to the first root in the effective chain that
+  holds it, as it pins `logo_path`; a directory pin carries `kind: directory` in evidence. The
+  three codex0 apparatus images left the engine allowlist and `TEMPLATE_RESOURCE_KEYS` for
+  codex0's declaration, which adds `codex_held_mark_asset`, `codex_vow_frame_asset` and
+  `codex_ornament_pool`. The codex0 template and composition filter name no file by absolute
+  path. The filter's ornament and rail tables are relative to the pool, which it reads from the
+  writer variables as it loads (a `Meta` function would run after the blocks it has to steer).
+  Without the variables those seats draw nothing. The book's spine tool sets the three and
+  declares `book/codex0` as a second resource root.
+- **Whole-book check** (regression lane; base `sil31-art-base-2026-10-21`, candidate
+  `sil31-art-cand-2026-10-21`): all six contact sheets identical, at 224/224, 286/288 and 126/128
+  pages. The manifests and resolved sources differ only by the three variables and the second root.
+- **Seen, not changed.** The composition filter reads its `codex_*_gap` and `codex_rail_width`
+  overrides in `Meta`, after the blocks, so a manifest setting them has no effect; no book
+  manifest sets them. The June `codex0_v2` and `codex0_v3` draft manifests set none of the new
+  variables; rendered now, they would get no held marks, vow frames, ornaments or rails.
+
+Still open from that paragraph: whether `client_report`'s classification becomes its editions,
+which needs the client profile.

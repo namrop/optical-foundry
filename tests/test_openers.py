@@ -11,6 +11,9 @@ import yaml
 
 from engine.openers import FILTER, OpenerError, plan_openers
 
+# The work's ornament pool, as the engine pins it and pandoc passes it (SIL-31).
+POOL_ARGS = ["-V", "codex_ornament_pool=/book/codex0/assets/generated_media/ornament_pool"]
+
 
 def test_codex0_package_uses_general_opener_geometry_and_filter(tmp_path):
     from engine.profile_resolver import resolve_profile
@@ -21,7 +24,7 @@ def test_codex0_package_uses_general_opener_geometry_and_filter(tmp_path):
     composition = resolved.package_dir / "filters" / "codex0_composition.lua"
     md = _op("One") + "Before the room opens, a long enough first paragraph to need its ordinary space.\n\nSecond paragraph.\n"
     tex = subprocess.run(
-        ["pandoc", "-f", "markdown", "-t", "latex", "--lua-filter", str(composition),
+        ["pandoc", "-f", "markdown", "-t", "latex", *POOL_ARGS, "--lua-filter", str(composition),
          "--lua-filter", str(FILTER)], input=md, capture_output=True, text=True, check=True).stdout
     assert "\\OFOpenerCapital{B}{efore}" in tex
     assert "CodexLettrine" not in tex
@@ -36,7 +39,7 @@ def test_codex0_opener_breath_keeps_pre_capital_stringify_metric():
     para = "The road does not erase the weather that was always gathering."
     md = _op("One") + "```{=latex}\n\\OFSetRunningTagline{One}\n```\n\n" + para + "\n\nFollowing paragraph.\n"
     tex = subprocess.run(
-        ["pandoc", "-f", "markdown", "-t", "latex", "--lua-filter", str(composition),
+        ["pandoc", "-f", "markdown", "-t", "latex", *POOL_ARGS, "--lua-filter", str(composition),
          "--lua-filter", str(FILTER)], input=md, capture_output=True, text=True, check=True).stdout
     assert "\\OFOpenerCapital{T}{he}" in tex
     assert "\\CodexBreakOrnament" in tex

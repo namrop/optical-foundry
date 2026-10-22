@@ -23,9 +23,18 @@ from engine.resource_roots import (
     TEMPLATE_RESOURCE_KEYS,
     effective_resource_roots,
     pin_render_resources,
+    resource_resolution_evidence,
+    template_resource_kinds,
     typed_resource_references,
 )
 from renderers.pandoc_renderer import PandocRenderer
+
+# A profile's template path variables, as its package declares them (SIL-31).
+CODEX0_LIKE_ASSET_VARIABLES = {
+    "codex_blank_leaf_ornament": "file",
+    "codex_folio_chip_asset": "file",
+    "codex_ornament_pool": "directory",
+}
 
 
 def _profile(resource_paths: list[Path]):
@@ -152,7 +161,9 @@ def test_template_path_variables_in_frontmatter_are_pinned_and_other_keys_are_no
         "body\n"
     )
 
-    pinned, record = pin_render_resources(text, roots, template_keys=TEMPLATE_RESOURCE_KEYS)
+    pinned, record = pin_render_resources(
+        text, roots, template_keys=template_resource_kinds(CODEX0_LIKE_ASSET_VARIABLES)
+    )
 
     knot = (manifest_root / references[0]).resolve().as_posix()
     chip = (manifest_root / references[1]).resolve().as_posix()
@@ -163,6 +174,90 @@ def test_template_path_variables_in_frontmatter_are_pinned_and_other_keys_are_no
         "template:codex_blank_leaf_ornament",
         "template:codex_folio_chip_asset",
     }
+
+
+def test_engine_template_keys_name_no_profile_variables(tmp_path):
+    # SIL-31: the codex0 apparatus images were engine keys from 2026-09-30; now a
+    # profile's path variables are pinned only when its package declares them.
+    assert set(TEMPLATE_RESOURCE_KEYS) == {"logo_path", "titlepage_background_image"}
+    reference = "assets/apparatus/knot.png"
+    roots, _manifest_root, _profile_root = _roots(tmp_path, [reference])
+    text = f"---\nvariables:\n  codex_blank_leaf_ornament: {reference}\n---\nbody\n"
+
+    pinned, record = pin_render_resources(text, roots, template_keys=template_resource_kinds())
+
+    assert pinned == text
+    assert record["pinned"] == []
+
+
+def test_directory_asset_variable_is_pinned_to_the_first_root_holding_that_directory(tmp_path):
+    roots, manifest_root, profile_root = _roots(tmp_path, [])
+    pool = "assets/generated_media/ornament_pool"
+    (manifest_root / pool).mkdir(parents=True)
+    (profile_root / pool).mkdir(parents=True)
+    # A FILE of that name in an earlier root is not a directory winner.
+    run_root = next(root.path for root in roots if root.origin == "run")
+    (run_root / "assets" / "generated_media").mkdir(parents=True)
+    (run_root / pool).write_bytes(b"not a directory")
+    text = (
+        "---\n"
+        f"codex_ornament_pool: {pool}/\n"
+        "variables:\n"
+        f"  codex_ornament_pool: {pool}\n"
+        "---\n"
+        "body\n"
+    )
+
+    pinned, record = pin_render_resources(
+        text, roots, template_keys=template_resource_kinds(CODEX0_LIKE_ASSET_VARIABLES)
+    )
+
+    winner = (manifest_root / pool).resolve().as_posix()
+    assert f"codex_ornament_pool: {winner}\n" in pinned
+    assert f"  codex_ornament_pool: {winner}\n" in pinned
+    [entry] = record["pinned"]
+    assert entry["kind"] == "directory"
+    assert entry["macro"] == "template:codex_ornament_pool"
+    assert entry["winner_origin"] == "manifest"
+    assert entry["occurrences"] == 2
+    assert entry["shadowed"] == [str((profile_root / pool).resolve())]
+
+
+def test_directory_asset_variable_without_a_winner_is_left_and_recorded(tmp_path):
+    roots, _manifest_root, _profile_root = _roots(tmp_path, [])
+    text = "---\nvariables:\n  codex_ornament_pool: assets/missing_pool\n---\nbody\n"
+
+    pinned, record = pin_render_resources(
+        text, roots, template_keys=template_resource_kinds(CODEX0_LIKE_ASSET_VARIABLES)
+    )
+
+    assert pinned == text
+    [entry] = record["unpinned"]
+    assert entry["kind"] == "directory"
+    assert entry["reference"] == "assets/missing_pool"
+
+
+def test_resolution_evidence_resolves_declared_directories_against_directories(tmp_path):
+    roots, manifest_root, _profile_root = _roots(tmp_path, ["assets/apparatus/knot.png"])
+    (manifest_root / "assets" / "pool").mkdir(parents=True)
+    source = tmp_path / "source" / "source.md"
+    source.write_text(
+        "---\nvariables:\n  codex_blank_leaf_ornament: assets/apparatus/knot.png\n"
+        "  codex_ornament_pool: assets/pool\n---\nbody\n",
+        encoding="utf-8",
+    )
+    plan = ProjectionPlan(profile_id="codex0", render_id="pin", render_source=source)
+
+    evidence = resource_resolution_evidence(plan, roots, CODEX0_LIKE_ASSET_VARIABLES)
+    by_reference = {entry["reference"]: entry for entry in evidence["resolved_resources"]}
+
+    assert by_reference["assets/pool"]["kind"] == "directory"
+    assert by_reference["assets/pool"]["winner"] == str((manifest_root / "assets" / "pool").resolve())
+    assert "kind" not in by_reference["assets/apparatus/knot.png"]
+    assert by_reference["assets/apparatus/knot.png"]["winner_origin"] == "manifest"
+    # Undeclared, the same frontmatter resolves neither.
+    evidence = resource_resolution_evidence(plan, roots)
+    assert evidence["resolved_resources"] == []
 
 
 def test_repeated_reference_is_counted_once_with_occurrences(tmp_path):

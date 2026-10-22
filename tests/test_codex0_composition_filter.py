@@ -16,22 +16,90 @@ GF = Path(__file__).resolve().parents[1]
 PROFILE_ROOT = GF / "profiles" / "40_latex_import"   # engine defaults (document spine, Johannah)
 CODEX0 = codex0_package()                              # the codex0 profile package (map G2)
 FILTER = CODEX0 / "filters" / "codex0_composition.lua"
+# The work names its ornament pool (SIL-31); the engine pins it to an absolute
+# directory and it reaches the filter as a writer variable. The filter only joins.
+POOL = "/book/codex0/assets/generated_media/ornament_pool"
 
 
-def _pandoc_latex(tmp_path: Path, body: str) -> str:
+def _pandoc_run(tmp_path: Path, body: str, pool: str | None = POOL) -> subprocess.CompletedProcess:
     if not shutil.which("pandoc"):
         raise RuntimeError("pandoc not available")
     src = tmp_path / "codex-composition.md"
     src.write_text(body, encoding="utf-8")
+    pool_args = ["-V", f"codex_ornament_pool={pool}"] if pool is not None else []
     result = subprocess.run(
-        ["pandoc", str(src), "-t", "latex", "--lua-filter", str(FILTER)],
+        ["pandoc", str(src), "-t", "latex", *pool_args, "--lua-filter", str(FILTER)],
         capture_output=True,
         text=True,
         timeout=30,
         cwd=PROFILE_ROOT,
     )
     assert result.returncode == 0, result.stderr
-    return result.stdout
+    return result
+
+
+def _pandoc_latex(tmp_path: Path, body: str, pool: str | None = POOL) -> str:
+    return _pandoc_run(tmp_path, body, pool).stdout
+
+
+POOL_PROBE = """
+::: {.codex-breath}
+A breath.
+:::
+
+::: {.codex-hinge-break asset="T03"}
+An id override.
+:::
+
+::: {.codex-hinge-break ornament="assets/custom-hinge.png"}
+A path override.
+:::
+
+<!-- cx0:rule -->
+
+::: {.codex-pataphorical story="s"}
+A field.
+:::
+"""
+
+
+def test_pool_assets_are_named_relative_to_the_works_ornament_pool(tmp_path):
+    latex = _pandoc_latex(tmp_path, POOL_PROBE)
+    assert f"{{{POOL}/style_map_v2_pools_2026-07-19/selected/breath/BR02_alpha.png}}" in latex
+    assert f"{POOL}/selected_assets_overview_2026-06-26/" in latex and "T03_seed_branch_closure" in latex
+    assert f"\\CodexRailPoolAdd{{contained}}{{2}}{{\\detokenize{{{POOL}/rail_length_ladder_2026-07-27/alpha/RS04_balloon_flower_bell_alpha.png}}}}" in latex
+    assert latex.count("\\CodexRailPoolAdd{") == 56
+    assert "{assets/custom-hinge.png}" in latex
+
+
+def test_without_a_pool_no_table_asset_is_drawn(tmp_path):
+    latex = _pandoc_latex(tmp_path, POOL_PROBE, pool=None)
+    # No default ornament, no id override, no rail pool members...
+    assert "BR02_alpha.png" not in latex and "T03_seed_branch_closure" not in latex
+    assert "\\CodexRailPoolAdd{" not in latex
+    assert "\\CodexRailPoolReset" in latex
+    # ...an explicit relative path still is, and the passage rule falls back to a plain rule.
+    assert "\\CodexBreakOrnament[width=0.40\\linewidth]" not in latex
+    assert "{assets/custom-hinge.png}" in latex
+    assert "\\centering\\rule{0.22\\linewidth}{0.4pt}" in latex
+    assert latex.count("\\CodexBreakOrnament") == 1
+
+
+def test_pool_path_arrives_exactly_as_the_engine_pinned_it(tmp_path):
+    # Read from the writer variables, not metadata: metadata is parsed as Markdown,
+    # where smart punctuation would turn -- into an en dash.
+    pool = "/book/a--b/ornament_pool"
+    latex = _pandoc_latex(tmp_path, POOL_PROBE, pool=pool + "/")
+    assert f"{{{pool}/style_map_v2_pools_2026-07-19/selected/breath/BR02_alpha.png}}" in latex
+
+
+def test_an_unsafe_pool_is_refused_with_a_warning(tmp_path):
+    result = _pandoc_run(tmp_path, POOL_PROBE, pool="/book/{evil}/pool")
+    assert "codex_ornament_pool is not a TeX-safe path" in result.stderr
+    assert "BR02_alpha.png" not in result.stdout and "evil" not in result.stdout
+    result = _pandoc_run(tmp_path, POOL_PROBE, pool="/book/../pool")
+    assert "codex_ornament_pool is not a TeX-safe path" in result.stderr
+    assert "BR02_alpha.png" not in result.stdout
 
 
 def test_codex_composition_filter_lowers_core_block_primitives(tmp_path):

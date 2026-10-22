@@ -42,6 +42,12 @@ wins: a package cannot shadow an engine profile silently.
     editions: {labels: [...]}    # engine/editions.py (map C1)
     registers: [pataphorical]    # source registers its filter lowers: a bundle's
                                  # sources[].codex_register must name one (SIL-31)
+    asset_variables:             # template variables the WORK fills with a path (SIL-31):
+      codex_held_mark_asset: file      # file = one image/PDF; directory = a folder of them.
+      codex_ornament_pool: directory   # A manifest may set them; each is guarded as a
+                                       # relative path and pinned to its winner in the
+                                       # resource roots, like logo_path. The engine's
+                                       # allowlist never names a profile's variables.
 """
 from __future__ import annotations
 
@@ -55,7 +61,7 @@ import yaml
 SCHEMA = "profile_package_v1"
 _KEYS = {"schema_version", "id", "title", "description", "extends", "template", "defaults",
          "source_preparation", "ornaments", "openers", "markers", "editions",
-         "family", "base_defaults", "tex", "divider_kinds", "registers"}
+         "family", "base_defaults", "tex", "divider_kinds", "registers", "asset_variables"}
 
 
 class ProfilePackageError(ValueError):

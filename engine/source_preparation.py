@@ -54,11 +54,11 @@ from engine.profile_resolver import LOCAL_IMPORT, ResolvedProfile
 from engine.projection_plan import ProjectionPlan
 from engine.resource_roots import (
     ResolvedResourceRoot,
-    TEMPLATE_RESOURCE_KEYS,
     effective_resource_roots,
     pin_render_resources,
     resource_resolution_evidence,
     resource_root_paths,
+    template_resource_kinds,
 )
 from engine.vega import VegaRenderError, preprocess_vega_blocks
 
@@ -111,7 +111,9 @@ def prepare(plan: ProjectionPlan, profile: ResolvedProfile, out_dir: Path) -> Pr
         log.append({"step": name, "ran": True, "changed": plan.render_source != before})
 
     roots = effective_resource_roots(plan, profile, out_dir)
-    resolution = resource_resolution_evidence(plan, roots)
+    # SIL-31: the profile's own template path variables (its package's asset_variables).
+    asset_variables = getattr(profile, "asset_variables", None)
+    resolution = resource_resolution_evidence(plan, roots, asset_variables)
     source = plan.render_source.resolve()
 
     def copy_step(name: str, fn: Callable[[], Path]) -> None:
@@ -131,7 +133,9 @@ def prepare(plan: ProjectionPlan, profile: ResolvedProfile, out_dir: Path) -> Pr
 
     def _pin() -> Path:
         nonlocal pins
-        pinned, pins = resource_pinning(source, out_dir, plan.render_id, roots, profile.render_environment.cwd)
+        pinned, pins = resource_pinning(
+            source, out_dir, plan.render_id, roots, profile.render_environment.cwd, asset_variables
+        )
         return pinned
 
     copy_step("resource_pinning", _pin)
@@ -545,16 +549,20 @@ def resource_pinning(
     render_id: str,
     roots: list[ResolvedResourceRoot],
     latex_cwd: Path | None,
+    asset_variables: dict[str, str] | None = None,
 ) -> tuple[Path, dict[str, Any]]:
     """Render-only copy whose relative image references name the files the root chain picks.
 
     LaTeX's own search would otherwise try the profile folder first
-    (engine/resource_roots.py, "Raw-LaTeX resource pinning").
+    (engine/resource_roots.py, "Raw-LaTeX resource pinning"). The template path
+    variables pinned are the engine's and the profile's ``asset_variables`` (SIL-31).
     """
     if not render_source.exists():
         return render_source, {"pinned": [], "unpinned": [], "warnings": []}
     text = render_source.read_text(encoding="utf-8", errors="ignore")
-    pinned_text, record = pin_render_resources(text, roots, latex_cwd=latex_cwd, template_keys=TEMPLATE_RESOURCE_KEYS)
+    pinned_text, record = pin_render_resources(
+        text, roots, latex_cwd=latex_cwd, template_keys=template_resource_kinds(asset_variables)
+    )
     if pinned_text == text:
         return render_source, record
     path = out_dir / f"{render_id}.resources_pinned.md"

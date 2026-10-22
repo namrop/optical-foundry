@@ -1542,6 +1542,43 @@ def test_codex_bundle_source_register_follows_the_profile_declaration(tmp_path, 
     assert any("must be one of ['pataphorical']" in error for error in errors)
 
 
+def test_codex_bundle_passes_the_path_variables_its_profile_declares(tmp_path, monkeypatch):
+    # SIL-31: a profile's path variables come from its package's asset_variables,
+    # not from the engine allowlist, and reach the assembled frontmatter only for it.
+    import yaml
+
+    import engine.manifest_compiler as mc
+
+    declared = {"garden-notebook": {"garden_pool": "directory", "garden_mark": "file"}}
+    monkeypatch.setattr(mc, "_declared_asset_variables", lambda pid: declared.get(pid, {}))
+    manifest = _codex_bundle_two_passages(tmp_path)
+    manifest["variables"] = {"garden_pool": "assets/pool", "garden_mark": "assets/mark.pdf"}
+
+    manifest["profile"] = "garden-notebook"
+    assembled = CodexBundleCompiler().compile(manifest).render_source.read_text()
+    front = yaml.safe_load(assembled.split("\n---", 1)[0].removeprefix("---\n"))
+    assert front["variables"]["garden_pool"] == "assets/pool"
+    assert front["variables"]["garden_mark"] == "assets/mark.pdf"
+
+    manifest["profile"] = "document-spine"
+    assembled = CodexBundleCompiler().compile(manifest).render_source.read_text()
+    assert "garden_pool" not in assembled and "garden_mark" not in assembled
+
+
+def test_profile_asset_variables_must_name_lowercase_variables_and_a_kind():
+    import pytest
+
+    from engine.profile_resolver import _asset_variables_of
+
+    assert _asset_variables_of({}, "p") is None
+    assert _asset_variables_of({"asset_variables": {"pool": "directory", "mark": "file"}}, "p") == {
+        "pool": "directory", "mark": "file",
+    }
+    for bad in ({"pool": "url"}, {"Pool": "file"}, {"po ol": "file"}, ["pool"], "pool"):
+        with pytest.raises(ValueError, match="asset_variables"):
+            _asset_variables_of({"asset_variables": bad}, "p")
+
+
 def test_codex0_package_declares_the_pataphorical_register():
     from engine.profile_resolver import resolve_profile
     from tests.profile_packages import profile_package

@@ -76,6 +76,8 @@ class ResolvedProfile:
     editions: dict[str, Any] | None = None
     # The source registers it declares (a bundle's sources[].codex_register), SIL-31.
     registers: tuple[str, ...] | None = None
+    # The template variables the work fills with a path, name -> "file" | "directory" (SIL-31).
+    asset_variables: dict[str, str] | None = None
 
 
 ALIASES: dict[str, str] = {
@@ -157,7 +159,7 @@ def resolve_profile(profile_id: str) -> ResolvedProfile:
         if base_id not in PROFILE_SPECS:
             raise ValueError(f"profile package {canonical}: extends {base_id!r}, which is not an engine profile")
         spec = dict(PROFILE_SPECS[base_id])
-        for key in ("source_preparation", "markers", "editions", "registers", "family"):
+        for key in ("source_preparation", "markers", "editions", "registers", "asset_variables", "family"):
             if package.spec.get(key) is not None:
                 spec[key] = package.spec[key]
         # G2: a package that carries a whole profile names the engine defaults it
@@ -261,10 +263,28 @@ def resolve_profile(profile_id: str) -> ResolvedProfile:
         markers=_markers_of(spec, canonical),
         editions=_editions_of(spec, canonical),
         registers=_registers_of(spec, canonical),
+        asset_variables=_asset_variables_of(spec, canonical),
     )
 
 
 _REGISTER_RE = re.compile(r"^[a-z][a-z0-9_-]*$")
+_ASSET_VARIABLE_RE = re.compile(r"^[a-z][a-z0-9_]*$")
+ASSET_VARIABLE_KINDS = ("file", "directory")
+
+
+def _asset_variables_of(spec: dict[str, Any], canonical: str) -> dict[str, str] | None:
+    declared = spec.get("asset_variables")
+    if declared is None:
+        return None
+    if not isinstance(declared, dict) or not all(
+        isinstance(name, str) and _ASSET_VARIABLE_RE.match(name) and kind in ASSET_VARIABLE_KINDS
+        for name, kind in declared.items()
+    ):
+        raise ValueError(
+            f"profile {canonical}: asset_variables must map lowercase variable names to "
+            f"{' or '.join(ASSET_VARIABLE_KINDS)}, e.g. {{codex_ornament_pool: directory}}"
+        )
+    return dict(declared)
 
 
 def _registers_of(spec: dict[str, Any], canonical: str) -> tuple[str, ...] | None:
