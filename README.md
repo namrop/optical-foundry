@@ -4,15 +4,16 @@ Optical Foundry turns Markdown manuscripts and YAML render manifests into print-
 
 ## A small book, built from source
 
-[The Shape of a Page](examples/illuminated-book/) is an eight-page example with an illuminated initial, displayed imagery, mirrored outer-margin rails and section ornaments. Its text was written for the example; its botanical art comes from the Codex 0 decorative collection. Everything needed to render it is in this repository.
+[The Shape of a Page](examples/illuminated-book/) is an eleven-page example set in 14pt type, with an illuminated initial, displayed imagery, three botanical rail designs, four ornament slots, contents, footnotes and a glossary. Its text was written for the example; its decorative art comes from the Codex 0 collection. Everything needed to render it is in this repository.
 
 <p>
-  <img src="docs/images/illuminated-title.png" width="32%" alt="Rendered title page of The Shape of a Page, with a botanical ornament">
-  <img src="docs/images/illuminated-initial.png" width="32%" alt="Chapter opening with an image initial, a small ornament and a purple orchid in the right outer margin">
-  <img src="docs/images/illuminated-margin.png" width="32%" alt="An even page with the orchid rail mirrored to the left outer margin">
+  <img src="docs/images/illuminated-initial.png" width="48%" alt="Chapter opening with an image initial, breath ornament, left outer orchid rail and a footnote">
+  <img src="docs/images/illuminated-margin.png" width="48%" alt="Chapter opening with a right outer wisteria rail and a footnote">
 </p>
-
-![A rendered page showing an image in the text measure and a closing ornament](docs/images/illuminated-image.png)
+<p>
+  <img src="docs/images/illuminated-image.png" width="48%" alt="A displayed image in the text measure and a closing vine tailpiece">
+  <img src="docs/images/illuminated-ornaments.png" width="48%" alt="Four live, explained ornament specimens: whisper, breath, hinge and tailpiece">
+</p>
 
 ## What it does
 
@@ -29,7 +30,7 @@ Demo profiles ship here; other profiles live in a separate repository and are lo
 
 ## Requirements
 
-The example has been exercised with Python 3.13, Pandoc 3.7 and TeX Live 2025. Install:
+The example has been exercised with Python 3.12 and 3.13, Pandoc 3.7 and TeX Live 2025. Install:
 
 - Python, [uv](https://docs.astral.sh/uv/) and the Python packages shown below;
 - Pandoc;
@@ -54,7 +55,7 @@ The render script gives profile discovery a temporary home/config and unsets `OF
 
 Outputs are written under `generated/illuminated-book/`:
 
-- `illuminated-book.pdf` — eight half-letter pages;
+- `illuminated-book.pdf` — eleven half-letter pages;
 - `illuminated-book.evidence.json` — render and validation evidence;
 - `illuminated-book.bindery_preflight.json` — advisory print checks;
 - safe-area guide and overlay PDFs.

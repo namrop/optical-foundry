@@ -5,7 +5,7 @@ profile: illuminated-example
 source:
   path: examples/illuminated-book/book.md
 resource_roots:
-  - profiles/illuminated-example
+- profiles/illuminated-example
 metadata:
   title: ''
   subtitle: ''
@@ -38,10 +38,16 @@ render:
       rail: outer
       width: 0.33in
       reserve_space: true
-      placement: chapter_openers
+      placement: explicit
       assets:
-        - id: orchid
-          source: assets/orchid-rail.png
-          pages: chapter_openers
+      - id: orchid
+        source: assets/orchid-rail.png
+        pages: explicit
+      - id: wisteria
+        source: assets/wisteria-rail.png
+        pages: explicit
+      - id: lupine
+        source: assets/lupine-rail.png
+        pages: explicit
     imposition:
       enabled: false

@@ -34,18 +34,24 @@ A page is more than a container. It is an agreement between the length of a line
 
 ```{=latex}
 \clearpage
+\tableofcontents*
+\clearpage
 ```
 
 # Chapter One: The page
 
+```{=latex}
+\OFOuterRail{assets/orchid-rail.png}
+```
+
 ```of-initial
 path: assets/initial-t.png
-width: 0.55in
+width: 0.62in
 lines: 4
 gap: 0.07in
 align: top
 ```
-he page begins with a measure. A line should carry a thought far enough to gather momentum, but not so far that the eye loses its way on the return. That judgment belongs to the relationship between type size, leading and the width of the text, rather than to any one number in isolation.
+he page begins with a measure.[^measure] A line should carry a thought far enough to gather momentum, but not so far that the eye loses its way on the return. That judgment belongs to the relationship between type size, leading and the width of the text, rather than to any one number in isolation.
 
 An illuminated initial changes the opening without replacing the paragraph. The capital is an image; the words beside it remain text. The space reserved around the image must be large enough for its frame, yet small enough that the sentence still reads as one movement.
 
@@ -62,9 +68,13 @@ The best test is ordinary reading. If the reader notices the apparatus before th
 
 # Chapter Two: The margin
 
+```{=latex}
+\OFOuterRail{assets/wisteria-rail.png}
+```
+
 The margin is not leftover space. It separates the text from the edge of the object, and it can carry a second, quieter channel of information. A note, a folio or a botanical rail can live there without narrowing every sentence into a negotiation with an illustration.
 
-In this example, a purple orchid marks the chapter opening. Its placement belongs to the delivery manifest: the outer edge changes sides when the page changes parity. The source does not need to choose a permanent left or right margin.
+In this example, a purple wisteria marks this chapter opening; the other chapters use orchid and lupine art. Its placement belongs to the delivery manifest: the outer edge changes sides when the page changes parity.[^parity] The source does not need to choose a permanent left or right margin.
 
 ::: {.breath}
 :::
@@ -83,7 +93,7 @@ Paragraphs make a second measure within the page. An indentation can mark a new 
 
 The same is true of headings. A heading belongs to the words that follow it, not to the empty space at the bottom of the preceding page. Keeping that relationship intact is a layout responsibility. It should not depend on adding blank lines until a particular proof happens to look right.
 
-::: {.breath}
+::: {.whisper}
 :::
 
 A book also has a rhythm across its openings. The reader sees a left page and a right page together. Their margins need not be identical, but their relationship should feel deliberate. The binding takes space from the inner edge; the outer edge gives the hand somewhere to rest.
@@ -119,11 +129,15 @@ This distinction is also useful in the source. The image block declares its plac
 
 # Chapter Three: The object
 
+```{=latex}
+\OFOuterRail{assets/lupine-rail.png}
+```
+
 A rendered file is not ready merely because it exists. Its pages need the right dimensions. Its fonts must be embedded. Its images must be present, and its text must remain free of working paths, source directives and other construction debris.
 
 Evidence helps make those questions repeatable. A render records its inputs, warnings, page count and output hash. These records identify what was built; they do not decide whether the typography is good. A clean report and a poor page can coexist.
 
-::: {.breath}
+::: {.hinge}
 :::
 
 That is why the final pass returns to the page itself. Look at an opening. Follow a sentence around an initial. Check the outer margins on both parities. Read the bottom line before turning the page. Notice whether an ornament has become stranded where a page break already supplies the pause.
@@ -137,15 +151,76 @@ The object is complete only when the declared structure and the visible result a
 \clearpage
 ```
 
-## Making this example
+# Four kinds of ornament
 
-This eight-page specimen is intentionally small. It demonstrates a title page, a framed image initial, a displayed image, chapter-opening illumination rails and engine-native breath and tailpiece ornaments.
+These definitions follow the engine's ornament-slot contract.[^slots] Each mark below is a live example of its named slot.
+
+**Whisper** is the lightest pause between passages: here, a fine gold double scroll.
+
+::: {.whisper}
+:::
+
+**Breath** is a stronger pause between passages: here, two green leaves and a gold bud.
+
+::: {.breath}
+:::
+
+**Hinge** is the strongest of these three pauses: here, curling vines with blossom dots. Its height and surrounding gap exceed the breath's.
+
+::: {.hinge}
+:::
+
+The engine drops these pauses at a page top or foot, where a page break already supplies the interval. A **tailpiece** instead closes a section. It may remain at the page foot; only the first structural ornament there is kept. This vine knot closes the specimen.
+
+::: {.tailpiece}
+:::
+
+```{=latex}
+\clearpage
+```
+
+# Making this example
+
+This specimen is intentionally small. It demonstrates a title page, a framed image initial, a displayed image, chapter-opening illumination rails and engine-native whisper, breath, hinge and tailpiece ornaments.
 
 The example profile inherits the neutral document spine. Its ornament slots use the public engine's page-position law: a breath does not survive at a page top or foot, where a page break already performs its work. A tailpiece is allowed to close a section.
 
-The manifest owns the half-letter page size, mirrored bound margins and outer folios. It also owns the chapter-opening rails. The companion render script isolates profile discovery so that only this repository's demonstration profile is available. It does not require a separate profile checkout.
+The manifest owns the half-letter page size, mirrored bound margins and outer folios. It also owns the illumination rail geometry; explicit source marks select the orchid, wisteria and lupine art at chapter openings. The companion render script isolates profile discovery so that only this repository's demonstration profile is available. It does not require a separate profile checkout.
 
 The accompanying asset inventory records where each decorative file came from and how it was prepared. No personal manuscript text, photographs, keepsakes or location imagery are included. The text is original to this example; it is not a quotation or a claim of public-domain status.
 
 ::: {.tailpiece}
 :::
+
+
+```{=latex}
+\clearpage
+```
+
+# Glossary
+
+**Breath.** A pause between passages, stronger than a whisper and lighter than a hinge. See *Four kinds of ornament* for a live specimen.
+
+**Folio.** The printed page number. Here it sits at the outer foot, alternating sides across an opening.
+
+**Hinge.** The strongest of the three between-passage pauses in this example. It is not a new chapter.
+
+**Illumination rail.** A reserved margin lane for decorative art. Here its geometry belongs to the delivery manifest; source marks choose one of three botanical images.
+
+**Imposition.** Arranging reading-order pages onto sheet sides for folding and binding. It is not requested for this specimen.
+
+**Measure.** The width of the prose column, considered in relation to type size and line spacing.
+
+**Register rail.** A profile-defined margin mark following a declared voice or register beside marked text. This specimen demonstrates decorative illumination, not that automatic system.
+
+**Signature.** A group of folded sheets assembled as a binding unit. Page counts and padding depend on the chosen production plan.
+
+**Tailpiece.** An ornament after a section's final block. It closes rather than interrupts.
+
+**Whisper.** The lightest between-passage pause. Its height and surrounding gap are smaller than a breath's.
+
+[^measure]: Here measure means the width of the prose column, not a unit of length or the paper width.
+
+[^parity]: Odd pages use the right outer margin; even pages use the left. This follows the typeset page counter.
+
+[^slots]: Definitions: the repository's ornament-slot contract, section 1. The public engine's slot table supplies the page-top and page-foot defaults.

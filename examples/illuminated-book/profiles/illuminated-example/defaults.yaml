@@ -1,12 +1,16 @@
 pdf-engine: lualatex
+include-in-header: ['${.}/preamble.tex']
 variables:
   mainfont: EBGaramond-Regular.otf
   mainfontoptions:
-    - BoldFont=EBGaramond-Bold.otf
-    - ItalicFont=EBGaramond-Italic.otf
-    - BoldItalicFont=EBGaramond-BoldItalic.otf
+  - BoldFont=EBGaramond-Bold.otf
+  - ItalicFont=EBGaramond-Italic.otf
+  - BoldItalicFont=EBGaramond-BoldItalic.otf
   sansfont: texgyreheros-regular.otf
   monofont: texgyrecursor-regular.otf
   linestretch: 1.12
   parindent: 1.1em
   parskip: 2pt
+  classoption:
+  - 14pt
+  - twoside

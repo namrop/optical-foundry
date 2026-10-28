@@ -1,23 +1,39 @@
+# An unused, empty register rail avoids the current slots-only JSON-null filter bug.
+# Visible decorative rails are separate manifest-owned illumination.
 schema_version: profile_package_v1
 id: illuminated-example
 title: Illuminated book example
 extends: document-spine
-defaults: [defaults.yaml]
-tex: [.]
+defaults:
+- defaults.yaml
+tex:
+- .
 ornaments:
-  # The current public filter cannot index JSON null for a slots-only profile.
-  # Declare an unused, empty register rail; visible rails belong to render.delivery.
   rails:
     class: example-register
     art: []
   slots:
+    whisper:
+      class: whisper
+      height: 0.45em
+      gap: 0.3\baselineskip
+      art:
+      - assets/whisper-scroll.png
     breath:
       class: breath
-      height: 1.1em
+      height: 0.9em
+      gap: 0.5\baselineskip
+      art:
+      - assets/leaf-bud.png
+    hinge:
+      class: hinge
+      height: 1.55em
       gap: 0.7\baselineskip
-      art: [assets/leaf-bud.png]
+      art:
+      - assets/hinge-tendrils.png
     tailpiece:
       class: tailpiece
-      height: 1.5em
-      gap: 1\baselineskip
-      art: [assets/leaf-bud.png]
+      height: 1.2em
+      gap: 0.6\baselineskip
+      art:
+      - assets/tailpiece-vine.png

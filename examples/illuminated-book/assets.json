@@ -1,5 +1,5 @@
 {
-  "source_collection": "Codex 0 decorative ornament pool (first two entries); existing engine demo initial (third entry).",
+  "source_collection": "Codex 0 decorative ornament pool; existing engine demo initial is identified separately.",
   "rights": "No new license is asserted by this inventory. Repository licensing remains undecided.",
   "assets": [
     {
@@ -37,6 +37,71 @@
       "provenance": "Existing public Optical Foundry demo initial; not borrowed from Codex 0.",
       "transformation": "Byte-for-byte copy.",
       "visual_review": "Only decorative art; no people, keepsakes, real places, handwriting or private text."
+    },
+    {
+      "source": "style_register_regen_2026-07-18/alpha/WP01_alpha.png",
+      "destination": "examples/illuminated-book/profiles/illuminated-example/assets/whisper-scroll.png",
+      "source_sha256": "16a708107871ae764ae52a4ff50c5977acc38d73f03055aecd1d624cb01a84bd",
+      "sha256": "16a708107871ae764ae52a4ff50c5977acc38d73f03055aecd1d624cb01a84bd",
+      "source_bytes": 223598,
+      "bytes": 223598,
+      "depicts": "A symmetric gold double-scroll flourish with tapered ends; decorative linework, no letters.",
+      "provenance": "Codex 0 WP01 decorative whisper pool, 2026-07-18. Adjacent prompts/WP01_prompt.txt specifies the generated motif; extract_alpha_regen.py records the deterministic alpha extraction.",
+      "transformation": "Byte-for-byte copy.",
+      "visual_review": "Decorative art only; no people, keepsakes/held objects, rings, real places, handwriting or private text.",
+      "use": "whisper"
+    },
+    {
+      "source": "floral_hinge_marks_2026-06-26/selected/floral_hinge_selected_set_2026-06-26/images/FH12_vine_tendrils_blossom_dots_selected_alpha.png",
+      "destination": "examples/illuminated-book/profiles/illuminated-example/assets/hinge-tendrils.png",
+      "source_sha256": "9a2da51d24d834f3576c8321ddbe5043c9f575a11c0981e96a581095dca6a97d",
+      "sha256": "5c5aef9dd5b211514f974c684f1967f298d8df2aa3162167111fae75a82e9aa6",
+      "source_bytes": 84465,
+      "bytes": 71993,
+      "depicts": "Mirrored green vine tendrils, burgundy blossom dots and a central gold seed.",
+      "provenance": "Codex 0 FH12, gpt-image-2 floral-hinge pool, 2026-06-26; recorded in the pool manifest and selected-set README.",
+      "transformation": "Alpha-bounds crop with 12px transparent padding; lossless PNG recompression.",
+      "visual_review": "Decorative art only; no people, keepsakes/held objects, rings, real places, handwriting or private text.",
+      "use": "hinge"
+    },
+    {
+      "source": "tailpieces_2026-06-26/selected/tailpieces_core_set_2026-06-26/images/T01_closing_vine_knot_gpt_image_2_alpha.png",
+      "destination": "examples/illuminated-book/profiles/illuminated-example/assets/tailpiece-vine.png",
+      "source_sha256": "867a5098f46ac3e167f1c80d1500c2f007fa859b83ef3d5376f6bb89476684eb",
+      "sha256": "b3cbe3793fc2353d79eb6c5a9479289c1b2ea8a5bf8cfca456548bdb75a6986b",
+      "source_bytes": 788409,
+      "bytes": 332800,
+      "depicts": "A horizontal green vine knot with leaves, gold hairlines and small lozenge accents.",
+      "provenance": "Codex 0 T01, gpt-image-2 tailpiece pool, 2026-06-26; recorded in the tailpiece pool manifest and selected-set README.",
+      "transformation": "Alpha-bounds crop with 12px transparent padding; lossless PNG recompression.",
+      "visual_review": "Decorative art only; no people, keepsakes/held objects, rings, real places, handwriting or private text.",
+      "use": "tailpiece"
+    },
+    {
+      "source": "rail_length_ladder_2026-07-27/alpha/RL03_wisteria_long_raceme_alpha.png",
+      "destination": "examples/illuminated-book/profiles/illuminated-example/assets/wisteria-rail.png",
+      "source_sha256": "a17690b711eccf8bc795d2c76728191d0c078d68c39ea478cd1f304e6fe309f7",
+      "sha256": "a17690b711eccf8bc795d2c76728191d0c078d68c39ea478cd1f304e6fe309f7",
+      "source_bytes": 405175,
+      "bytes": 405175,
+      "depicts": "A long pendant purple wisteria-like raceme with green leaves and a curling stem.",
+      "provenance": "Codex 0 RL03, generated Codex gpt-image rail-length ladder, 2026-07-27; pool README and RL03 prompt record its production.",
+      "transformation": "Byte-for-byte copy.",
+      "visual_review": "Decorative art only; no people, keepsakes/held objects, rings, real places, handwriting or private text.",
+      "use": "outer illumination"
+    },
+    {
+      "source": "rail_length_ladder_2026-07-27/alpha/RL04_lupine_tall_spire_alpha.png",
+      "destination": "examples/illuminated-book/profiles/illuminated-example/assets/lupine-rail.png",
+      "source_sha256": "066bf27fbb99cec1b7e479947f582674e3fb7fbc0dc6975c48b1c19d53f45f95",
+      "sha256": "066bf27fbb99cec1b7e479947f582674e3fb7fbc0dc6975c48b1c19d53f45f95",
+      "source_bytes": 469951,
+      "bytes": 469951,
+      "depicts": "An upright purple lupine-like flower spire with palmate green leaves and fine gold dots.",
+      "provenance": "Codex 0 RL04, generated Codex gpt-image rail-length ladder, 2026-07-27; pool README and RL04 prompt record its production.",
+      "transformation": "Byte-for-byte copy.",
+      "visual_review": "Decorative art only; no people, keepsakes/held objects, rings, real places, handwriting or private text.",
+      "use": "outer illumination"
     }
   ]
 }
