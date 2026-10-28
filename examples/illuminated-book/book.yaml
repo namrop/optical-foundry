@@ -1,0 +1,47 @@
+kind: markdown_document
+schema_version: document_manifest_v1
+document_id: illuminated-book
+profile: illuminated-example
+source:
+  path: examples/illuminated-book/book.md
+resource_roots:
+  - profiles/illuminated-example
+metadata:
+  title: ''
+  subtitle: ''
+  author: ''
+  date: ''
+render:
+  include_toc: false
+  numbersections: false
+  page_size: half_letter
+  preserve_source_provenance: false
+  emit_visible_provenance: false
+  delivery:
+    mode: bound
+    binding: unknown
+    duplex: true
+    page_numbers: outer
+    margins:
+      inner: 0.70in
+      outer: 0.65in
+      top: 0.65in
+      bottom: 0.65in
+    running_headers:
+      enabled: false
+    footer_metadata:
+      suppress_repeated: true
+    colophon:
+      enabled: false
+    illumination:
+      enabled: true
+      rail: outer
+      width: 0.33in
+      reserve_space: true
+      placement: chapter_openers
+      assets:
+        - id: orchid
+          source: assets/orchid-rail.png
+          pages: chapter_openers
+    imposition:
+      enabled: false

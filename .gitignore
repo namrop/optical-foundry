@@ -19,3 +19,6 @@ profiles/40_latex_import/styles/texmf/tex/latex/client/
 profiles/40_latex_import/templates/client_report.tex
 # Client agent MCP rendering contract — kept on-disk, out of the shared repo.
 docs/mcp/client-report-rendering.md
+
+# Machine/private instructions must not enter a public checkout.
+AGENTS.md.local

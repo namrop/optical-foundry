@@ -1,0 +1,42 @@
+{
+  "source_collection": "Codex 0 decorative ornament pool (first two entries); existing engine demo initial (third entry).",
+  "rights": "No new license is asserted by this inventory. Repository licensing remains undecided.",
+  "assets": [
+    {
+      "source": "floral_hinge_marks_2026-06-26/selected/floral_hinge_selected_set_2026-06-26/images/FH01_leaf_pair_gold_bud_selected_alpha.png",
+      "destination": "examples/illuminated-book/profiles/illuminated-example/assets/leaf-bud.png",
+      "source_sha256": "5e9cc51df1728bdcde8c15b83020afd7313f510e92f98ee8a8205f3f481f5b35",
+      "sha256": "56440b3a093b1cca4f5b389d9e2bf6bf88bf6e8919d37de47092fa1c5e6d0938",
+      "source_bytes": 105198,
+      "bytes": 91926,
+      "depicts": "Two green leaves around a small gold bud, with one burgundy petal.",
+      "provenance": "Codex 0 FH01, generated with gpt-image-2 on 2026-06-26; floral-hinge pool manifest and selected-set README.",
+      "transformation": "Alpha-bounds crop with 12px transparent padding; lossless PNG recompression.",
+      "visual_review": "Only decorative art; no people, keepsakes, real places, handwriting or private text."
+    },
+    {
+      "source": "rail_length_ladder_2026-07-27/alpha/RM03_orchid_spray_alpha.png",
+      "destination": "examples/illuminated-book/profiles/illuminated-example/assets/orchid-rail.png",
+      "source_sha256": "102624376f9478b78f2a3c140529951d065a1079bce7b214eb2d45fc390bb470",
+      "sha256": "102624376f9478b78f2a3c140529951d065a1079bce7b214eb2d45fc390bb470",
+      "source_bytes": 906514,
+      "bytes": 906514,
+      "depicts": "Three purple orchid blooms, a bud, green stem and leaves, and small gold dots.",
+      "provenance": "Codex 0 RM03, generated through the Codex gpt-image route on 2026-07-27; rail-length-ladder README and RM03 prompt.",
+      "transformation": "Byte-for-byte copy.",
+      "visual_review": "Only decorative art; no people, keepsakes, real places, handwriting or private text."
+    },
+    {
+      "source": "profiles/40_latex_import/assets/dropcaps/oasis/T.png",
+      "destination": "examples/illuminated-book/profiles/illuminated-example/assets/initial-t.png",
+      "source_sha256": "57cf0d38adbb3c56545431d0a990f6969514222e7a18c047b7f6e68b1f62f804",
+      "sha256": "57cf0d38adbb3c56545431d0a990f6969514222e7a18c047b7f6e68b1f62f804",
+      "source_bytes": 8124,
+      "bytes": 8124,
+      "depicts": "A printed capital T in a green, gold and purple ornamental frame.",
+      "provenance": "Existing public Optical Foundry demo initial; not borrowed from Codex 0.",
+      "transformation": "Byte-for-byte copy.",
+      "visual_review": "Only decorative art; no people, keepsakes, real places, handwriting or private text."
+    }
+  ]
+}

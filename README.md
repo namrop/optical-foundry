@@ -1,125 +1,110 @@
 # Optical Foundry
 
-Pandoc-backed render engine and active replacement lane for the former `40_latex` renderer. Optical Foundry now has working local runtime surfaces: profile resolution, typed render manifests, document rendering, bundle/CAM/Codex assembly, generated-figure preprocessors, title-page controls, bundle section dividers, source-level layout images/illuminated initials, manifest-owned bound delivery overlays, booklet/signature imposition, bindery preflight guides, and evidence sidecars.
+Optical Foundry turns Markdown manuscripts and YAML render manifests into print-ready PDFs through Pandoc and LuaLaTeX. It separates the manuscript, its visual profile and its delivery settings, and writes a JSON evidence file for each render: inputs, resolved resources, warnings, validation checks, page count and the output's SHA-256. Use it for a single document or an assembled book, then inspect both the evidence and the pages before delivery.
 
-`40_latex` now lives at `../08_archives/deprecated/40_latex` as the known-good behavioral reference and archive/provenance source. Normal Foundry renders resolve through the Foundry-owned `profiles/40_latex_import/` runtime surface, not an active external legacy fallback, and must not mutate legacy trees.
+## A small book, built from source
+
+[The Shape of a Page](examples/illuminated-book/) is an eight-page example with an illuminated initial, displayed imagery, mirrored outer-margin rails and section ornaments. Its text was written for the example; its botanical art comes from the Codex 0 decorative collection. Everything needed to render it is in this repository.
+
+<p>
+  <img src="docs/images/illuminated-title.png" width="32%" alt="Rendered title page of The Shape of a Page, with a botanical ornament">
+  <img src="docs/images/illuminated-initial.png" width="32%" alt="Chapter opening with an image initial, a small ornament and a purple orchid in the right outer margin">
+  <img src="docs/images/illuminated-margin.png" width="32%" alt="An even page with the orchid rail mirrored to the left outer margin">
+</p>
+
+![A rendered page showing an image in the text measure and a closing ornament](docs/images/illuminated-image.png)
+
+## What it does
+
+- Render one Markdown document directly, or use a typed YAML manifest for repeatable builds.
+- Assemble multiple sources into a book with title pages, contents and section dividers.
+- Keep imagery explicit with `of-image` and `of-initial` blocks.
+- Declare bound margins, folios and illumination rails under `render.delivery`.
+- Fill engine-native ornament slots from a profile package, with page-position rules.
+- Render Mermaid, Vega, D2 and Graphviz figures when their local tools are installed.
+- Produce booklet/signature impositions and advisory bindery preflight reports.
+- Record source hashes, resource selection and output evidence alongside the PDF.
+
+Demo profiles ship here; other profiles live in a separate repository and are loaded through the [profile-package mechanism](engine/profile_package.py).
+
+## Requirements
+
+The example has been exercised with Python 3.13, Pandoc 3.7 and TeX Live 2025. Install:
+
+- Python, [uv](https://docs.astral.sh/uv/) and the Python packages shown below;
+- Pandoc;
+- LuaLaTeX and a sufficiently complete TeX Live installation, including EB Garamond and TeX Gyre fonts;
+- Poppler tools (`pdfinfo`, `pdftotext`, `pdffonts`, `pdfimages`) for evidence and preflight;
+- XeLaTeX for the safe-area guide/overlay sidecars, and `qpdf` for independent PDF checks.
+
+No proprietary fonts or external profile checkout are required by this example. Diagram CLIs are optional and are not used in it.
 
 ## Quickstart
 
-Run from the repository root:
+From the repository root:
 
 ```bash
-cd ~/Digital_Workspace/42_optical_foundry
-
-# Render one Markdown document through a profile.
-python3.14 -m cli doc path/to/source.md --profile cam --output generated/<run-name>
-
-# Render a typed manifest: markdown_document, composite_bundle, cam_stack, codex_bundle, etc.
-python3.14 -m cli manifest manifests/<manifest>.yaml --output generated/manifests/<run-name>
-
-# Impose an already-rendered PDF into booklet/signature sheet sides.
-python3.14 -m cli impose input.pdf --page-size half_letter --sheet-size letter --signature-size 16 --duplex short-edge --output generated/impositions/<run-name>
-
-# Inspect available profiles.
-python3.14 -m cli profiles
-
-# Validate a manifest.
-python3.14 -m cli validate manifests/<manifest>.yaml
+uv venv --python python3
+uv pip install PyYAML Pillow pytest
+.venv/bin/python examples/illuminated-book/render.py
+.venv/bin/python examples/illuminated-book/verify.py
 ```
 
-The current validated interpreter is `python3.14`. Older examples using a hypothetical `foundry` executable or `python -m cli.render` are stale.
+The render script gives profile discovery a temporary home/config and unsets `OF_PROFILE_PATH`. Its only profile pointer names the bundled example profile, so it does not consult your personal profile repositories.
 
-**Sol runtime note (2026-08-25):** on Sol the engine runs fine under the
-system `python3` (3.13) with the fleet-provisioned `pandoc`/`lualatex` —
-verified end-to-end with a keeper-profile render (validation passed, zero
-warnings). Two follow-ups from that run:
+Outputs are written under `generated/illuminated-book/`:
 
-- **DONE 2026-09-01:** the Earth-era Homebrew `.venv/` (18 MB on disk, never
-  tracked — `.venv/` was already gitignored) was deleted by keeper ruling;
-  recreate per-host.
-- Sol lacks Helvetica/Menlo/Times New Roman, so renders fall back to
-  DejaVu (recorded as declared runtime fallbacks in render evidence).
-  If Sol becomes a regular render host, pin the real faces into the
-  fleet environment.
+- `illuminated-book.pdf` — eight half-letter pages;
+- `illuminated-book.evidence.json` — render and validation evidence;
+- `illuminated-book.bindery_preflight.json` — advisory print checks;
+- safe-area guide and overlay PDFs.
 
-## Current status
+The verifier checks success, warnings, page count, output hash, resource locality, ornament/image wiring and legacy-tree boundaries. It is not a substitute for looking at the pages. The example is a prototype proof, not a vendor-certified press file: its images are RGB and it has no bleed. Read the preflight report before sending any output to a printer.
 
-**Phase:** active local implementation / migration proving ground.
+### Other CLI entry points
 
-Implemented and exercised code surfaces:
+Run these with your Python environment active, from the repository root:
 
-- `markdown_document` render lane for single canonical Markdown objects.
-- Bundle-family manifest lane: `composite_bundle`, `cam_stack`, `codex_bundle`.
-- Local imported `40_latex` profile stack under `profiles/40_latex_import`.
-- CAM/Yugen Civic profile rendering.
-- Title pages, default blank-after-title behavior, and guarded title-page background images.
-- Generated figure preprocessors for Mermaid, Vega, D2, and Graphviz/DOT.
-- Source-level `of-image` and `of-initial` layout blocks, including general figure-wrap tightening controls and transparent PNG initial diagnostics.
-- Evidence JSON sidecars with profile, boundary, output, source, and figure assertions.
-- Bundle section dividers via top-level `section_dividers:` in bundle-family manifests.
-- Manifest-owned bound delivery: mirrored margins, outer page numbers, title-verso colophon, optional running-header marks, outer/bottom illumination rails, and manifest-owned `booklet_signature_2up` imposition.
-- Advisory bindery preflight sidecars plus standalone and overlaid safe-area guide PDFs for prototype inspection.
-
-Current code-change status is tracked in:
-
-```text
-docs/IMPLEMENTATION_STATUS_2026-05-12.md
+```bash
+python -m cli --help
+python -m cli profiles
+python -m cli doc path/to/manuscript.md --profile document-spine --output generated/document
+python -m cli manifest path/to/book.yaml --output generated/book
+python -m cli impose --help
+python -m pytest -q
 ```
 
-That status document intentionally excludes packet-specific document-content notes.
+The example's custom profile is selected by its render script; a direct `manifest` call needs that package on the profile search path. See its [README](examples/illuminated-book/README.md) for the file layout and known limitations.
 
-## Conceptual split
+## Documents, manifests and bundles
 
-- **Markdown document:** direct Foundry input for one canonical source object.
-- **Render manifest:** direct Foundry input for recurring assembled/projection cases.
-- **Manifest subtype:** named contract such as `markdown_document`, `label_run`, `sticker_sheet`, `composite_bundle`, `cam_stack`, `codex_bundle`, or `forge_packet_review`.
-- **Bundle:** source graph/content grouping, usually rendered through a bundle-family manifest.
-- **Packet:** work/lifecycle container; rendered only through a packet-review manifest that projects packet state.
-- **Projection plan / assembly view:** internal compiled render plan derived from Markdown or a manifest.
-- **Rendered artifact:** PDF/DOCX/HTML output plus evidence sidecars.
+A **document** is one Markdown source. A **manifest** declares a render target: source, profile, metadata and delivery settings. A `markdown_document` manifest preserves single-document semantics; a **bundle** manifest assembles an ordered graph of sources and may insert dividers and other book-level material. A **profile** supplies visual defaults, templates and optional composition rules. Generated PDFs and evidence are outputs, not source manuscripts.
 
-## Packet and bundle presentation controls
+## Repository map
 
-Bundle-family manifests own assembly-level presentation between source objects:
+| Path | Purpose |
+| --- | --- |
+| [`examples/`](examples/) | Self-contained book source, manifest and example profile |
+| [`cli/`](cli/) | `python -m cli` entry points |
+| [`engine/`](engine/) | Compilers, profile/resource resolution and source preparation |
+| [`renderers/`](renderers/) | Pandoc-backed rendering |
+| [`profiles/`](profiles/) | Bundled demo defaults, templates, styles and assets |
+| [`contracts/`](contracts/) | Rendering and extension contracts |
+| [`schemas/`](schemas/) / [`validators/`](validators/) | Manifest shapes and validation |
+| [`fixtures/`](fixtures/) / [`tests/`](tests/) | Test inputs and pytest suite |
+| [`docs/`](docs/) | Guides, design notes and implementation records |
 
-- `presentation.title_page.*` controls packet title-page behavior.
-- `generated.reader_guide` and `generated.afterword` can generate simple bundle sections where enabled.
-- `section_dividers[]` inserts title/divider pages before target sources. Dividers can be generic manifest-authored pages or source-backed Markdown divider pages. Divider options include recto/right-page forcing, divider-local profile hooks, background images, blank-after insertion, and divider-faithful numbering/TOC via `render.numbering_strategy: section_dividers`.
-- Manifest `figures:` is appropriate for compiler-controlled/appended figure material.
+## Documentation
 
-Exact mid-source full-page figure placement is still a source/staged-source concern. If exact placement should become manifest-owned, add a dedicated anchor-placement contract rather than overloading `figures:`.
+- [Architecture](DESIGN.md)
+- [Render manifests](contracts/RENDER_MANIFESTS.md)
+- [Bundle assembly](contracts/BUNDLE_ASSEMBLY.md)
+- [Profile expansion](contracts/EXPANSION.md)
+- [Ornament slots](contracts/ORNAMENT_SLOTS_CONTRACT.md)
+- [Images and wrapping](docs/guides/figure-wraps.md)
+- [Illuminated image initials](docs/guides/illuminated-image-initials.md)
+- [Imposition](contracts/IMPOSITION.md)
+- [Bound delivery details](docs/bound-delivery-status-2026-05-18.md)
+- [Example source and profile guide](examples/illuminated-book/README.md)
 
-## Folder map
-
-- `profiles/` — profile registry and imported profile stack.
-- `profiles/40_latex_import/` — active local defaults/templates/styles/assets imported from the known-good 40_latex profile family.
-- `engine/` — manifest compilers, registry/resolver code, profile checks, generated-figure preprocessors.
-- `renderers/` — Pandoc-backed document renderer.
-- `schemas/` — YAML schemas for manifests and profile surfaces.
-- `contracts/` — render, bundle, label, sticker, and expansion contracts.
-- `cli/` — CLI entrypoint used as `python3.14 -m cli ...`.
-- `validators/` — manifest validation.
-- `fixtures/` — synthetic test sources/manifests.
-- `tests/` — pytest suite.
-- `manifests/` — user-facing and smoke manifest files.
-- `generated/` — render outputs and staged generated sources; normally gitignored.
-- `docs/` — implementation status and design plans.
-
-## Core documentation
-
-- `DESIGN.md` — architecture design plus implementation delta.
-- `INDEX.md` — beam index and navigation anchors.
-- `docs/IMPLEMENTATION_STATUS_2026-05-12.md` — current code-change status.
-- `contracts/RENDER_MANIFESTS.md` — manifest taxonomy and runtime contract.
-- `contracts/BUNDLE_ASSEMBLY.md` — bundle assembly contract, including section dividers.
-- `contracts/IMPOSITION.md` — booklet/signature imposition contract and verification checklist.
-- `docs/bound-delivery-status-2026-05-18.md` — implemented `render.delivery`, illumination rail, imposition, and preflight status.
-- `contracts/EXPANSION.md` — adding new profiles.
-- `docs/PROFILE_AND_PANDOC_REFERENCE.md` — profile/Pandoc operational notes.
-- `docs/guides/figure-wraps.md` — source-level `of-image` wrapping contract and general tightening controls.
-- `docs/guides/illuminated-image-initials.md` — `of-initial` asset/tuning guide.
-- `docs/guides/manuscript-rendering-support-boundaries.md` — Foundry/artifact division for illuminated/bound manuscript rendering.
-
-## Validation posture
-
-Before reporting a render or code surface as ready, inspect the evidence JSON for `render_metadata.success`, `warnings`, page count, SHA-256, `target_legacy_profile_tree_mutated: false`, relevant title-page, section-divider, delivery, imposition, and bindery-preflight boundary assertions, and required text markers.
+Some design records describe earlier interfaces. Use `python -m cli --help` for the implemented command surface and report a mismatch rather than assuming a historical example still runs.

@@ -1,0 +1,23 @@
+schema_version: profile_package_v1
+id: illuminated-example
+title: Illuminated book example
+extends: document-spine
+defaults: [defaults.yaml]
+tex: [.]
+ornaments:
+  # The current public filter cannot index JSON null for a slots-only profile.
+  # Declare an unused, empty register rail; visible rails belong to render.delivery.
+  rails:
+    class: example-register
+    art: []
+  slots:
+    breath:
+      class: breath
+      height: 1.1em
+      gap: 0.7\baselineskip
+      art: [assets/leaf-bud.png]
+    tailpiece:
+      class: tailpiece
+      height: 1.5em
+      gap: 1\baselineskip
+      art: [assets/leaf-bud.png]
